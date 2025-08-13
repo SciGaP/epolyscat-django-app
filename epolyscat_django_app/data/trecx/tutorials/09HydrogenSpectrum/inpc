@@ -1,0 +1,52 @@
+Title:
+Tutorial example  - photo-electron spectra of hydrogen
+
+The purpose of this exercise is to
+(1) guide you to approaching realistic calculations
+   - tune the basis,
+   - tweek the time-propagation
+   - assess accuracies
+
+[TASK] inspect the spectra
+[TASK] try without cutEnergy - see how much slower it is
+[TASK] perform another calculation with absorption starting only at 30 au
+       vary the basis, from comparisons, assess the result
+[TASK] move the Surface to 25 and 30 au, compare
+[TASK] note the message about a non-analytic point in [10,20] (including explanation)
+       change either elements or trunc to avoid the message
+       check (minor) change in results
+[TASK] trunc[15,20] triggers a warning message - assess its importance, adjust input to avoid it
+[TASK] compare with a calculation whithout trunc[15,20] - assess error due to Coulomb tail
+
+Spectrum: radialPoints=100
+
+# basis comparatively small, to get results quickly
+Axis: name,order,lower end, upper end,functions,nElem
+ Rn,20, 0.,20.,polynomial,2
+ Rn,20, 20.,Infty,polExp[1.]
+ Phi,1
+ Eta,4,-1,1, assocLegendre{Phi}
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,20.
+
+# potential in the Hamiltonian - as in 1d, we clip the Coulomb tail off
+
+Operator: hamiltonian=1/2<<Laplacian>>-<trunc[15,20]/Q><1><1>
+Operator: interaction=iLaserAz[t]<<D/DZ>>
+Operator: expectationValue=<chi[0,20]><1><1>
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 1.e15, 8. OptCyc, 20.
+
+
+# cutEnergy ...impose a spectral cut on the Hamiltonian
+               this essential to speed up up the time-propagation
+# store ...we save the surface values and derivatives at a fine time grid (au)
+TimePropagation: begin,end,print,store,cutEnergy,accuracy
+-8 OptCyc, 20 OptCyc, 0.5 OptCyc,0.05 au,30,1.e-10
+
+# NOTE: the stop time is rather long after the pulse
+        we need to wait until all flux has left through the surface
+        propagation after the pulse is off is usually cheap, one can be generous here
+

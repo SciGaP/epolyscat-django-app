@@ -1,0 +1,69 @@
+Title:
+Tutorial example  - spectra from 1d hydrogen in a laser field
+
+The purpose of this exercise is
+(1) see how spectra are calculated in a simple case
+(2) understand the paremeter requirements
+(3) confirm your expectations on a multi-photon peak
+
+[TASK] inspect the spectra, re-calculate spectra using
+       ./tRecX tutorial/08Hyd1dSpectrum/00xx [various options]
+       Note: for some options, you will need to specify -recompute
+[TASK] check sensitivity to spatial discretization:
+       you will see that the present discretization is rather generous
+[TASK] vary intensities, confirm the multi-photon character of the peaks you see
+[TASK] shorten the time-integration in the spectral integration
+       tRecX  tutorial/08Hyd1dSpectrum/00xx  -tMax=[your choice in atomic units] -recompute
+       What is the effect on the spectrum?
+[TASK] relax time-propagation accuracy see what happens
+
+# surface values and derivatives will at X=20 will be written to file
+#Surface: points
+18.
+
+Spectrum: radialPoints=100
+
+# laser pulse parameters: cos2 pulse
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 2.e14, 10. OptCyc, 20.
+
+# time-progation
+# from  start of the pulse (default)
+#   to  many optical cycles (long after the field is gone)
+#       print output at the given intervals
+TimePropagation: end,print,store,accuracy
+ 100 OptCyc, 1. OptCyc,0.,1.e-11
+
+# NOTE: we have given here a very small tolerance value for accuracy
+        this is mostly to force the self-adaptive time-integrator to write
+        many steps to file for the integration of the high-freuqency oscillations
+        of the surface
+
+
+Absorption: kind, axis, theta, upper
+ECS,X,0.5,20.
+
+# piece-wise specification of discretization with exponential tails at both ends
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X, 20,-Infty,-20.,polExp[1.]
+X, 80,-20.,20.,polynomial,10
+X, 20, 20.,Infty,polExp[1.]
+
+# potential in the Hamiltonian:
+# for tSurff, there is an error by the long range Coulumb outside the tSurff radius Rc
+# we may just as well clip that tail off and solve a slightly different problem using trunc[15,20]
+# for such a problem, tSurff is exact
+
+Operator: hamiltonian='0.5<d_1_d>-<trunc[15,20]/sqrt(Q*Q+2)>'
+
+# interation with the 0 component of a laser field in velocity gauge
+# the time-dependent factor is the vector potential A(t)
+
+Operator: interaction='iLaserA0[t]<1_d>'
+
+
+# monitor and also write to file
+# the expectation value of the characteristic function in [-5,5] and [-10,10]
+Operator: expectationValue='<chi[-5,5]>'
+
+

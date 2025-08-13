@@ -1,0 +1,156 @@
+
+
+ ===  Date [02/21 15:49:15] Tutorial example  - spectra from 2d Helium in a laser field  
+
+ !!! WARNING --- Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recommended shape is cos8 --- WARNING !!!
+
+ Master host = linux-hxdi (2 processes)
+
+ *** using ParallelLayout X1.X2 ***
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X1.X2
+
+   Axis maxCoeff       from       to order                basis     absorption: eta,inner
+     --   ------   --------   ------   ---   ------------------   -----------------------
+     X1      111 -Infty|-40 40|Infty 10-20 polExp[0.5]/polyn... ECS:(0.955,0.296)[-40,40]
+     X2      111 -Infty|-40 40|Infty 10-20 polExp[0.5]/polyn... ECS:(0.955,0.296)[-40,40]
+
+ Full basis name(s): polExp[0.5]/polynomial, polExp[0.5]/polynomial
+
+
+           Surfaces: 40
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: (0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)+<{}><1/sqrt(pow[2](X1-X2)+0.3)>
+        Interaction: iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>
+         HamInitial: H(t=Begin)
+
+ Expectation Values: <chi[0,20]><chi[0,20]>,<chi[10,20]><chi[10,20]>
+         Projection: 0.5<d_1_d>:X1+0.5<d_1_d>:X2
+
+
+ ===  Laser  ===================================================================
+
+   polAxis Shape Intens(W/cm2) lambda(nm)  FWHM  begin   end phiCEO
+     -----   ---   -----------   --------   ---   ----   ---   ----
+   [1 0 0]  cos2         3e+14        800 551.6 -551.6 551.6       
+
+ ponderomotive potential (eV): 17.93
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: tutorial/21Helium2dIR/0000/
+
+
+ !!! WARNING --- trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature interval [ -40 , -30 ] --- WARNING !!!
+ Exact numerical integration needs integrands that are analytic within every finite element.
+ Matrix elements will be discretization dependent and non-systematic errors may appear 
+    - errors may be acceptably low, but convergence with order may be inconsistent 
+    - for consistent convergence place element boundaries on non-analytic points
+
+
+                 !!! Limit=1 reached, no further warnings as above !!!
+
+ !!! WARNING --- trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature interval [ 30 , 40 ] --- WARNING !!!
+
+                 !!! Limit=1 reached, no further warnings as above !!!
+
+ ***  In sparse matrix, found  1 independent subsets with size(s) 111 ***
+
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inter...
+                  0:  trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte...
+                  0: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte....
+                  0:  trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte...
+                  0:  trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte...
+                  0: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+                  0: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inter...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: setup                             1        4.45        4.45
+               mpiWrapper: MPI                           22923        1.08    4.69e-05
+                run_trecx: all                               2       0.232       0.116
+            operatorFloor: cost                           3020      0.0334    1.11e-05
+                run_trecx: run                               1           0           0
+timer overhead/call (sec): 5.2e-08
+timer overhead/call (sec): 1.65e-09 (sample=1024)
+
+
+ ===  PROPAGATION PARAMETERS  ==================================================
+
+    begin  end print  store fixStep   accuracy cutEnergy method
+     ----   --   ---   ----   -----   --------   -------   ----
+   -551.6 1655 110.3 0[100]    0.02 no control        70    RK4
+
+
+
+ ===  TIME PROPAGATION (tutorial/21Helium2dIR/0000/)  ==========================
+
+             <Exp0>: +<chi[0,20]><chi[0,20]> at hierarchy X1.X2.X1.X2
+             <Exp1>: +<chi[10,20]><chi[10,20]> at hierarchy X1.X2.X1.X2
+
+       Initial <H0>: -2.8878922524695
+
+      CPU   (%)    Time <Ovr(X1.X2.X1.X2)>             <H0>          <Exp0>              <Exp1>
+     -----   --   -----   ----------------   --------------   -------------   -----------------
+         0    0  -551.6                  1 -2.8878922524695 0.2055020134565 2.4924630565993e-19
+      56.6    5 -441.28    0.9999971442288 -2.8877560877193 0.20029966423433  2.770381454555e-19
+     114.2   10 -330.96   0.99999388014548 -2.8861737913044 0.18686349319817 1.9553977492716e-19
+     172.2   15 -220.64   0.99998774816233 -2.8814518746538 0.17044115784653 2.9307004255208e-19
+     230.6   20 -110.32   0.99994590286135 -2.8743541824225 0.15683003027327 4.4794166715775e-15
+     288.3   25       0   0.99930803340903 -2.8689299518749  0.1526735143849 6.9081096708474e-10
+     357.4   30  110.32   0.99801306409724 -2.8678223273829 0.15725510627397 5.7505366742264e-08
+     422.5   35  220.64   0.99741955050414  -2.873045718966  0.1697265393259 9.8019308777501e-08
+     483.3   40  330.96   0.99706546416176 -2.8775858760372 0.18798519666307 8.2007216671666e-09
+     548.3   45  441.28   0.99697498173305 -2.8786941826342 0.19910521445031 1.3618841963903e-08
+       615   50   551.6   0.99695152505535 -2.8788313102709 0.20422420175352 3.2270421566573e-09
+     662.4   55  661.92   0.99694315682143 -2.8788171994873 0.20641867312985 6.8825357422633e-09
+     705.8   60  772.24   0.99693755773766  -2.878805740512 0.20379794794515  6.747088823094e-09
+     744.4   65  882.56   0.99693240739095 -2.8787952056424 0.20644537626678 1.7320599152414e-09
+     783.3   70  992.88   0.99692920042106 -2.8787875406922 0.20515965852495 1.3865551164167e-08
+     821.5   75  1103.2   0.99692373970103  -2.878775422907 0.20666927502447 3.7797035494702e-09
+     860.7   80 1213.52   0.99692227207574 -2.8787707104374 0.20459037673665 1.0309733272601e-08
+     900.3   85 1323.84    0.9969173238675 -2.8787591573824 0.20745578395655 3.7496065991251e-09
+     939.4   90 1434.16   0.99691458942775 -2.8787515995851  0.2041167010829 1.9961449404002e-09
+     977.5   95 1544.48   0.99691121473002 -2.8787429509486 0.20660190773215 2.2495760467199e-09
+      1016  100  1654.8   0.99690767794226 -2.8787337641713  0.2052628970154 1.2434922837722e-08
+
+ TimePropagator RK4: calls=441280, accept/reject 110320/0, <h>=0.02, Delta h=1.3e-08
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte....
+                  0:  trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte...
+                  0:  trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte...
+                  0: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+                  0: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inte....
+                  0: trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)  has non-analytic point in quadrature inter...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2    1.02e+03         512
+                run_trecx: run                               1    1.02e+03    1.02e+03
+               mpiWrapper: MPI                         3677615        13.2    3.59e-06
+                run_trecx: setup                             1        4.45        4.45
+             initialState: get                               1        3.74        3.74
+            operatorFloor: cost                           3020      0.0334    1.11e-05
+timer overhead/call (sec): 6.13e-08
+timer overhead/call (sec): 1.91e-09 (sample=1024)
+
+

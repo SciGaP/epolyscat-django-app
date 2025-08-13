@@ -1,0 +1,47 @@
+Title:
+Tutorial example - exterior complex scaling
+
+The purpose of this exercise is to
+(1) get introduced to exerior complex scaling
+(2) have a look at the scaled spectrum
+
+[TASK] plot real vs. imaginary part of eigen energies (file 05irECS/00xx/eig)
+       for various theta and R0, observe the changes
+
+# piece-wise specification of discretization with exponential tails at both ends
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X,20,-Infty,-20,polExp[0.5]
+X,15,-20,-15,polynomial,15
+X,60,-15, 15,polynomial,10
+X,15, 15, 20,polynomial,15
+X,20, 20, Infty,polExp[0.5]
+
+
+# define exterior complex scaling
+# theta  ...scaling radius
+# upper  ...the place R0 where scaling starts
+Absorption: kind, axis, theta, upper
+ECS,X,0.3,10.
+
+# NOTE:     upper (=R0) MUST coincide with an element boudary (ANY of the boundaries)
+            !!! otherwise it is mathematically wrong and fails numerically !!!
+                for this reason, the code stops with an error in this case
+
+# NOTE:     with a double-sided axis like X,
+            by default scaling at the lower radius -R0 is assumed
+
+
+
+Operator: hamiltonian='0.5<d_1_d>-<1/sqrt(Q*Q+2)>'
+
+# NOTE: we do not use truncation,
+        i.e. the complete operator is complex scaled,
+        not only the potential or kinetic energy alone
+
+# we will print the lowest eigenvalues and stop
+Eigen: select=SmallReal[10]
+
+
+
+
+

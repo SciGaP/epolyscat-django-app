@@ -1,0 +1,87 @@
+
+
+ ===  Date [06/23 11:45:16] Tutorial example - hydrogen atom in polar coordinates  
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Phi.Eta.Rn
+
+   Axis maxCoeff from       to order                basis absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   -------------------
+     Rn       37    0 10|Infty 10-20 polynomial/polExp...                      
+    Phi        1    0    6.283     1               cosSin                      
+    Eta        3   -1        1     3   assocLegendre{Phi}                      
+
+ Full basis name(s): polynomial/polExp[0.5]
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 1/2<<Laplacian>>-<1/Q><1><1>
+         HamInitial: H(t=Begin)
+
+         Projection: 1/2<<Laplacian>>-<1/Q><1><1>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/03HydrogenPolar/0000/
+
+
+
+ ===  GRID AND PLOT  ===========================================================
+
+             digits: 8
+
+   Axis   usage  points    from      to
+     --   -----   -----   -----   -----
+     Rn    grid     101       0     4.8
+    Eta    grid      31      -1       1
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[7]  ===========================================
+ ***  In sparse matrix, found  3 independent subsets with size(s)  37  37  37 ***
+                 real imag
+     --   --------------   --
+   0  -0.499999993473    0
+   1  -0.124999999999    0
+   2  -0.124999999997    0
+   3 -0.0555555555556    0
+   4 -0.0555555555555    0
+   5 -0.0555555555555    0
+   6 -0.0312499999992    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                             172       0.636      0.0037
+                run_trecx: all                               2       0.159      0.0795
+                run_trecx: setup                             1       0.153       0.153
+                run_trecx: run                               1       0.153       0.153
+timer overhead/call (sec): 4.31e-08
+timer overhead/call (sec): 1.55e-09 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/03HydrogenPolar/0000/  ======
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

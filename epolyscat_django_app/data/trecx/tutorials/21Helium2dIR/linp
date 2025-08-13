@@ -1,0 +1,243 @@
+--- DO NOT EDIT: InputItem's as actually appearing in code -----
+Absorption:axis[1]=X1 \inputValue{X1} \default{NONE} \docu{absorption parameters for this axis} \allow{}
+Absorption:axis[2]=X2 \inputValue{X2} \default{NONE} \docu{absorption parameters for this axis} \allow{}
+Absorption:axis[3]=NONE \inputValue{EMPTY} \default{NONE} \docu{absorption parameters for this axis} \allow{}
+Absorption:kind[1]=ECS \inputValue{NOT_FOUND} \default{ECS} \docu{complex scaling kind} \allow{PML}
+Absorption:kind[2]=ECS \inputValue{NOT_FOUND} \default{ECS} \docu{complex scaling kind} \allow{PML}
+Absorption:lower[1]=-40 \inputValue{NOT_FOUND} \default{-40} \docu{lower end of inner region} \allow{}
+Absorption:lower[2]=-40 \inputValue{NOT_FOUND} \default{-40} \docu{lower end of inner region} \allow{}
+Absorption:theta[1]=0.3 \inputValue{0.3} \default{0.1} \docu{complex parameter eta=exp(i theta)} \allow{[0,1.571]}
+Absorption:theta[2]=0.3 \inputValue{0.3} \default{0.1} \docu{complex parametConstant:name[1]=BLANK \inputValue{NOT_Absorption:unitary[1]=false \inputValue{NOT_FOUND} \default{false} \docu{inEigensolver:method[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Flag:generate-docu[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{re-write the LaTeX docu from code} \allow{}
+Eigen:method[1]=auto \inputValue{NOT_FOUND} \default{auto} \docu{options: auto...(default) reasonable choice,Lapack,Arpack,NonLin} \allow{}
+Eigensolver:shift[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Eigen:shift[1]=100 \inputValue{NOT_FOUND} \default{100} \docu{shift Arpack eigensolver to avoid zero's arising from continuity projections if positive eigenvalues are searched for} \allow{}
+_EXPERT_:newFloor[0]=false \inputValue{NOT_FOUND} \default{false} \docu{admit use of tensor products} \allow{}
+_EXPERT_:suppressTensor[0]=false \inputValue{NOT_FOUND} \default{false} \docu{admit use of tensor products} \allow{}
+_EXPERT_:fuseOperator[1]=true \inputValue{NOT_FOUND} \default{true} \docu{fuse pieces of the operator as much as possible} \allow{}
+_EXPERT_:flatDer[1]=true \inputValue{NOT_FOUND} \default{true} \docu{absorb the inverse into new Floor operators} \allow{}
+Operator:truncate[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{truncate potentials of type <<PotName>> (default=do not truncate)} \allow{}
+Operator:smooth[1]=1.7976931348623e+308 \inputValue{NOT_FOUND} \default{1.7976931348623e+308} \docu{start smoothing potentials of type <<PotName>> (default=no smoothing)} \allow{}
+_EXPERT_:FDgrid[1]=exp \inputValue{NOT_FOUND} \default{exp} \docu{kind of grid spacing: exp,sudden,smooth} \allow{}
+_EXPERT_:FDmatrix[1]=exact \inputValue{NOT_FOUND} \default{exact} \docu{allow inexact stensils} \allow{}
+PolarOffCenter:origin[1]=[0,0,0] \inputValue{NOT_FOUND} \default{[0,0,0]} \docu{[x,y,z], origin of the off-center polar basis} \allow{}
+PolarOffCenter:radius[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radius around origin} \allow{}
+PolarOffCenter:rmin[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radial support is in [rmin,radius]} \allow{}
+PolarOffCenter:Lmax[1]=2 \inputValue{NOT_FOUND} \default{2} \docu{maximal angular momentum} \allow{}
+PolarOffCenter:Mmax[1]=2 \inputValue{NOT_FOUND} \default{2} \docu{maximal |m|} \allow{}
+PolarOffCenter:Nmax[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{number of radial functions} \allow{}
+PolarOffCenter:quad[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{minimal number of quadrature points} \allow{}
+Polar2D:origin[1]=0 0 \inputValue{NOT_FOUND} \default{0 0} \docu{x y, origin of the off-center polar basis} \allow{}
+Polar2D:radius[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radius around origin} \allow{}
+Polar2D:Mmax[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{maximal |m|} \allow{}
+Polar2D:Nmax[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{number of radial functions} \allow{}
+Polar2D:quad[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{minimal number of quadrature points} \allow{}
+Reuse:runs[1]= \inputValue{NOT_FOUND} \default{} \docu{runs to re-use if identical input - blank-separated runDirs or [all] or format [1,4,6-9]} \allow{}
+Autoconverge:mode[1]=ConvergeToTarget \inputValue{NOT_FOUND} \default{ConvergeToTarget} \docu{Operation mode: ConvergeToTarget...determine parameters for accuracy, EstimateError...estimate error at given parameter} \allow{}
+Autoconverge:accuracy[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{target relative accuracy} \allow{}
+Autoconverge:target[1]=default \inputValue{NOT_FOUND} \default{default} \docu{target definition, e.g. spec_partial[all][2] all rows in second column in spec_partial} \allow{}
+Autoconverge:category[1]=_MACRO_ \inputValue{NOT_FOUND} \default{_MACRO_} \docu{Category of input item to vary (blank - use previous) or "_MACRO_" for varying macros} \allow{}
+Autoconverge:name[1]= \inputValue{NOT_FOUND} \default{} \docu{name of input item to vary} \allow{}
+Autoconverge:atLine[1]=ReadInput-anyName \inputValue{NOT_FOUND} \default{ReadInput-anyName} \docu{enter matchName=val to vary entry at line where matchName==val in category} \allow{}
+Autoconverge:step[1]=0.2 of initial \inputValue{NOT_FOUND} \default{0.2 of initial} \docu{initial step for varying parameter, specify as "10" or "0.3 of initial"} \allow{}
+Autoconverge:lowerLimit[1]=1.7976931348623e+308 \inputValue{NOT_FOUND} \default{1.7976931348623e+308} \docu{lower limit for parameter (default: present-2*step)} \allow{}
+Autoconverge:upperLimit[1]=-1.7976931348623e+308 \inputValue{NOT_FOUND} \default{-1.7976931348623e+308} \docu{upper limit for parameter (default: present+9*step)} \allow{}
+Autoconverge:metric[1]=1e-2 \inputValue{NOT_FOUND} \default{1e-2} \docu{pedestal in relative distance for error definition} \allow{}
+Flag:showOperators[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{show operator structure and stop} \allow{}
+Flag:printMatrices[0]= \inputValue{NOT_FOUND} \default{} \docu{show operator matrix, norms[depth,digits]...norms of matrix-blocks to depth,full[digits]...all, block[ibl,jbl,i0,j0]...block of full matrix} \allow{}
+_EXPERT_:halfPlaneR[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{smoothing for half-plane suppression} \allow{}
+_EXPERT_:halfPlaneS[1]=5 \inputValue{NOT_FOUND} \default{5} \docu{smoothing for half-plane suppression} \allow{}
+_EXPERT_:halfPlaneEta[1]=0.2 \inputValue{NOT_FOUND} \default{0.2} \docu{smoothing for half-plane suppression} \allow{}
+FactorMatrix:name[1]= \inputValue{NOT_FOUND} \default{} \docu{name to be used in operator definition} \allow{}
+FactorMatrix:nrow[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{number of rows} \allow{}
+FactorMatrix:ncol[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{number of columns (default == number of rows)} \allow{}
+ChannelsSubregion:tStore[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{Store spectra timestep} \allow{}
+OperatorFloorEE:lambdaMax[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Operator:multipoleOrder[1]=-1 \inputValue{NOT_FOUND} \default{-1} \docu{Maximum number of l-terms in multipole expansion of ee interaction} \allow{}
+Pot3d:quadOrder[1]=40 40 0 \inputValue{NOT_FOUND} \default{40 40 0} \docu{quadrature order for interpolating the potential, last=0 indicates DVR)} \allow{}
+Pot3d:chargeC[1]=1/5 \inputValue{NOT_FOUND} \default{1/5} \docu{fraction or Coulombic charge on C} \allow{}
+Pot3d:methaneSize[1]=2.042794 \inputValue{NOT_FOUND} \default{2.042794} \docu{Length scale of Methane molecule (au)} \allow{}
+Pot3d:methaneAlign[1]=z \inputValue{NOT_FOUND} \default{z} \docu{Align one symmetry axis along either 'x', 'y' or 'z'} \allow{}
+Pot3d:screenHydrogen[1]=3.100 \inputValue{NOT_FOUND} \default{3.100} \docu{screen length for Hydrogens} \allow{}
+Pot3d:screenCarbon[1]=2. \inputValue{NOT_FOUND} \default{2.} \docu{screen length for Carbon} \allow{}
+Pot3d:potential[1]=undefined \inputValue{NOT_FOUND} \default{undefined} \docu{: methane,hydrogen,harmOsc,identity,radial[x,y,z,V(r)]...radial around x,y,z} \allow{}
+Pot3d:origin[1]= \inputValue{NOT_FOUND} \default{} \docu{postion of potential origin (give in cartesian coordinates)} \allow{}
+PlotFunction:algebra[1]= \inputValue{NOT_FOUND} \default{} \docu{Algebra's to evaluate and plot (blank-separated strings)} \allow{}
+PlotFunction:lower[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{lower end of plot interval} \allow{}
+PlotFunction:upper[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{upper end of plot interval} \allow{}
+PlotFunction:points[1]=201 \inputValue{NOT_FOUND} \default{201} \docu{number of plot points} \allow{}
+Orbital:properties[1]= \inputValue{NOT_FOUND} \default{} \docu{print properties (blank-separted list), choices are T L(L+1) Lz^2 cos^8Phi cos^2Phi sin^2Phi X Y } \allow{}
+Orbital:definition[1]= \inputValue{NOT_FOUND} \default{} \docu{defintion of the orbitalsT L(L+1) Lz^2 cos^8Phi cos^2Phi sin^2Phi X Y } \allow{}
+Orbital:integrationAccuracy[1]=1e-7 \inputValue{NOT_FOUND} \default{1e-7} \docu{accuracy target for numerical integration, values<1e-7 may lead to slow convergence} \allow{}
+Orbital:method[1]=singleQuadrature \inputValue{NOT_FOUND} \default{singleQuadrature} \docu{methods: singleQuadrature...evaluate on overall quadrature grid,volumeSplit...quadratures on subvolumes} \allow{}
+Orbital:integrationPoints[1]=5 \inputValue{NOT_FOUND} \default{5} \docu{number of points beyond standard quadrature} \allow{}
+Axis:alternate[1]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Axis:alternate[2]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Axis:alternate[3]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Axis:alternate[4]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Axis:alternate[5]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Axis:alternate[6]= \inputValue{NOT_FOUND} \default{} \docu{someName[order=10] will create same axis and FEs , but replace order by 10, store index as "someName"} \allow{}
+Pulse:check[1]=false \inputValue{NOT_FOUND} \default{false} \docu{check new against old pulse checking code} \allow{}
+Laser:shape[1]=cos2 \inputValue{cos2} \default{BLANK} \docu{pulse shapes: gauss,cos8,cos4,cos2,sin2,flatTop,train,BLANK} \allow{}
+Laser:I(W/cm2)[1]=3.e14 \inputValue{3.e14} \default{NO_VALUE} \docu{peak intensity} \allow{}
+Laser:lambda(nm)[1]=800. \inputValue{800.} \default{-1} \docu{wave length} \allow{}
+Laser:lambda@I/2(nm)[1]=800 \inputValue{NOT_FOUND} \default{800} \docu{linear chirp - wave length at half intensity after peak} \allow{}
+Laser:ePhoton[1]=0.056954190628108 \inputValue{NOT_FOUND} \default{0.056954190628108} \docu{photon energy} \allow{}
+Laser:ePhoton@I/2[1]=0.056954190628108 \inputValue{NOT_FOUND} \default{0.056954190628108} \docu{linear chirp - photon energy at half intensity after peak} \allow{}
+Laser:FWHM[1]=5 OptCyc \inputValue{5 OptCyc} \default{NO_VALUE} \docu{intensity FWHM of pulse} \allow{}
+Laser:peak[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{time of peak envelope} \allow{}
+Laser:phiCEO[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(rad) carrier-envelope offset} \allow{[-6.2832,6.2832]}
+Laser:polarAngle[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(deg) polar angle (measured from z-axis)} \allow{}
+Laser:azimuthAngle[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(deg) azimuthal angle (measured from x-axis)} \allow{}
+Laser:ellip[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{ellip%2 gives -1=left circular, 0=linear, +1=right cirular } \allow{}
+Laser:ellipAng[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{angle of ellipticity plane arount main polarization axis} \allow{}
+Laser:allowAngleJump[1]=false \inputValue{NOT_FOUND} \default{false} \docu{allow jump of rotation angle in rotating frem} \allow{}
+Laser:LaserCycles[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Laser:shape[2]=BLANK \inputValue{NOT_FOUND} \default{BLANK} \docu{pulse shapes: gauss,cos8,cos4,cos2,sin2,flatTop,train,BLANK} \allow{}
+Eigen:select[1]=NONE \inputValue{NOT_FOUND} \default{NONE} \docu{kinds: All, SmallReal[N]...first N, Nearest[N,Ereal,Eimag]...in complex plane, Rectangle[Rmin,Rmax,Imin,Imax]...in complex plane, NONE} \allow{}
+Eigen:vectors[1]=false \inputValue{NOT_FOUND} \default{false} \docu{save eigenvectors (binary format)} \allow{}
+Eigen:elements[1]=false \inputValue{NOT_FOUND} \default{false} \docu{compute matrix elements of Operator expectation } \allow{}
+Initial:state[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{initial state (number of state in Hamiltonian)} \allow{}
+Initial:kind[1]=atBegin \inputValue{NOT_FOUND} \default{atBegin} \docu{initial state: atBegin...eigenstate of time-evolution at t=tBegin, mln...for polar select by quantum numbers, Hinitial...eigenstate of specified operator, inFlux...zero, incoming flux, manyBody...many-body calc, Orbital...orbital in basis, ProductFunction...replaces Function, External...numerical external orbital, Eigenstate...[oper:n:refIdx] n'th eigenstate of operator wrt refIdx, EigenSubblock...[Hinitial(i0,i1,..):n] n'th eigenstate of (i0,i1,..) diagonal subblock of Hinitial, GP...ground state of Gross Pitaeskii, EE...mean field electron-electron potential} \allow{}
+Operator:hamiltonian[1]=(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)+<{}><1/sqrt(pow[2](X1-X2)+0.3)> \inputValue{(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)+<{}><1/sqrt(pow[2](X1-X2)+0.3)>} \default{NO_VALUE} \docu{Hamiltonian definition} \allow{}
+Operator:interaction[1]=iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d> \inputValue{iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>} \default{} \docu{interaction definition} \allow{}
+Operator:initial[1]=atBegin \inputValue{NOT_FOUND} \default{atBegin} \docu{eigenstate of this operator will be used as initial states -- atBegin..H(tBegin), hamiltonian..H0 or general operator string} \allow{}
+Operator:projection[1]=0.5<d_1_d>:X1+0.5<d_1_d>:X2 \inputValue{0.5<d_1_d>:X1+0.5<d_1_d>:X2} \default{hamiltonian} \docu{spectrally project in time propagFactorMatrix:ncol[1]=0 \inputValue{NOOperator:parameterTerm[1]= \inputValue{NOT_FOUND} \default{} \docu{use hamiltonian+FactorMatrix:nrow[1]=0 \inputValue{NOT_FOUND} Operator:expectationValue[1]=<chi[0,20]><chFlag:DEBUGallowHugeMatrix[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{suppress checks on huge matrices} \allow{}
+Flag:DEBUGascii[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{force ascii output for all data files} \allow{}
+Flag:DEBUGeigenFullVerify[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{force complete verification of eigenvectors even when problem is large} \allow{}
+Flag:DEBUGfem[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{run FEM basis - compute exact integrals everywhere} \allow{}
+Flag:DEBUGfft[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{fourier transform of coefficients to plot} \allow{}
+Flag:DEBUGoperators[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{check matrices and stop} \allow{}
+Flag:DEBUGparallel[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{block, see main_trecx.cpp how to proceed} \allow{}
+Flag:DEBUGplotBasis[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{plot all basis functions into run output directory} \allow{}
+Flag:DEBUGsetup[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{stop after setup} \allow{}
+Flag:DEBUGshowOp[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{show the expanded operator definitions} \allow{}
+Flag:generate-docu[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{re-write the LaTeX docu from code} \allow{}
+Flag:generate-linp[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{only generate list-of-inputs file} \allow{}
+Flag:noChecks[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{globally switch off all checks} \allow{}
+Flag:printMatrices[0]= \inputValue{NOT_FOUND} \default{} \docu{show operator matrix, norms[depth,digits]...norms of matrix-blocks to depth,full[digits]...all, block[ibl,jbl,i0,j0]...block of full matrix} \allow{}
+Flag:recompute[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{recompute all amplitudes and spectra} \allow{}
+Flag:showDiscretization[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{print the discretization and stop} \allow{}
+Flag:showIndex[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{print Indices and stop} \allow{}
+Flag:showMainIndex[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{print main Index and stop} \allow{}
+Flag:showOperators[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{show operator structure and stop} \allow{}
+Flag:verbose[1]=1 \inputValue{NOT_FOUND} \default{1} \docu{0...minimal, 10...maximal} \allow{}
+FloquetAnalysis:compare[1]= \inputValue{NOT_FOUND} \default{} \docu{list of runs as in "{Dir}[0001,0007,0009]", Dir is omitted, use current top} \allow{}
+FloquetAnalysis:maxE[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) upper boundary for field free energies} \allow{}\mutable{}
+FloquetAnalysis:maxErr[1]=1.e-2 \inputValue{NOT_FOUND} \default{1.e-2} \docu{(mutable) maximal deviation between energies} \allow{}\mutable{}
+FloquetAnalysis:maxImag[1]=1.e-1 \inputValue{NOT_FOUND} \default{1.e-1} \docu{(mutable) maximal modulus of imaginary part} \allow{}\mutable{}
+FloquetAnalysis:minE[1]=-2 \inputValue{NOT_FOUND} \default{-2} \docu{(mutable) lower boundary for field free energies} \allow{}\mutable{}
+FloquetAnalysis:minOvr[1]=0.1 \inputValue{NOT_FOUND} \default{0.1} \docu{(mutable) minimal overlap for a match} \allow{}\mutable{}
+FloquetAnalysis:nFree[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{(mutable) compare lowest nFree states of free problem} \allow{}\mutable{}
+IndexConstraint:axes[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+IndexConstraint:name[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Initial:kind[1]=atBegin \inputValue{NOT_FOUND} \default{atBegin} \docu{initial state: atBegin...eigenstate of time-evolution at t=tBegin, mln...for polar select by quantum numbers, Hinitial...eigenstate of specified operator, inFlux...zero, incoming flux, manyBody...many-body calc, Orbital...orbital in basis, ProductFunction...replaces Function, External...numerical external orbital, Eigenstate...[oper:n:refIdx] n'th eigenstate of operator wrt refIdx, EigenSubblock...[Hinitial(i0,i1,..):n] n'th eigenstate of (i0,i1,..) diagonal subblock of Hinitial, GP...ground state of Gross Pitaeskii, EE...mean field electron-electron potential} \allow{}
+Initial:state[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{initial state (number of state in Hamiltonian)} \allow{}
+Integration:DVR[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Laser:FWHM[1]=5 OptCyc \inputValue{5 OptCyc} \default{NO_VALUE} \docu{intensity FWHM of pulse} \allow{}
+Laser:I(W/cm2)[1]=3.e14 \inputValue{3.e14} \default{NO_VALUE} \docu{peak intensity} \allow{}
+Laser:LaserCycles[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Laser:allowAngleJump[1]=false \inputValue{NOT_FOUND} \default{false} \docu{allow jump of rotation angle in rotating frem} \allow{}
+Laser:azimuthAngle[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(deg) azimuthal angle (measured from x-axis)} \allow{}
+Laser:ePhoton[1]=0.056954190628108 \inputValue{NOT_FOUND} \default{0.056954190628108} \docu{photon energy} \allow{}
+Laser:ePhoton@I/2[1]=0.056954190628108 \inputValue{NOT_FOUND} \default{0.056954190628108} \docu{linear chirp - photon energy at half intensity after peak} \allow{}
+Laser:ellip[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{ellip%2 gives -1=left circular, 0=linear, +1=right cirular } \allow{}
+Laser:ellipAng[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{angle of ellipticity plane arount main polarization axis} \allow{}
+Laser:lambda(nm)[1]=800. \inputValue{800.} \default{-1} \docu{wave length} \allow{}
+Laser:lambda@I/2(nm)[1]=800 \inputValue{NOT_FOUND} \default{800} \docu{linear chirp - wave length at half intensity after peak} \allow{}
+Laser:peak[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{time of peak envelope} \allow{}
+Laser:phiCEO[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(rad) carrier-envelope offset} \allow{[-6.2832,6.2832]}
+Laser:polarAngle[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(deg) polar angle (measured from z-axis)} \allow{}
+Laser:shape[1]=cos2 \inputValue{cos2} \default{BLANK} \docu{pulse shapes: gauss,cos8,cos4,cos2,sin2,flatTop,train,BLANK} \allow{}
+Laser:shape[2]=BLANK \inputValue{NOT_FOUND} \default{BLANK} \docu{pulse shapes: gauss,cos8,cos4,cos2,sin2,flatTop,train,BLANK} \allow{}
+LinCom:alignmentAngle[1]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{(deg) linearly combine for alignement (for range -align=[0,70,36])} \allow{}
+LinCom:ampl[1]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{directories containing amplitude files -ampl=dir1,dir2,.., or -ampl=1,2,3 } \allow{}
+LinCom:averageAlignement[1]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{(deg) linearly combine for alignement -average)} \allow{}
+LinCom:phiCEO[1]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{(rad) desired carrier-envelop offset as -phiCEO=3*pi/4 or range =[0,pi/2,11], =maxPhi[kmin,kmax] for phi with maximal yield)} \allow{}
+Operator:expectationValue[1]=<chi[0,20]><chi[0,20]>,<chi[10,20]><chi[10,20]> \inputValue{<chi[0,20]><chi[0,20]>,<chi[10,20]><chi[10,20]>} \default{} \docu{expectation values (comma-separated list inside quotes), default is overlap and energy, 'suppress' for suppressing all expectation values, 'overInitial' for overlap with initial state} \allow{}
+Operator:hamiltonian[1]=(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)+<{}><1/sqrt(pow[2](X1-X2)+0.3)> \inputValue{(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-2.<trunc[8*10/2-5,8*10/2]/sqrt(Q*Q+0.5)>)+<{}><1/sqrt(pow[2](X1-X2)+0.3)>} \default{NO_VALUE} \docu{Hamiltonian definition} \allow{}
+Operator:initial[1]=atBegin \inputValue{NOT_FOUND} \default{atBegin} \docu{eigenstate of this operator will be used as initial states -- atBegin..H(tBegin), hamiltonian..H0 or general operator string} \allow{}
+Operator:interaction[1]=iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d> \inputValue{iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>} \default{} \docu{interaction definition} \allow{}
+Operator:multipoleOrder[1]=-1 \inputValue{NOT_FOUND} \default{-1} \docu{Maximum number of l-terms in multipole expansion of ee interaction} \allow{}
+Operator:parameterTerm[1]= \inputValue{NOT_FOUND} \default{} \docu{use hamiltonian+parameterTerm for parameter studies} \allow{}
+Operator:projection[1]=0.5<d_1_d>:X1+0.5<d_1_d>:X2 \inputValue{0.5<d_1_d>:X1+0.5<d_1_d>:X2} \default{hamiltonian} \docu{spectrally project in time propagation wrt to this operator} \allow{}
+Operator:smooth[1]=1.7976931348623e+308 \inputValue{NOT_FOUND} \default{1.7976931348623e+308} \docu{start smoothing potentials of type <<PotName>> (default=no smoothing)} \allow{}
+Operator:spectrum[1]= \inputValue{NOT_FOUND} \default{} \docu{print spectral decomposition of wf wrt to operator} \allow{}
+Operator:surfaceGauge[1]=automatic \inputValue{NOT_FOUND} \default{automatic} \docu{how to interprete surface: length, velocity, automatic..results mostly in velocity} \allow{}
+Operator:truncate[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{truncate potentials of type <<PotName>> (default=do not truncate)} \allow{}
+OperatorFloorEE:lambdaMax[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Orbital:definition[1]= \inputValue{NOT_FOUND} \default{} \docu{defintion of the orbitalsT L(L+1) Lz^2 cos^8Phi cos^2Phi sin^2Phi X Y } \allow{}
+Orbital:integrationAccuracy[1]=1e-7 \inputValue{NOT_FOUND} \default{1e-7} \docu{accuracy target for numerical integration, values<1e-7 may lead to slow convergence} \allow{}
+Orbital:integrationPoints[1]=5 \inputValue{NOT_FOUND} \default{5} \docu{number of points beyond standard quadrature} \allow{}
+Orbital:method[1]=singleQuadrature \inputValue{NOT_FOUND} \default{singleQuadrature} \docu{methods: singleQuadrature...evaluate on overall quadrature grid,volumeSplit...quadratures on subvolumes} \allow{}
+Orbital:properties[1]= \inputValue{NOT_FOUND} \default{} \docu{print properties (blank-separted list), choices are T L(L+1) Lz^2 cos^8Phi cosAxis:nCoefficients[3]=20 \inpuOutput:wavefunction[1]=false \inputValue{NOT_FOUND} \default{false} \docu{savAxis:order[3]=-1 \inputValue{EMPTY} \defaulParallel:sort[1]=Phi.Eta.Rn \inputValue{NOT_FOUND} \default{Phi.Eta.Rn} \docu{coordinaAxis:lower end[3]=8*10/2 \inputValue{8*10/2} \default{-1.7976ParameterRange:max[1]=-infty \inputValue{NOT_FOUND} \defaulAxis:upper end[3]=Infty \inputValue{InftyParameterRange:min[1]=-1.79769313486e+308 \inputValue{NOT_FOUND} \default{-1Axis:modify[3]= \inputValue{NOT_FOUND} \default{} ParameterRange:nSteps[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{number of steps froAxis:exactIntegral[3]=falseParameterRange:name[1]=NOT_FOUND \inputValue{NOT_FOUND} \default{NOT_FOUND} \docu{name of the parameter} \allow{AxPlot:append[1]=false \inputValue{NOT_FOUND} \default{false} \docu{append to file} \allow{}
+Plot:axis[1]=BLANK \inputValue{NOT_FOUND} \default{BLANK} \docu{(mutable) axis to plot (must match an axis name in discretization)} \allow{}\mutable{}
+Plot:currents[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Plot:digits[1]=8 \inputValue{NOT_FOUND} \default{8} \docu{number of digits for plot values} \allow{}
+Plot:interval[1]=-1 \inputValue{NOT_FOUND} \default{-1} \docu{minimal interval for plots (<=0 - all w/o duplicates, <0 - can be overwritten by setDefaultInterval())} \allow{}
+Plot:lowerBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) upper grid boundary} \allow{}\mutable{}
+Plot:onlyMatching[1]=false \inputValue{NOT_FOUND} \default{false} \docu{true = abort rather than skip if plot axes do not match index} \allow{}
+Plot:points[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) number of points, 0...automatic} \allow{}\mutable{}
+Plot:tagMax[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{plot only tags <= tagMax} \allow{}
+Plot:tagMin[1]=-infty \inputValue{NOT_FOUND} \default{-infty} \docu{plot only tags >= tagMin} \allow{}
+Plot:upperBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) lower grid boundary; defaults to upper=lower - single point or no grid conversion} \allow{}\mutable{}
+Plot:usage[1]=separate \inputValue{NOT_FOUND} \default{separate} \docu{(mutable) axis usage: grid...plot axis, separate...separate plots, sum.Absorption:lower[2]=-40 \inputValue{NOT_FOUND} \default{-40}PlotFunction:algebra[1]= \inputValue{NOT_FOAbsorption:unitary[2]=false \inputValue{NOT_FOUND} \default{false} \docu{interprete as thPlotFunction:lower[1]=0 \inputValue{NOT_FOUND}Axis:name[5]=X2 \inputValue{X2} \default{BLANK} \docu{coPlotFunction:points[1]=201 \inputValue{NOT_FOUND} \default{201} \docu{number of plot points} \allow{}
+PlotFunction:upper[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{upper end of plot interval} \allow{}
+Plot_user:axis[1]=BLANK \inputValue{NOT_FOUND} \default{BLANK} \docu{(mutable) axis to plot (must match an axis name in discretization)} \allAxis:order[5]=1Plot_user:lowerBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) upper grid boundary} \allow{}\mutaAxis:lPlot_user:points[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) number of points, 0...automatic} \allow{}\mAxis:uppePlot_user:upperBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) lower grid boundary; defaults to Axis:modify[5]= \inputValue{NOT_FOUND} \default{} \docu{path-dependenPlot_user:usage[1]=separate \inputValue{NOT_FOUND} \default{separateAxis:exactIntegral[5]=false \inputValue{NOT_FOUND} \default{false} \docu{use exaxt integrations for axis, even if overall femDVR} \allow{}
+Axis:name[6]=X2 \inputValue{X2} \default{BLANK} \docu{coordinate string: X,Y,Z,R,Polar2D:Nmax[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{number of radial functions} \allow{}APolar2D:origin[1]=0 0 \inputValue{NOT_FOUND} \default{0 0} \docu{x y, origin of the off-center polar basis} \allowAxiPolar2D:quad[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{minimal number of quadrature points} \allowAxiPolar2D:radius[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radius around origin} \allow{}
+PolarOffCenter:Lmax[1]=2 \inputValue{NOT_FOUND} \default{2} \docu{maximal angular momentum} \allow{}
+PolarOffCenter:Mmax[1]=2 \inputValue{NOT_FOUND} \default{2} \docu{maximal |m|} \allow{}
+PolarOffCenter:Nmax[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{number of radial functions} \allow{}
+PolarOffCenter:origin[1]=[0,0,0] \inputValue{NOT_FOUND} \default{[0,0,0]} \docu{[x,y,z], origin of the off-center polar basis} \allow{}
+PolarOffCenter:quad[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{minimal number of quadrature points} \allow{}
+PolarOffCenter:radius[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radius around origin} \allow{}
+PolarOffCenter:rmin[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{radial support is in [rmin,radius]} \allow{}
+Pot3d:chargeC[1]=1/5 \inputValue{NOT_FOUND} \default{1/5} \docu{fraction or Coulombic charge on C} \allow{}
+Pot3d:methaneAlign[1]=z \inputValue{NOT_FOUND} \default{z} \docu{Align one symmetry axis along either 'x', 'y' or 'z'} \allow{}
+Pot3d:methaneSize[1]=2.042794 \inputValue{NOT_FOUND} \default{2.042794} \docu{Length scale of Methane molecule (au)} \allow{}
+Pot3d:origin[1]= \inputValue{NOT_FOUND} \default{} \docu{postion of potential origin (give in cartesian coordinates)} \allow{}
+Pot3d:potential[1]=undefined \inputValue{NOT_FOUND} \default{undefined} \docu{: methane,hydrogen,harmOsc,identity,radial[x,y,z,V(r)]...radial around x,y,z} \allow{}
+Pot3d:quadOrder[1]=40 40 0 \inputValue{NOT_FOUND} \default{40 40 0} \docu{quadrature order for interpolating the potential, last=0 indicates DVR)} \allow{}
+Pot3d:screenCarbon[1]=2. \inputValue{NOT_FOUND} \default{2.} \docu{screen length for Carbon} \allow{}
+Pot3d:screenHydrogen[1]=3.100 \inputValue{NOT_FOUND} \default{3.100} \docu{screen length for Hydrogens} \allow{}
+Project:constraints[1]= \inputValue{NOT_FOUND} \default{} \docu{constrain spectral projection} \allow{}
+Pulse:check[1]=false \inputValue{NOT_FOUND} \default{false} \docu{check new against old pulse checking code} \allow{}
+Reuse:runs[1]= \inputValue{NOT_FOUND} \default{} \docu{runs to re-use if identical input - blank-separated runDirs or [all] or format [1,4,6-9]} \allow{}
+Source:end[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{stop time-integration here} \allow{}
+Source:region[1]= \inputValue{NOT_FOUND} \default{} \docu{axis perpendicular to surface of subregion} \allow{}
+Source:turnOff[1]=220.63996478176 \inputValue{NOT_FOUND} \default{220.63996478176} \docu{linearly turn off source over this time-interval, default ParameterRange:max[1]Source:undoundDOF[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{.ParameterRange:nSteps[1]Spectrum:amplitude[1]=all \inputValue{NOT_FOUND} \default{all} \docu{which amplitude file ParameterRange:min[1]=-1.79769313486e+308 \inputVaSpectrum:benchmark[1]=false \inputValue{NOT_FOUND} \default{false} \docu{staFloquetAnalysis:minE[1]=-2 \inputValue{NOT_FOUND} Spectrum:energyGrid[1]=false \inputValue{NOT_FOUND} \default{false} \docu{grid equidistaFloquetAnalysis:maxE[1]=0 \inputValue{NOT_FOUND} Spectrum:maxEnergy[1]=7.9059253226096 \inputValue{NOT_FOUND} \default{7.9059253226096} FloquetAnalysis:minOvr[1]=0.1 \inputValue{NOT_FOUND} \default{0.1} Spectrum:minEnergy[1]=0 \inputValue{NOT_FOUND} \default{0} \docuFloquetAnalysis:maxImag[1Spectrum:plot[1]= \inputValue{NOT_FOUND} \default{} \docu{(mutable) read from ampl-file and plot, default depends on FloquetAnalysis:maxErr[1]=1.e-2 \inputValue{NOT_FOUND} \default{1.e-2} \docu{(mutable) maximal deviation between energies} \allow{}\mutable{}
+FloquetAnalysis:nFree[1]=10 \inputValue{NOT_FOUND} \default{10} \docu{(mutable) compare lowest nFree states of free problem} \allow{}\mutable{}
+FloquetAnalysis:compare[1]= \inputValue{NOT_FOUND} \default{} \docu{list of runs as in "{Dir}[0001,0007,0009]", Dir is omitted, use current top} \allow{}
+EigenSubspace:imGuess[1]=0. \inputValue{NOT_FOUND} \default{0.} \docu{real part of spectral center} \allow{}
+EigenSubspace:reGuess[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{real part of spectral center} \allow{}
+EigenSubspace:tolerance[1]=1.e-7 \inputValue{NOT_FOUND} \default{1.e-7} \docu{largest eigenvalue error (relative to radius)} \allow{}
+Project:constraints[1]= \inputValue{NOT_FOUND} \default{} \docu{constrain spectral projection} \allow{}
+Plot:currents[1]=OBSOLETE \inputValue{NOT_FOUND} \default{OBSOLETE} \docu{...OBSOLETE...} \allow{}
+Plot:onlyMatching[1]=false \inputValue{NOT_FOUND} \default{false} \docu{true = abort rather than skip if plot axes do not match index} \allow{}
+Plot:append[1]=false \inputValue{NOT_FOUND} \default{false} \docu{append to file} \allow{}
+Plot:tagMin[1]=-infty \inputValue{NOT_FOUND} \default{-infty} \docu{plot only tags >= tagMin} \allow{}
+Plot:tagMax[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{plot only tags <= tagMax} \allow{}
+Plot:interval[1]=-1 \inputValue{NOT_FOUND} \default{-1} \docu{minimal interval for plots (<=0 - all w/o duplicates, <0 - can be overwritten by setDefaultInterval())} \allow{}
+Plot:digits[1]=8 \inputValue{NOT_FOUND} \default{8} \docu{number of digits for plot values} \allow{}
+Plot:axis[1]=BLANK \inputValue{NOT_FOUND} \default{BLANK} \docu{(mutable) axis to plot (must match an axis name in discretization)} \allow{}\mutable{}
+Plot:points[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) number of points, 0...automatic} \allow{}\mutable{}
+Plot:lowerBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) upper grid boundary} \allow{}\mutable{}
+Plot:upperBound[1]=0 \inputValue{NOT_FOUND} \default{0} \docu{(mutable) lower grid boundary; defaults to upper=lower - single point or no grid conversion} \allow{}\mutable{}
+Plot:usage[1]=separate \inputValue{NOT_FOUND} \default{separate} \docu{(mutable) axis usage: grid...plot axis, separate...separate plots, sum...sum over coordinates} \allow{grid,separate,sum}\mutable{}
+Flag:showDiscretization[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{print the discretization and stop} \allow{}
+Constrain:axis[1]=NONE \inputValue{NOT_FOUND} \default{NONE} \docu{name of axis to apply constraints} \allow{}
+Constrain:upperEnd[1]=infty \inputValue{NOT_FOUND} \default{infty} \docu{constrain axis to <= upper end} \allow{}
+Constrain:lowerEnd[1]=-1.7977e+308 \inputValue{NOT_FOUND} \default{-1.7977e+308} \docu{constrain axis to >= lower end} \allow{}
+Constrain:order[1]=1000000 \inputValue{NOT_FOUND} \default{1000000} \docu{maximal order} \allow{}
+Checks:off[1]= \inputValue{NOT_FOUND} \default{} \docu{do not perform checks as listed, if emty list switch of globally} \allow{}
+Flag:noChecks[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{globally switch off all checks} \allow{}
+Output:wavefunction[1]=false \inputValue{NOT_FOUND} \default{false} \docu{save coefficients at print interval} \allow{}
+Flag:showIndex[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{print Indices and stop} \allow{}
+Flag:DEBUGoperators[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{check matrices and stop} \allow{}
+Flag:DEBUGfft[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{fourier transform of coefficients to plot} \allow{}
+Flag:DEBUGsetup[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{stop after setup} \allow{}
+DEBUG:killTime[1]=1.7976931348623e+308 \inputValue{NOT_FOUND} \default{1.7976931348623e+308} \docu{kill if time larger than this} \allow{}
+Flag:DEBUGeigenFullVerify[0]=false \inputValue{NOT_FOUND} \default{FLAG_ONLY} \docu{force complete verification of eigenvectors even when problem is large} \allow{}
+ow{}
+_EXPERT_:newFloor[0]=false \inputValue{NOT_FOUND} \default{false} \docu{admit use of tensor products} \allow{}
+_EXPERT_:suppressTensor[0]=false \inputValue{NOT_FOUND} \default{false} \docu{admit use of tensor products} \allow{}

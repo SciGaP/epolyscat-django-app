@@ -1,0 +1,40 @@
+Title:
+Tutorial example  - 2d harmonic oscillator
+
+The purpose of this exercise is  to
+(1) understand how to specify a 2-dimensional problem
+(2) see the onset of the "curse of dimension" already here
+
+[TASK] vary the Axis and see what happens
+
+# Below we define our discretization axis:
+# nCoefficients = order * nElem (older, alternative input)
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X1,24,-7,7,polynomial,12
+X2,32,-7,7,polynomial,8
+
+# NOTE: the axes need not be identical,
+#       although, of course, there is no good reason to have them different in this example
+
+# NOTE: the coordinate type (here: X) can be numbered
+#       alternatively, we could specify
+#         X,24,-7,7,polynomial,12
+#         Y,32,-7,7,polynomial,8
+#       or any combination of these
+
+# Hamiltonian in the tensor product space L2( dx1 dx2, R^2) = L2(dx1,R) (x) L2(dx2,R)
+Operator: hamiltonian
+0.5(<d_1_d><1>+<1><d_1_d>)+0.5<Q*Q><1>+0.5<1><Q*Q>
+
+# NOTE: what we usually denote as d^2/dx^2 +  d^2/dy^2 is, mathematically speaking
+#       a tensor product d^2/(x^2 (x) 1 +  1 (x) d^2/dy^2
+#       this is the principle for the notation of operators in tRecX
+
+
+# we will print the lowest eigenvalues and stop
+Eigen: select=SmallReal[20]
+
+
+
+
+

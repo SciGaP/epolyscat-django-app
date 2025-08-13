@@ -1,0 +1,73 @@
+Title:
+A CO2 lookalike
+
+#define BOX    40.
+#define SMOOTH 30.
+
+# the CO bond length
+#define bCO 2.197
+
+# STANDARD PARAMETERS
+# with alfaCharge 0.5, Cscreen 3, Oscreen 1.73 we have the
+# 7th bound state energy -0.51 and gerade Pi symmetry
+# at order 20 and density 2/au and 10 angular momenta,
+# that is reasonably well converged
+
+# effictive charge balance and oxygen and carbon screening
+#define alfaCharge 0.5
+#define Cscreen 3.
+#define Oscreen 1.73
+
+#define HamCO2 (1/2<<Laplacian>>+<1><{}><CO2Pot[BOX,alfaCharge,Cscreen,Oscreen](Eta,Rn)>)
+#define HamFree (1/2<<Laplacian>>)
+
+#define TruncC 3
+#define TruncatedCoulomb (0.5<<Laplacian>>-<1><1><chi[TruncC,BOX]*trunc[SMOOTH,BOX]/Q>-<1><1><chi[0,TruncC]/TruncC>)
+
+Spectrum: radialPoints=200,plot=total
+
+Axis: subset,name,nCoefficients,lower end, upper end,functions,order
+Subspace,Orbital,2,7,,Eigenbasis[HamCO2:Complement]
+Complement, Phi,7,,,expIm
+          , Eta,10,-1,1, assocLegendre{Phi}
+          , Rn,80, 0,  BOX,polynomial,20
+          , Rn,20, BOX,Infty,polExp[0.5]    
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+Operator: hamiltonian=<0,0>HamCO2+<1,1>HamFree
+Operator: interaction=<allOnes>(iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>+iLaserAz[t]<<D/DZ>>)
+Operator: expectationValue='-i<allOnes><1_d><1><1>,<allOnes><1><Q><1>'
+
+# --- manual input of matrices ------------------
+# sequence of matrix definitions with unique names
+# line1: a 2x2 diagonal matrix, to be addressed as [[SubHam]] in operator definitions
+# line2: header for a 2x2 general matrix, elements blank-separated in subsequent lines
+# a sequencs of such definitions can be given, terminates by blank line
+# (numbers w/o physical meaning, just for demonstration)
+Matrix: name, kind, shape
+SubHam, diagonal, -0.5 -0.4
+SubDip, matrixElements, 2x2
+0 1
+1 0
+
+# alternative operator definitions using the above matrices
+#Operator: hamiltonian=<0,0>[[SubHam]]+<1,1>HamFree
+#Operator: interaction=<0,0>[[SubDip]]+<1,1>(iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>+iLaserAz[t]<<D/DZ>>)
+#------------------------------------------------
+
+
+
+#define FRAC 3
+Laser: shape, I(W/cm2), FWHM, lambda(nm), phiCEO, polarAngle
+cos2, 1.e10, 4 OptCyc, 800.,      pi/2,     FRAC*45
+cos4, 1.e11, 3 OptCyc, 800./13,   0.,     FRAC*45
+cos4, 1.e11, 3 OptCyc, 800./15,   0.,     FRAC*45
+
+Initial: kind=Orbital[0]
+
+TimePropagation: end,print,store,cutEnergy,accuracy
+  20 OptCyc, 0.5 OptCyc,0.05 au,200,1.e-9
+
+

@@ -1,0 +1,58 @@
+Title:
+Demonstration of general 2d potentials (minor modification of 2d HO)
+
+# NOTE: implementation is somewhat rough and not all plausible inputs work
+#       try the alternatives below to see what works and what not
+
+# Below we define our discretization axis:
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X1,30,-7,7,polynomial,15
+X2,30,-7,7,polynomial,15
+
+# Hamiltonian in the tensor product space L2( dx1 dx2, R^2) = L2(dx1,R) (x) L2(dx2,R)
+
+# Alternative 0: (DVR) -- see explanations below
+Operator: hamiltonian
+0.5(<d_1_d><1>+<1><d_1_d>)+0.5<{}><X1*X1+X2*X2>
+
+# Alternative 1: exact integral on X1 coordinate
+#Operator: hamiltonian
+0.5(<d_1_d><1>+<1><d_1_d>)+0.5<{Int}><X1*X1+X2*X2>
+
+# Alternative 2: (separable potential)
+#Operator: hamiltonian
+0.5(<d_1_d><1>+<1><d_1_d>)+0.5<Q*Q><1>+0.5<1><Q*Q>
+
+# Alternative 3: (hard-coded "class Sum")
+#Operator: hamiltonian
+0.5(<d_1_d><1>+<1><d_1_d>)+0.5<{Int}><Sum(X1*X1,X2*X2)>
+
+
+# we will print the lowest eigenvalues and stop
+Eigen: select=SmallReal[20]
+
+# Inner workings of the code:
+(a) if both coordinates are DVR and the factor on the first is <{}>
+    the code will use DVR integration on both (here X1 and X2)
+    this makes efficient purely diagonal operators on the X1-X2 plane
+    it will only work when both axes are FE-DVR
+    (Alternative 0)
+
+(b) if the factor on the first is <{Int}>, more accurate integration
+    over first will be forced, even if DVR were possible
+    at present, <{Int}> can only be used on single-element functions (not for FE)
+    i.e. need to change to
+    X1,30,-7,7,polynomial,30
+    (Alternative 1)
+
+(c) Of course, if the potential is separabble as in this example, it is
+    more efficient to exploit that separability
+    (Alternative 2)
+
+(d) There are a few hard-coded 2-argument functions, here class AlgebraSum, which will be more
+    efficient in setup than when the expression <{}><X1*X1+X2*X2> must be evaluated
+    This can be extended in C++ using the examples
+    (Alternative 3)
+
+
+

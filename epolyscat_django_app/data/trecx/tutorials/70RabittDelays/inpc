@@ -1,0 +1,63 @@
+Title:
+Compute a RABITT setup (post-process for finding the delay)
+
+# [TASK] compute side band amplitudes for different phiCEOs
+#        look at the results, see the side-band oscillating
+# [TASK] post-process by the commmand
+# >./tRecX tutorial/70RabittDelays/0002 -phiCEO=maxPhi -ampl=tutorial/70RabittDelays/0003
+#   (replacing 0002 and 0003 with the run numbers)
+#    you find phiCEO with maximal side-band yield and other info
+#
+# [TASK] Change continuum Hamiltonian from free motion to Coulomb, see the effect
+# [TASK] pick a different combination of phiCEOs to verify the result
+
+
+#define PHI pi/4
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm), phiCEO
+cos2, 1.e10, 4 OptCyc, 800.,     0*PHI
+cos4, 1.e11, 3 OptCyc, 800./13,   0.
+cos4, 1.e11, 3 OptCyc, 800./15,   0.
+
+# basis comparatively small, to get results quickly
+#define NELEM 8
+#define ORDER 10
+#define BOX NELEM*ORDER/2
+
+# space is split into a subspace with orbitals an the rest
+# orbitals are constructed as the eigenbasis of the Hydrogen hamiltonian wrt to basis on Complement
+
+Axis: subset,name,nCoefficients,lower end, upper end,functions,order
+Subspace,Orbital,       1,0,  ,Eigenbasis[(1/2<<Laplacian>>-<<Coulomb>>):Complement]
+Complement,Phi,         1
+          ,Eta,         4,-1,1, assocLegendre{Phi}
+          ,Rn,NELEM*ORDER, 0,BOX,polynomial,ORDER
+          ,Rn,         5, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+# input a diagonal matrix - will be used as energy matrix on the subspace
+Matrix: name, kind, shape, units
+SubspaceEner,  diagonal,-0.5 -0.125 -0.125 -0.05555555 -0.055555555 -0.0555555
+
+# energy w/o the interaction: diaonal for subspace (energy -0.5), free motion on the rest
+Operator: hamiltonian=<0,0>[[SubspaceEner]]+1/2<1,1><<Laplacian>>
+
+# allOnes means that Subspace and Complement are all connected
+Operator: interaction=<allOnes>(iLaserAz[t]<<D/DZ>>)
+Operator: expectationValue='<allOnes><<Z>>'
+
+Operator: projection=<allOnes>(1/2<<Laplacian>>)
+
+# use start from the (first) orbital in the subspace
+Initial: kind=Orbital[0]
+
+Spectrum: iSurff=false,radialPoints=200,plot=total,minEnergy='0 eV', maxEnergy='12 eV'
+
+TimePropagation: end,print,store,cutEnergy,accuracy,fixStep
+       20 OptCyc, 0.5 OptCyc,0.05 au,30,1.e-10,0.025
+
+#Eigen: select=SmallReal[6],elements=true,method=Lapack
+
+

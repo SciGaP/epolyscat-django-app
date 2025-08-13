@@ -1,0 +1,86 @@
+@import url('https://fonts.iu.edu/style.css?family=BentonSans:regular,bold|BentonSansCond:regular|GeorgiaPro:regular');
+
+//$font-family-sans-serif: BentonSans Regular, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;
+//$font-family-monospace: BentonSans Regular, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !default;
+//$font-family-base: BentonSans Regular, $font-family-sans-serif !default;
+//
+//.trecx-color-main {
+//  color: #226597;
+//}
+//
+//.trecx-bg-color {
+//  background-color: #2265970D;
+//}
+//
+//.trecx-bg-color-sec {
+//  background-color: #E8E8E8;
+//}
+//
+//.trecx-text-color {
+//  color: #303030;
+//}
+//
+//.trecx-text-sec-color {
+//  color: #989797;
+//}
+
+
+$primary: #226597 !default;
+$secondary: #303030 !default;
+//$success:       $green !default;
+//$info:          $cyan !default;
+//$warning:       $yellow !default;
+//$danger:        $red !default;
+$light: #F6F6F6 !default;
+//$dark:          $gray-800 !default;
+
+
+// Links
+//
+// Style anchor elements.
+
+//$link-color: #303030 !default;
+//$link-decoration:                         none !default;
+//$link-hover-color:                        darken($link-color, 15%) !default;
+//$link-hover-decoration:                   underline !default;
+// Darken percentage for links with `.text-*` class (e.g. `.text-success`)
+//$emphasized-link-hover-darken-percentage: 15% !default;
+
+
+// Bootstrap and its default variables
+@import '~bootstrap/scss/bootstrap';
+// BootstrapVue and its default variables
+@import '~bootstrap-vue/src/index.scss';
+
+.badge {
+  background-color: #237ABB0D;
+  color: #226597
+}
+
+// https://bootstrap-vue.org/docs/components/collapse
+// To toggle the text based on the collapse state.
+.collapsed .when-open,
+.not-collapsed .when-closed {
+  display: none;
+}
+
+.table thead th {
+  border: none;
+}
+
+.table thead {
+  background: rgba(34, 101, 151, 0.1);
+  color: #226597;
+}
+
+label {
+  margin: 0px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.breadcrumb {
+  padding: 0px;
+  font-size: 12px;
+  background-color: transparent;
+}

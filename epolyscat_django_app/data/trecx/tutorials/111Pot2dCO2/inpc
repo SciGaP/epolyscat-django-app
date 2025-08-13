@@ -1,0 +1,73 @@
+Title:
+Simple CO2-like single-electron model
+
+# input alternatives:
+# (long) algebraic expression or hard-coded routine
+# WARNING: there is a hack specific for the hard-coded CO2Pot[...]:
+#          it is truncated at Lmax=7
+#          i.e. beyond Eta,8 (Lmax=7) the behavior of the two alternatives differs
+
+
+#define BOX    20.
+#define SMOOTH 15.
+
+# the CO bond length
+#define bCO 2.197
+
+# STANDARD PARAMETERS
+# with alfaCharge 0.5, Cscreen 3, Oscreen 1.73 we have the
+# 7th bound state energy -0.51 and gerade Pi symmetry
+# at order 20 and density 2/au and 10 angular momenta,
+# that is reasonably well converged
+
+# effictive charge balance and oxygen and carbon screening
+#define alfaCharge 0.5
+#define Cscreen 3.
+#define Oscreen 1.73
+
+#define rPlus sqrt(Rn*Rn+2.*Eta*Rn*bCO+bCO*bCO)
+#define rMinu sqrt(Rn*Rn-2.*Eta*Rn*bCO+bCO*bCO)
+#define potC -alfaCharge*(1.+5.*exp(-Rn/Cscreen))/Rn
+#define potPlus (0.5*(alfaCharge-1.))*(1.+7.*exp(-rPlus/Oscreen))/rPlus
+#define potMinu (0.5*(alfaCharge-1.))*(1.+7.*exp(-rMinu/Oscreen))/rMinu
+
+Surface: points
+BOX
+
+Spectrum: radialPoints=100, plot=cutPhi[0]
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,2,,,expIm
+ Eta,8,-1,1, assocLegendre{Phi}
+ Rn,40, 0,  BOX,polynomial,20
+ Rn,20, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+# hard-coded version of potential (faster setup)
+Operator: hamiltonian='1/2<<Laplacian>>+<1><{}><CO2Pot[BOX,alfaCharge,Cscreen,Oscreen](Eta,Rn)>'
+
+# input-defined potential (slow setup)
+#Operator: hamiltonian='1/2<<Laplacian>>+<1><{}><trunc[15,20](Rn)*(potC+potPlus+potMinu)>'
+
+Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>+iLaserAz[t]<<D/DZ>>'
+Operator: expectationValue='<1><Q><1>,-i<1_d><1><1>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm), phiCEO
+cos2, 1.e10, 4 OptCyc, 800.,   0.
+cos4, 1.e11, 3 OptCyc, 800./13,0.
+cos4, 1.e11, 3 OptCyc, 800./15,0.
+
+
+Initial: state=7
+
+TimePropagation: end,print,store,cutEnergy,accuracy
+  20 OptCyc, 0.5 OptCyc,0.05 au,100,1.e-9
+
+#Eigen: select=SmallReal[10]
+
+# put a 2d plot to files
+#Plot: axis,points,lowerBound,upperBound
+      Rn,101,0.,10.
+      Eta,31,-1.,1.

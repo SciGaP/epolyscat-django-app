@@ -1,0 +1,46 @@
+Title:
+Tutorial example  - spectra from 2d Helium in a laser field
+
+Runtime on single laptop CPU ~ 6 min
+
+#define BOX 20
+
+Surface: points
+BOX
+
+Spectrum: radialPoints=60,symmetry12=true
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+       cos2, 4.e14, 5 OptCyc, 100.
+
+TimePropagation: end,print,store,accuracy,cutEnergy
+      15 OptCyc, 1. OptCyc,0.05 OptCyc,1.e-9,100
+
+Absorption: kind, axis, theta, upper
+ECS,X1,0.3,BOX
+ECS,X2,0.3,BOX
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X1, 10,-Infty,-BOX.,polExp[0.5]
+X1, 40,-BOX.,BOX.,polynomial,20
+X1, 10, BOX,Infty,polExp[0.5]
+X2, 10,-Infty,-BOX,polExp[0.5]
+X2, 40,-BOX,BOX,polynomial,20
+X2, 10, BOX,Infty,polExp[0.5]
+
+# two-dimesional potentials: input using {..}
+#  - the first, emtpy {} indicates that the coordinate will be used deeper in the hierarchy
+#    and no factor will be computed on the present level
+#    where B_k(X),B_l(X) are the basis functions from the X-level with emtpy {}
+#    X1 and X2 atch the Axis names defined above
+
+#define HSINGLE (0.5<d_1_d>-<2/sqrt(Q*Q+0.5)>)
+Operator: hamiltonian
+HSINGLE<1>+<1>HSINGLE+<{}><1./sqrt(pow[2](X1-X2)+0.3)>
+
+Operator: interaction='iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>'
+
+# special format for defining the high-energy projectors:
+# indicates that operator is separabel, projector is product of projectors on X and Y
+# !!! NOTE: this format for now is only admissible for Operator: projection !!!
+Operator: projection='0.5<d_1_d>:X1+0.5<d_1_d>:X2'

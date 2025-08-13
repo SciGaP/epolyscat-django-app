@@ -1,0 +1,82 @@
+Title:
+Tutorial example  - high harmonics from 1d hydrogen
+
+The purpose of this exercise is to
+(1) compare the time-dependent dipole in length, velocity, and acceleration forms
+(2) verify what you have heard about high harmonics by numerical experiments
+
+[TASK 1] run, plot dipole responses (quite messy),
+         run "Harmonics" to get harmonic spectra
+         compare the numerical behavior of the three responses
+         HINT: vary the BOX size
+[TASK 2] choose different pulse parameters and shapes (gauss,cos8),
+         adjust the integration ranges appropriately
+[TASK 3] study the importance of the exact pulse shape for HHG power spectrum (little influence!)
+         see how clean harmonic spikes emerge at longer pulse duration
+
+# Input macro: below, any string "BOX" will be replaced by the given string before processing
+#define BOX 20
+
+# specified which dipol forms should be calculated
+Dipole: acceleration=DipAccZ:<-Q/pow[3](sqrt(Q*Q+2))>,velocity,length
+
+# NOTE: dipole acceleration operator is derivative of potential - need to define here
+        predefined for some standard potentials, but not for the "1d-hydrogen"
+	When specified in this form, post-process by program "Harmonics"
+
+# NOTE: of the three forms, acceleration: <d/dx V(x)> gives the best result
+        as contributions to it drop with distances
+        in contrast <x> EMPHASIZES large distances
+        and         <d/dx> gives equal weight to all x
+
+# for comparison, the dipole operators are spelled out explicitly
+Operator: expectationValue
+'<-chi[-BOX,BOX]*Q*pow[-1.5](Q*Q+2)>,-i<chi[-BOX,BOX]/2_d>+i<d_chi[-BOX,BOX]/2>,<chi[-BOX,BOX]*Q>'
+
+Absorption: kind, axis, theta, upper
+ECS,Z,0.3,BOX
+
+# NOTE: as velocity form includes long-distance contributions
+        it is sensitive to box size and absorption
+        (if possible, use acceleration form)
+
+# laser pulse parameters: cos2 pulse
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 2.e14, 2. OptCyc, 800.
+
+# TimePropagation: store - minimal interval for writing expectation values to file
+TimePropagation: begin, end, print, store, cutEnergy, accuracy
+ , 10 OptCyc, 0.1 OptCyc, 0.1 au, 100, 1.e-7
+
+# NOTE: if no begin time is specified, propagation starts at beginning of pulse
+
+# NOTE: store must be chosen to match the highest frequencies that are to be resolved
+        i.e. store < 2pi/omega_max
+
+        you may find larger spacing than "store" on file, if the time
+        propagator makes larger single steps - this means that nothing much happens in between
+        if values at finer intervals are needed, interpolation will work well
+
+# NOTE: here, for demonstration purposes,
+        the store-interval are is speccified in au (atomic units), not optical cycles
+
+# NOTE: "cutEnergy" introduces a spectral constraint that accelerates time propagation
+
+# piece-wise specification of discretization with exponential tails at both ends
+Axis: name,nCoefficients,lower end, upper end,functions,order
+Z, 30,-Infty,-BOX,polExp[1.]
+Z, BOX*4,-BOX, BOX,polynomial,20
+Z, 30, BOX, Infty,polExp[1.]
+
+# NOTE: we can keep the discretization unchanged,
+        absorption is done perferctly well by the
+        "infinite range" exponential functions at either end of the axis
+
+# NOTE: the algebraic expression BOX*4 will be evaluated
+#       after the string was substituted for BOX
+
+Operator: hamiltonian='0.5<d_1_d>-<1/sqrt(Q*Q+2)>'
+Operator: interaction='iLaserAz[t]<1_d>'
+
+
+

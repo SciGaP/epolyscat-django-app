@@ -1,0 +1,88 @@
+
+
+ ===  Date [06/23 13:32:48] Demonstration of general 2d potentials (minor modification of 2d HO)  
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X1.X2
+
+   Axis maxCoeff from   to order      basis absorption: eta,inner
+     --   ------   --   --   ---   --------   -------------------
+     X1       27   -7    7    15 polynomial                      
+     X2       27   -7    7    15 polynomial                      
+
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5(<d_1_d><1>+<1><d_1_d>)+0.5<{}><X1*X1+X2*X2>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5(<d_1_d><1>+<1><d_1_d>)+0.5<{}><X1*X1+X2*X2>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/110Pot2d/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[20]  ==========================================
+ ***  In sparse matrix, found  1 independent subsets with size(s) 729 ***
+               real imag
+     --   -----------   --
+    0 1.00000038154    0
+    1 1.99999656951    0
+    2 1.99999656951    0
+    3 2.99999275748    0
+    4 3.00000653329    0
+    5 3.00000653329    0
+    6 4.00000272126    0
+    7 4.00000272126    0
+    8 4.00013755893    0
+    9 4.00013755893    0
+   10 4.99858615439    0
+   11 4.99858615439    0
+   12 5.00001268504    0
+   13  5.0001337469    0
+   14  5.0001337469    0
+   15 5.99858234235    0
+   16 5.99858234235    0
+   17 6.00014371068    0
+   18 6.00014371068    0
+   19 6.00329840809    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2        3.99        1.99
+                run_trecx: run                               1        3.98        3.98
+                run_trecx: setup                             1        3.98        3.98
+               mpiWrapper: MPI                              62       0.609     0.00982
+timer overhead/call (sec): 4.27e-08
+timer overhead/call (sec): 9.84e-10 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/110Pot2d/0000/  =============
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

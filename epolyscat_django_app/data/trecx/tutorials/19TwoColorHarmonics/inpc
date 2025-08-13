@@ -1,0 +1,58 @@
+Title:
+Tutorial example  - high harmonics for H-atom in two-color field
+
+Use fundamental and perpendicular 2nd harmonic
+
+
+# you may check the "Laser" file in each run directory for the actual field
+
+Definitions:
+Rscal   = complex scaling radius and surfac pickup radius
+Lambda = longer wave length (nm)
+Phase  = Phase offset of the shorter wave length component
+
+#define Rscal 20.
+#define Lambda 800
+#define Phase pi/4
+
+# acceleation form is far the best, velocity and length included for demonstration purposes only
+# if   compiled with -D_FFTW_ fourierer transforms will be written to "harmonics"
+# else the values will be in "dipoles" with an equidistant time grid
+Dipole: acceleration,velocity,length
+
+# NOTE: for acceleration we need to use the derivative of the actual radial potential, this
+#  is taken care of for some potentials by the class Harmonics, where also the above input is defined
+
+
+
+# CAUTION: carefully tuned minimal basis for given parameters
+#          carefully verify convergence for actual use
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,9
+ Eta,15,-1,1, assocLegendre{Phi}
+ Rn,25, 0.,Rscal,polynomial,25
+ Rn,20, Rscal,Infty,polExp[0.7]
+
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.5,Rscal
+
+# for harmonics, there is no reason to truncate the potential
+# -> disabled
+# Operator: truncate=20,smooth=15
+
+Operator: hamiltonian='1/2<<Laplacian>>-<<Coulomb>>'
+Operator: interaction='iLaserAz[t]<<D/DZ>>+iLaserAx[t]<<D/DX>>'
+
+# the p[0,20] before : defines a name instead of the default "ExpN"
+Operator: expectationValue='p[0,20]:<1><1><chi[0,20]>'
+
+
+# play with different relative phases here
+Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle,phiCEO
+cos8,  2.e14,  8. OptCyc, Lambda,   0.
+cos8, 0.25e14, 8. OptCyc, Lambda/2,90.,Phase
+
+TimePropagation: print,store,cutEnergy,accuracy,operatorThreshold
+0.125 OptCyc,0.05 au,50,1.e-7,1.e-6
+

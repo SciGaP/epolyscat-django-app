@@ -1,0 +1,40 @@
+Copyright Armin Scrinzi (2013)
+------------------------------
+
+Description:
+============
+
+The "zslapack" collection of algorithms are 
+adaptations from real(8) LAPACK algorithms for
+complex symmetric matrices, 
+i.e. complex matrices with A(i,j)=A(j,i)
+
+The interfaces are analogous to the corresponding real symmetric interfaces
+
+Without deeper analysis, we found that essentially mechanical 
+carry over of the real symmetric algorithm works for
+a limited class of tests. 
+
+!!! DISCLAIMER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+The algorithms have only been tested for limited uses 
+for our purposes and come without any warrenty whatsoever.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+Extension of the library
+========================
+The following strategy was found to be convenient:
+
+(1) Collect in the directories dblas and dlapack all files 
+    needed for the REAL version of a given algorithm to work; 
+    test in a routine like the diagon.f90 supplied
+
+(2) Copy the main new routine into zlapack, only rename the 
+    ROUTINE from d**** to zs*****, WITHTOUT renaming the FILE
+    Write a call to it into examples/diagon.f90 and compile.
+    The compiler will complain, supply the missing routines by the same
+    prodecure.
+
+(3) Test the result versus the REAL version and versus more general 
+    complex lapack routines
+

@@ -1,0 +1,67 @@
+Title:
+Tutorial example  - spectra from 2d Helium in a laser field
+
+Computes spectra for the 2 x 1d Helium model
+using tSurff surfaces
+X1=20,X2<20 and X1<20,X2=20
+
+Procedures for full 6d Helium are similar, but much larger calculations
+with the need for meticulous determination of the smallest possible basis
+
+# RUNTIME: ~ 20 min on single CPU for NEL/ORD/SIZ/ABS=4/20/10/20
+
+# NOTE: spectra are calulated only for the positive quadrants, i.e. leaving through surfaces X1,X2= +20
+#
+# implementation of calculation for all quadrants is not planned
+# as the model is mostly for code tests and method exploration,
+# the specific model can be solved very efficiently using FFT methods
+
+
+#define NEL 8
+#define ORD 10
+#define SIZ 10
+#define ABS 20
+
+#define BOX NEL*SIZ/2
+
+Surface: points
+BOX
+
+# NOTE: for symmetry12=true, need numbered axes, eg. X1,X2 (w/o could use, e.g. X,Y)
+Spectrum: radialPoints=64, symmetry12=true
+
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 3.e14, 5 OptCyc, 800.
+
+TimePropagation: end,print,store,accuracy,cutEnergy,fixStep
+      15 OptCyc, 1. OptCyc,0.,1.e-7,70,0.02
+
+Absorption: kind, axis, theta, upper
+ECS,X1,0.3,BOX
+ECS,X2,0.3,BOX
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X1, ABS,-Infty,-BOX.,polExp[0.5]
+X1, NEL*ORD,-BOX,BOX,polynomial,ORD
+X1, ABS, BOX,Infty,polExp[0.5]
+X2, ABS,-Infty,-BOX,polExp[0.5]
+X2, NEL*ORD,-BOX,BOX,polynomial,ORD
+X2, ABS, BOX,Infty,polExp[0.5]
+
+# two-dimesional potentials: input using {}
+#  - the first, emtpy {} indicates that the coordinate will be used deeper in the hierarchy
+#    and no factor will be computed on the present level
+#  - <1/sqrt(pow[2](X1-X2)+0.3)> will be calculated for basis functions
+#                             int[X1,X2] B_k(X1) B_l(X2) V(X1,X2)  B_l(X1) B_m(X2)
+#    where B_k(X1),B_l(X1) are the basis functions from the X1-level with emtpy {}
+
+#define HSINGLE (0.5<d_1_d>-2.<trunc[BOX-5,BOX]/sqrt(Q*Q+0.5)>)
+Operator: hamiltonian='HSINGLE<1>+<1>HSINGLE+<{}><1/sqrt(pow[2](X1-X2)+0.3)>'
+Operator: interaction='iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>'
+Operator: expectationValue='<chi[0,20]><chi[0,20]>,<chi[10,20]><chi[10,20]>'
+
+# special format for defining the high-energy projectors:
+# indicates that operator is separabel, projector is product of projectors on X1 and X2
+# !!! NOTE: this format for now is only admissible for Operator: projection !!!
+Operator: projection='0.5<d_1_d>:X1+0.5<d_1_d>:X2'

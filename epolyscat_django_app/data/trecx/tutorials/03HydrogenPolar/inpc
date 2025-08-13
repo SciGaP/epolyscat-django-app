@@ -1,0 +1,29 @@
+Title:
+Tutorial example - hydrogen atom in polar coordinates
+
+The purpose of this exercise is to
+(1) see the advantage of flexible discretization for the H-atom
+
+[TASK] vary the radial basis, study effect of the polExp on the accuracy
+
+# the tricky thing is the long-range nature of the Coulomb potential
+# it is good to have an infinitely extended discretiation to capture higher lying bound states
+Axis: name, nCoefficients, lower end, upper end, functions, order
+ Rn, 20, 0., 10., polynomial,10
+ Rn, 20, 10., Infty, polExp[0.5]
+ Phi, 1,
+ Eta, 3, -1, 1, assocLegendre{Phi}
+
+# NOTE: for simplicity, we calculate only m=0 states
+
+# switching from the Harmonic oscillator to Coulomb is easy, isn't it?
+Operator: hamiltonian
+1/2<<Laplacian>>-<1/Q><1><1>
+
+# compute a few eigenvalues of the field free system
+Eigen: select=SmallReal[7]
+
+# put a 2d plot to files
+Plot: axis,points,lowerBound,upperBound
+      Rn,101,0.,20.
+      Eta,31,-1.,1.

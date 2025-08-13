@@ -1,0 +1,135 @@
+
+
+ ===  Date [06/23 13:26:22] Tutorial example - full Helium in cylindrical symmetry  
+
+ ---> Truncation of potentials: [15.25,20] <---
+ !!! WARNING --- Pulse shape cos2 can produce artefacts for short pulses (here: 3 cycles), recommended shape is cos8 --- WARNING !!!
+
+ Master host = linux-hxdi(2 processes) 
+
+ *** using ParallelLayout Phi1.Phi2.Eta1.Eta2.Rn1.Rn2 ***
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Phi1.Phi2.Eta1.Eta2.Rn1.Rn2
+
+   Axis maxCoeff from       to order                basis     absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   -----------------------
+   Phi1        3    0    6.283     3                expIm                          
+   Phi2        3    0    6.283     3                expIm                          
+   Eta1        3   -1        1     3  assocLegendre{Phi1}                          
+   Eta2        3   -1        1     3  assocLegendre{Phi2}                          
+    Rn1       52    0 20|Infty  8-10 polynomial/polExp... ECS:(0.955,0.296)[-20,20]
+    Rn2       52    0 20|Infty  8-10 polynomial/polExp... ECS:(0.955,0.296)[-20,20]
+
+ Full basis name(s): polynomial/polExp[1.], polynomial/polExp[1.]
+
+                        Constraints                                 
+     ------------------------------   ------------------------------
+               M1+M2=0 at Phi1.Phi2             M1+M2=0 at Phi1.Phi2
+   l1,l2<3 for l1+l2>5 at Eta1.Eta2 l1,l2<3 for l1+l2>5 at Eta1.Eta2
+
+           Surfaces: default (at complex scaling radius)
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 1/2<<Laplacian>>-2.<<Coulomb>>+[[eeInt6DHelium]] (multipoleOrder=4)
+        Interaction: iLaserAz[t]<<D/DZ>>
+         HamInitial: H(t=Begin)
+
+ Expectation Values: <1><1><1><1><chi[0,20]><chi[0,20]>
+         Projection: (0.5<<Laplacian>>-2<<Coulomb>>):Phi1.Eta1.Rn1+(0.5<<Laplacian>>-2<<Coulomb>>):Phi2.Eta2.Rn2
+
+
+ ===  Laser  ===================================================================
+
+   polAxis Shape Intens(W/cm2) lambda(nm)  FWHM  begin   end phiCEO
+     -----   ---   -----------   --------   ---   ----   ---   ----
+   [1 0 0]  cos2         1e+15         20 8.274 -8.274 8.274       
+
+ ponderomotive potential (eV): 0.03735
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/23Helium3DSpectrum/0000/
+
+
+ ***  Exact ee-Interaction: save compute time by setting Operator:orderMultipole ***
+ ***  In sparse matrix, found  1 independent subsets with size(s)  52 ***
+
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 3 cycles), recomm...
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 3 cycles), recomm...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: setup                             1        24.5        24.5
+               mpiWrapper: MPI                          378031        1.94    5.14e-06
+            operatorFloor: cost                          33720       0.154    4.57e-06
+                run_trecx: all                               2       0.138      0.0691
+                run_trecx: run                               1           0           0
+timer overhead/call (sec): 4.72e-08
+timer overhead/call (sec): 1.16e-09 (sample=1024)
+
+
+ ===  PROPAGATION PARAMETERS  ==================================================
+
+    begin   end print  store fixStep   accuracy cutEnergy method
+     ----   ---   ---   ----   -----   --------   -------   ----
+   -8.274 13.79 1.379 0[100]    0.02 no control        60    RK4
+
+
+
+ ===  TIME PROPAGATION (/home/scrinzi/projects/tRecX/tutorial/23Helium3DSpectrum/0000/)
+
+             <Exp0>: +<1><1><1><1><chi[0,20]><chi[0,20]> at hierarchy Phi1.Phi2.Eta1.Eta2.Rn1.Rn2.Rn1.Rn2
+
+       Initial <H0>: -2.9018098505568
+
+      CPU   (%)    Time <Ovr(Phi1.Phi2...>             <H0> <Exp0>
+     -----   --   -----   ----------------   --------------   ----
+         0    0  -8.274                  1 -2.9018098505568      1
+      4.18 6.25  -6.895   0.99999996353657 -2.9018060041785 0.99999996353657
+     8.366 12.5  -5.516   0.99999992707081 -2.9016277023572 0.99999992707081
+     12.52 18.75  -4.137   0.99999989060204  -2.900387889339 0.99999989060204
+     16.69    25  -2.758   0.99999985414796 -2.8966413434211 0.99999985414797
+     20.88 31.25  -1.379   0.99999981742413   -2.88952076861 0.99999981742499
+     25.06  37.5       0   0.99999977028111 -2.8797464414687 0.99999977030593
+     29.21 43.75   1.379   0.99999954243989 -2.8696382394629 0.99999954286441
+      33.4    50   2.758   0.99999738885239 -2.8617080304416 0.99999739347732
+     37.67 56.25   4.137   0.99998084144048 -2.8571366573017 0.99998087568476
+     41.86  62.5   5.516   0.99988911046494 -2.8553778340958 0.99988928782619
+     46.08 68.75   6.895   0.99952190900362 -2.8549159168807 0.99952256215791
+      50.3    75   8.274   0.99845072576582 -2.8544065108157 0.99845245413845
+     53.24 81.25   9.653   0.99615866720461 -2.8531252185956 0.99616197035949
+     56.24  87.5  11.032   0.99254984520762 -2.8508798418474  0.9925544186431
+     59.19 93.75  12.411   0.98835548204263 -2.8481300929068 0.98836009211194
+     62.39   100   13.79   0.98474186146301 -2.8457203332172 0.98474528036705
+
+ TimePropagator RK4: calls=4416, fixed step=0.02
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 3 cycles), recomm...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2         104        51.9
+                run_trecx: run                               1         104         104
+                run_trecx: setup                             1        24.5        24.5
+             initialState: get                               1        15.8        15.8
+               mpiWrapper: MPI                          512194         2.9    5.66e-06
+            operatorFloor: cost                          33720       0.154    4.57e-06
+timer overhead/call (sec): 4.9e-08
+timer overhead/call (sec): 1.19e-09 (sample=1024)
+
+

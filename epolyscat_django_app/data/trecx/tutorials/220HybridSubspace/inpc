@@ -1,0 +1,74 @@
+Title:
+Hybrid of subspace and its complement - with custom operators
+
+Solves with hamiltonian
+
+P H0 P + (1-P) H1 (1-P) + Hint[t]
+
+P........ projector onto a subspace
+H0....... Hamiltonian on subspace
+H1....... Hamiltonian on orthogonal complement of suspace
+Hint[t]...time-dependent operator connecting all
+
+The subspace is composed of eigenfunctions of some operator (in this case: H0)
+expressed in the basis (see Axis:... entries below)
+
+# NOTE: this should produce identical results to a system w/o the separation
+#       the model is Harm Muller's Argon
+
+#define BOX    20.
+#define SMOOTH 15.
+
+#define mullerA 5.4
+#define mullerB 1
+#define mullerC 3.682
+#define mullerR 3
+#define mullerF 2.5
+#define mullerG 2.01785
+
+#define MullerV (1+mullerA*exp(-mullerB*Q)+(17-mullerA)*exp(-mullerC*Q))/Q
+#define MullerW chi[0,mullerR]*mullerF*(pow[5]((mullerR-Q)/mullerG)-pow[4]((mullerR-Q)/mullerG))
+
+#define MullerArgon (1/2<<Laplacian>>+<1><1><-MullerV+MullerW>)
+
+Surface: points
+20.
+
+# Explanation of the Subspace entry:
+# - Compute Eigenbasis of MullerArgon in the discretization of Complement
+# - select 1 eigenvector starting from eigenvector 4 (1-dimensional subspace)
+
+Axis: subset,name,nCoefficients,lower end, upper end,functions,order
+Subspace,Orbital,1,4,,Eigenbasis[MullerArgon:Complement]
+Complement,Phi, 1,,,expIm
+          ,Eta,4,-1,1, assocLegendre{Phi}
+          ,Rn,40, 0.,mullerR,polynomial,20
+          ,Rn,BOX*2, mullerR,BOX,polynomial,20
+          ,Rn,20, BOX,Infty,polExp[0.5]
+
+
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+Operator: hamiltonian=<0,0>MullerArgon+<1,1>MullerArgon
+
+# NOTE: above Subspace and Complement both use H0=H1=MullerArgon
+# Alternative example: Hydrogen atom
+# Operator: hamiltonian=<0,0>MullerArgon+<1,1>(0.5<<Laplacian>>-<<Coulomb>>)
+
+Operator: interaction=<allOnes>(iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>+iLaserAz[t]<<D/DZ>>)
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm), phiCEO
+cos2, 1.e10, 4 OptCyc, 800.,   0.
+cos4, 1.e11, 3 OptCyc, 800./13,0.
+cos4, 1.e11, 3 OptCyc, 800./15,0.
+
+Initial: kind=Orbital[0]
+
+TimePropagation: end,print,store,cutEnergy,accuracy
+  20 OptCyc, 0.5 OptCyc,0.05 au,20,1.e-9
+
+Spectrum: radialPoints=100
+
+

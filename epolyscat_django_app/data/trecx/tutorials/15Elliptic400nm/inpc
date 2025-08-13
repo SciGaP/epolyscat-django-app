@@ -1,0 +1,38 @@
+Title:
+Tutorial example  - spectra for elliptic polarization
+
+Basically the same as 13Circular400nm, only with
+different intensities on the two perpendicular components
+the very short pulse range renders the exact meaning of "ellipticity" somewhat diffuse
+
+# we make sure that channel radius, complex scaling radius and element boundaries
+# all fall onto the value given by Rc
+
+#define Rc 20.
+
+Spectrum: radialPoints=200, plot=cutEta[5]
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,33
+ Eta,17,-1,1, assocLegendre{Phi}
+ Rn,40, 0.,Rc,polynomial,10
+ Rn,20, Rc,Infty,polExp[1.]
+
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,Rc
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+# intensity ratios are conveniently chosen such that Ex/Ey=4/3
+# (note the convenient use of algebra on the number input
+Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle, azimuthAngle, phiCEO
+cos2, 1.e14,      2. OptCyc, 400., 90., 0.
+cos2, 0.9e14/1.6, 2. OptCyc, 400., 90.,90.,pi/2
+
+TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold
+6 OptCyc, 0.05 OptCyc,0.05 au,50,1.e-7,1.e-6
+
+

@@ -1,0 +1,3 @@
+[submodule "tRecX"]
+	path = trecx_django_app/tRecX
+	url = https://gitlab.physik.uni-muenchen.de/AG-Scrinzi/tRecX.git

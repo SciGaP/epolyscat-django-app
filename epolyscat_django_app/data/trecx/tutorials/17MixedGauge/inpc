@@ -1,0 +1,46 @@
+Title:
+Tutorial example  - demonstration of mixed gauge
+
+Same physical problem as tutorial/10IRSpectrum
+
+We demonstrate the use of mixed gauge,
+which is of disadvantage for the given problem, but
+an important ingredient of the haCC method
+
+#define BOX 20
+#define RG 20
+#define RC BOX
+
+Surface: points
+RC
+
+Spectrum: radialPoints=100,plot=total
+
+# NOTE: in mixed gauge, need more angular momenta
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,1
+ Eta,25,-1,1, assocLegendre{Phi}
+ Rn,48, 0.,BOX,polynomial,12
+ Rn,20, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+# potential in the Hamiltonian - as in 1d, we clip the Coulomb tail off
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+
+# the mixed gauge operator, where length gauge is used up to Rg=RG
+# very ugly operator, therefore pre-defined for polar coordinates
+Operator: interaction=<<MixedGaugeDipole:Rg=RG>>
+
+# the corresponding velocity gauge operator
+# Operator: interaction='iLaserA0[t]<<D/DZ>>'
+
+Operator: expectationValue='<1><1><chi[0,20]>,<1><1><chi[15,20]>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 1.e14, 2. OptCyc, 800.
+
+TimePropagation: end,print,store,cutEnergy,accuracy
+6 OptCyc, 0.05 OptCyc,0.5 au,100,1.e-7

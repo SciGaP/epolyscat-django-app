@@ -1,0 +1,53 @@
+Title:
+Tutorial example  - IR photo-electron spectrum of hydrogen
+
+The purpose of this exercise is to explore the calculation of IR spectra
+    in linear polarization, learn to assess accuracy and convergence
+
+# TIMING ~1+1 min for tRecX + spectral analysis with given parameters
+(results with Intel i7 on laptop)
+
+[TASK] perform convergence studies
+the initial parameters in this file are adjusted to yield ~ 10% accuracy in much of the spectrum
+Verify by varying
+  Eta-axis  (i.e. angular momenta)
+  Rn-axis   radial basis
+  
+[TASK] note the relation between the Rn-size and Eta-size
+the simulation volume growth is 2-dimensional!
+
+#define NEL  8
+#define ORD 12
+#define SIZ 5
+
+#define BOX NEL*SIZ
+
+Spectrum: radialPoints=200, plot=total, iSurff=true
+
+# basis sizes eta,r=30,40 appear to be good for 10% accuracy in relevant range
+Axis: name,order,lower end, upper end,functions,nElem
+ Phi,1
+ Eta,30,-1,1, assocLegendre{Phi}
+ Rn,ORD, 0.,BOX,RpowL*polynomial,NEL
+ Rn,30, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+# Note: full long-range Coulomb - spectrum will change with box-size
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><1/Q>'
+Operator: interaction='iLaserA0[t]<<D/DZ>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+# writes population of field-free states 0,1,2,3,4 to output and expec files
+Occupation: states=0:5
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos8, 2.e14, 3. OptCyc, 800.
+
+# operatorThreshold -- disregard operations that contribute below this value (default is 0)
+# observe impact on compute time and accuracy
+# no TimePropagation:end specified - propagation ends at end of pulse (needs iSurff for correct spectra)
+TimePropagation: print,cutEnergy,accuracy,operatorThreshold,fixStep
+ 0.25 OptCyc,30,5e-7,5e-7,0.08
+

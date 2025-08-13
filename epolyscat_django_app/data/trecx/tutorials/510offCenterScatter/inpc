@@ -1,0 +1,57 @@
+Title:
+Tests for the off-center basis
+
+#define BOX 80
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+Spectrum: radialPoints=100,plot=total
+
+Axis: subset,name,functions,nCoefficients,lower end, upper end,order,exactIntegral
+Off,Ndim,PolarOffCenter
+Center,Phi,,1
+      ,Eta,assocLegendre{Phi},4,-1,1
+      ,Rn,polynomial,        120,  0.,60.,20
+      ,Rn,polynomial,         20, 60.,70.,10
+      ,Rn,polynomial, (BOX-70)*2, 70.,BOX,20
+      ,Rn,polExp[0.5],  30,BOX,Infty
+
+# NOTE: above we treat region that contains the off-center basis separately
+#       found this not to be critical
+
+# quad ...points for numerical quadature, should be at least [order(Center)+Nmax]/2
+#define OFF 0,0,65
+PolarOffCenter: radius,Lmax,origin,Nmax,quad
+5,1,[OFF],5,20
+
+# Pot3d, the off-center scatterer: scattering is elastic at the given parameters
+# total spectrum is unaffected, but re-distribuition into partial waves
+# compare -plot=total and -plot=partial results with and w/o the Pot3d
+Pot3d: potential=radial[OFF,-0.9/Q]
+
+#NOTE
+here we use not quite the hydrogen off-center,
+this way the initial lowest energy state is located at the origin
+
+Operator: hamiltonian=0.5<allOnes><<Laplacian>>-<allOnes><<Coulomb>>+[[Pot3d]]
+
+# compute eigenvalues of the field free system
+#Eigen: select=SmallReal[20]
+#Eigensolver: method=Lapack
+
+Operator: interaction=iLaserAz[t]<allOnes><<D/DZ>>
+Operator: expectationValue=<allOnes><1><1><chi[0,15]>
+
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 1.e16, 8. OptCyc, 20.
+
+# cutEnergy ...impose a spectral cut on the Hamiltonian
+               this essential to speed up up the time-propagation
+# store ...we save the surface values and derivatives at a fine time grid (au)
+# end   ...BOX is large, make sure to run long enough to have all flux out
+TimePropagation: end, print, store,cutEnergy,accuracy
+           40 OptCyc, 0.5 OptCyc,0.05 au,30,1.e-10
+
+

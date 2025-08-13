@@ -1,0 +1,6 @@
+# laser dipole field in 0,1,2 = z,x,y directions, and integrals
+# dThetaA/dt angular velocity of A around y-coordinate
+# dThetaF/dt angular velocity of F around y-coordinate
+# Int(Field) and Int(dField/dt) can be used for consistency checks ?= A,F
+#
+# time,|A|, dThetaA/dt, dThetaF/dt, Apot[0], Field[0], Int(Field[0]), Int(dField[0]/dt), Apot[1], Field[1], Int(Field[1]), Int(dField[1]/dt), Apot[2], Field[2], Int(Field[2]), Int(dField[2]/dt)

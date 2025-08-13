@@ -1,0 +1,54 @@
+Title:
+Tutorial example - harmonic oscillator in 3d polar coordinates
+
+The purpose of this exercise is to
+(1) understand more complex axes-definitions
+(2) understand more complex operator specifications
+
+[TASK] switch between pre-defined and explicit operator definitions
+[TASK] modify the piece-wise definition of Rn
+[TASK] replace the pre-defined <<X>> with its explicit form in polar coordinates
+       if more adventurous, try the same for <<D/DX>>
+
+# Rn ... is the radial coordinate [0,Infty) with boundary conditions for functions F(0)=0
+#        i.e. <f|g> = int[0,Infty) dr f(r) g(r)  (WITHOUT any factor r^2)
+# the Rn discretization is specified piece-wise on
+#     on [0,30] using finite elements with Legendre polynomials
+#     on [30,Infty) by Laguerre-polynomials * exp(-r/(32-30))
+#        i.e. here the interval length desingnates a scale for the exponential damping
+# Phi ...is the polar Phi coordinate
+#        for any coordinate, there is a default discretization, for Phi is {1,sin(Phi),cos(Phi),sin(2*Phi),cos(2*Phi)...}
+#        as nothing is specified here, the first 5 functions of the default discretization are used
+#        in terms of angular momentum, this means m=-2,-1,0,1,2
+# Eta ...=cos(theta), discretization by associateted Legendre functions P^(|m|)_l, l=m,lmax (here lmax=3-1=2)
+#        {Phi} tells the code from where to obtain m
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Rn,40, 0.,30.,polynomial,20
+ Rn,2, 30.,Infty,polExp[2.]
+ Phi,5
+ Eta,3,-1,1, assocLegendre{Phi}
+
+# NOTE: effectively, with the combination of Phi and Eta-functions
+#        we have just defined the real spherical harmonics up to Lmax=2
+
+
+# <<Laplacian>> ...for certain coordinate combinations, frequently used operators are pre-defined
+Operator: hamiltonian
+1/2<<Laplacian>>+0.5<Q*Q><1><1>
+
+# NOTE: alternatively you could specify the operator by
+# Operator: hamiltonian
+# 0.5(<d_1_d><1><1>+<1/(Q*Q)><1><d_(1-Q*Q)_d>+<1/(Q*Q)><d_1_d><1/(1-Q*Q)>) +0.5<Q*Q><1><1>
+
+
+# all non-zero matrix elements of the following operators will be printed
+# pre-defined operators are marked by << ... >>
+# could have been specified alternatively by their form in polar coordinates
+
+# NOTE: here, a whole list is read, ENCLOSE in single quotes '...'
+Operator: expectationValue
+'<<X>>,<<D/DX>>'
+
+# compute a few eigenvalues of the field free system
+Eigen: select=SmallReal[15]

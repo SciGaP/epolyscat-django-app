@@ -1,0 +1,200 @@
+
+
+ ===  Date [06/23 13:35:29] Hybrid of subspace and its complement - with custom operators  
+
+ !!! WARNING --- Pulse shape cos2 can produce artefacts for short pulses (here: 4 cycles), recommended shape is cos8 --- WARNING !!!
+
+ Master host = linux-hxdi(2 processes) 
+
+ ***  In sparse matrix, found  1 independent subsets with size(s)  95 ***
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Orbital&Phi.Phi.Eta.Rn
+
+      Axis maxCoeff from       to order                basis     absorption: eta,inner
+     -----   ------   --   ------   ---   ------------------   -----------------------
+   Orbital        1    4        0     1 Eigenbasis[(1/2<<...                          
+       Phi        1    0    6.283     1                expIm                          
+       Eta        4   -1        1     4   assocLegendre{Phi}                          
+        Rn       95    0 20|Infty    20 polynomial/polExp... ECS:(0.955,0.296)[-20,20]
+
+ Full basis name(s): Eigenbasis[(1/2<<Laplacian>>+<1><1><-(1+5.4*exp(-1*Q)+(17-5.4)*exp(-3.682*Q))/Q+chi[0,3]*2.5*(pow[5]((3-Q)/2.01785)-pow[4]((3-Q)/2.01785))>):Complement], polynomial/polExp[0.5]
+
+
+           Surfaces: 20
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: <0,0>(1/2<<Laplacian>>+<1><1><-(1+5.4*exp(-1*Q)+(17-5.4)*exp(-3.682*Q))/Q+chi[0,3]*2.5*(pow[5]((3-Q)/2.01785)-pow[4]((3-Q)/2.01785))>)+<1,1>(1/2<<Laplacian>>+<1><1><-(1+5.4*exp(-1*Q)+(17-5.4)*exp(-3.682*Q))/Q+chi[0,3]*2.5*(pow[5]((3-Q)/2.01785)-pow[4]((3-Q)/2.01785))>)
+        Interaction: <allOnes>(iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>+iLaserAz[t]<<D/DZ>>)
+         HamInitial: H(t=Begin)
+
+         Projection: <0,0>(1/2<<Laplacian>>+<1><1><-(1+5.4*exp(-1*Q)+(17-5.4)*exp(-3.682*Q))/Q+chi[0,3]*2.5*(pow[5]((3-Q)/2.01785)-pow[4]((3-Q)/2.01785))>)+<1,1>(1/2<<Laplacian>>+<1><1><-(1+5.4*exp(-1*Q)+(17-5.4)*exp(-3.682*Q))/Q+chi[0,3]*2.5*(pow[5]((3-Q)/2.01785)-pow[4]((3-Q)/2.01785))>)
+
+
+ ===  Laser  ===================================================================
+
+   polAxis Shape Intens(W/cm2) lambda(nm)  FWHM  begin   end phiCEO
+     -----   ---   -----------   --------   ---   ----   ---   ----
+   [1 0 0]  cos2         1e+10        800 441.3 -441.3 441.3       
+   [1 0 0]  cos4         1e+11      61.54   331 -454.5 454.5       
+   [1 0 0]  cos4         1e+11      53.33   331 -454.5 454.5       
+
+ ponderomotive potential (eV): 0.0006595
+
+      Initial state: Orbital[0] for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/220HybridSubspace/0000/
+
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- Orbitals   0 extend into scaled region - operator may be inaccurate --- WARNING !!!
+
+ !!! WARNING --- unused process inmapFromFullToContracted --- WARNING !!!
+
+ !!! WARNING --- unused process inmapToFullFromContracted --- WARNING !!!
+
+
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: Orbitals   0 extend into scaled region - operator may be inaccurate
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 4 cycles), recomm...
+                  1: unused process inmapFromFullToContracted
+                  1: unused process inmapToFullFromContracted
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: Orbitals   0 extend into scaled region - operator may be inaccurate
+                  0: Orbitals   0 extend into scaled region - operator may be inaccurate
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 4 cycles), recomm...
+                  1: unused process inmapFromFullToContracted
+                  1: unused process inmapToFullFromContracted
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: setup                             1       0.424       0.424
+               mpiWrapper: MPI                            7630       0.393    5.15e-05
+                run_trecx: all                               2       0.309       0.155
+            operatorFloor: cost                           1234     0.00753    6.11e-06
+                run_trecx: run                               1           0           0
+timer overhead/call (sec): 3.59e-08
+timer overhead/call (sec): 9.18e-10 (sample=1024)
+
+
+ ===  PROPAGATION PARAMETERS  ==================================================
+
+    begin  end print     store  fixStep accuracy cutEnergy method
+     ----   --   ---   -------   ------   ------   -------   ----
+   -454.5 2206 55.16 0.05[100] variable    1e-09        20    RK4
+
+
+
+ ===  TIME PROPAGATION (/home/scrinzi/projects/tRecX/tutorial/220HybridSubspace/0000/)
+
+       Initial <H0>: -0.55829037367316
+
+      CPU   (%)     Time <Ovr(Orbital&P...>              <H0>
+     -----   --   ------   ----------------   ---------------
+         0    0 -454.545                  1 -0.55829037367316
+     4.564 2.073 -399.385   0.99999999983268 -0.55829036381504
+     10.77 4.146 -344.225   0.99999999620158 -0.55829010925841
+      18.7 6.219 -289.065   0.99999972377997 -0.55828870314683
+     28.48 8.292 -233.905   0.99999589734775 -0.55828278201138
+      40.3 10.36 -178.745   0.99997336213983 -0.55826150078919
+      53.1 12.44 -123.585    0.9998974283688 -0.55820419193586
+     66.79 14.51 -68.4246   0.99972805798433 -0.55809196180715
+     81.01 16.58 -13.2646   0.99945857945045 -0.55792951533016
+     95.34 18.66  41.8954   0.99914121140797 -0.55775339194035
+       110 20.73  97.0554   0.99886114241419 -0.55761056910461
+     123.3  22.8  152.215   0.99867756511364  -0.5575261183099
+     135.4 24.88  207.375   0.99859103562252 -0.55749214441135
+     146.3 26.95  262.535   0.99856359365211  -0.5574846313118
+     156.3 29.02  317.695   0.99855843552353 -0.55748474000938
+     163.6 31.09  372.855   0.99855798898673 -0.55748523753344
+       169 33.17  428.015   0.99855797855424 -0.55748530686642
+     171.3 34.16  454.545     0.998557978446 -0.55748530692108
+     175.3 36.24  509.705   0.99855797825372 -0.55748530681384
+     179.3 38.31  564.865   0.99855797806231 -0.55748530670698
+     183.3 40.38  620.025   0.99855797787016  -0.5574853065997
+     187.3 42.46  675.185   0.99855797767852 -0.55748530649271
+     191.3 44.53  730.345   0.99855797748513 -0.55748530638474
+     195.5  46.6  785.505   0.99855797729296 -0.55748530627746
+     199.7 48.67  840.664   0.99855797710155 -0.55748530617059
+     203.8 50.75  895.824   0.99855797690943 -0.55748530606333
+     207.8 52.82  950.984   0.99855797671769 -0.55748530595629
+       212 54.89  1006.14   0.99855797652613 -0.55748530584934
+     216.2 56.97   1061.3   0.99855797633366 -0.55748530574189
+     220.3 59.04  1116.46   0.99855797614221   -0.557485305635
+     224.4 61.11  1171.62   0.99855797595013 -0.55748530552777
+     229.1 63.19  1226.78   0.99855797575832 -0.55748530542068
+     233.3 65.26  1281.94   0.99855797556679 -0.55748530531375
+     237.5 67.33   1337.1   0.99855797537447 -0.55748530520638
+     241.7  69.4  1392.26   0.99855797518303  -0.5574853050995
+     245.7 71.48  1447.42   0.99855797499098 -0.55748530499229
+     249.7 73.55  1502.58    0.9985579747991 -0.55748530488516
+     253.8 75.62  1557.74    0.9985579746076 -0.55748530477824
+     257.8  77.7   1612.9   0.99855797441537 -0.55748530467092
+     261.8 79.77  1668.06   0.99855797422387 -0.55748530456401
+     265.9 81.84  1723.22   0.99855797403189 -0.55748530445683
+     270.7 83.91  1778.38   0.99855797383994 -0.55748530434966
+     275.1 85.99  1833.54   0.99855797364846 -0.55748530424276
+     279.3 88.06   1888.7   0.99855797345625 -0.55748530413545
+     283.3 90.13  1943.86   0.99855797326474 -0.55748530402854
+     287.5 92.21  1999.02   0.99855797307277 -0.55748530392137
+     291.8 94.28  2054.18   0.99855797288075 -0.55748530381416
+     295.9 96.35  2109.34   0.99855797268931 -0.55748530370728
+     300.2 98.43   2164.5   0.99855797249712 -0.55748530359998
+     303.3   100   2206.4   0.99855797235134 -0.55748530351859
+
+ TimePropagator RK4: calls=946488, accept/reject 78840/34, average step=0.017, step variance=0.0082
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: Orbitals   0 extend into scaled region - operator may be inaccurate
+                  0: Orbitals   0 extend into scaled region - operator may be inaccurate
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 4 cycles), recomm...
+                  1: unused process inmapFromFullToContracted
+                  1: unused process inmapToFullFromContracted
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2         304         152
+                run_trecx: run                               1         304         304
+               mpiWrapper: MPI                        11524614           5    4.34e-07
+                run_trecx: setup                             1       0.424       0.424
+            operatorFloor: cost                           1234     0.00753    6.11e-06
+             initialState: get                               1    0.000185    0.000185
+timer overhead/call (sec): 4.43e-08
+timer overhead/call (sec): 1.12e-09 (sample=1024)
+
+

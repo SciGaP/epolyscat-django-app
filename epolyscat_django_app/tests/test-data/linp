@@ -1,0 +1,157 @@
+--- DO NOT EDIT: InputItem's as actually appearing in code -----
+Absorption:axis[1]=NONE \default{NONE} \docu{absorption parameters for this axis} \allow{}
+Axis:exactIntegral[1]=false \default{false} \docu{use exaxt integrations for axis, even if overall femDVR} \allow{}
+Axis:functions[1]=polynomial \default{polynomial} \docu{which functions to use} \allow{}
+Axis:lower end[1]=-10 \default{-1.7976931348623e+308} \docu{lower boundary of the axis} \allow{}
+Axis:nCoefficients[1]=40 \default{-1} \docu{(approximate) number of coefficients} \allow{}
+Axis:name[1]=X \default{BLANK} \docu{coordinate string: X,Y,Z,R,Rn,Rho,Eta,Phi,Ndim,Vec,Channel,Ion,Neutral,Orbital,Xperiodic,Yperiodic,PXi,PEta,BLANK} \allow{}
+Axis:order[1]=10 \default{-1} \docu{number of functions on element (default - adjust to 4 elements)} \allow{}
+Axis:subset[1]= \default{} \docu{axis will be read into named subset} \allow{}
+Axis:upper end[1]=10 \default{1.7976931348623e+308} \docu{upper boundary of the axis} \allow{}
+BasisConstraint:axes[1]=BLANK \default{BLANK} \docu{Axes used in constraint, ordering is important} \allow{}
+BasisConstraint:kind[1]=None \default{None} \docu{Kinds: None...(default), L-M[c1;c2]...restrict to l-m<c1 except l<c2, M=0...total M,Lshape[c1;c2]...exclude (l1>=c1 && l2>=c1) except l1+l2<c2} \allow{}
+Cache:ReadInput-anyName[1]= \default{} \docu{blank-separated list -- name1[source1] name2{[source2]} etc: hamiltonian...field-free Hamiltonian, source1 will be used as default for further sourceX} \allow{}
+ChannelsSubregion:tStore[1]=0 \default{0} \docu{Store spectra timestep} \allow{}
+Checks:off[1]= \default{} \docu{do not perform checks as listed, if emty list switch of globally} \allow{}
+CoefficientsWriter:averageAxes[1]= \default{} \docu{Average over certain axes, e. g. "Rn1.Rn2"} \allow{}
+CoefficientsWriter:name[1]= \default{} \docu{output name of coefficients, this enables writing} \allow{}
+CoefficientsWriter:store[1]=0 \default{0} \docu{minimal interval for file output} \allow{}
+Columbus:path[1]=None \default{None} \docu{Columbus run path} \allow{}
+Constant:name[1]=BLANK \default{BLANK} \docu{name of constant for use in algebra} \allow{}
+Constrain:axis[1]=NONE \default{NONE} \docu{name of axis to apply constraints} \allow{}
+Constrain:lowerEnd[1]=-1.7977e+308 \default{-1.7977e+308} \docu{constrain axis to >= lower end} \allow{}
+Constrain:order[1]=1000000 \default{1000000} \docu{maximal order} \allow{}
+Constrain:upperEnd[1]=infty \default{infty} \docu{constrain axis to <= upper end} \allow{}
+DEBUG:sample[1]=16 \default{16} \docu{sample for amplitude integration} \allow{}
+Dipole:acceleration[1]=dum \default{dum} \docu{compute dipole expectation} \allow{}
+Dipole:length[1]=dum \default{dum} \docu{compute dipole expectation} \allow{}
+Dipole:velocity[1]=dum \default{dum} \docu{compute dipole expectation} \allow{}
+Eigen:method[1]=auto \default{auto} \docu{options: auto...(default) reasonable choice,Lapack,Arpack,NonLin} \allow{}
+Eigen:select[1]=SmallReal[10] \default{NONE} \docu{kinds: All, SmallReal[N]...first N, Nearest[N,Ereal,Eimag]...in complex plane, Rectangle[Rmin,Rmax,Imin,Imax]...in complex plane, NONE} \allow{}
+Eigen:shift[1]=100 \default{100} \docu{shift Arpack eigensolver to avoid zero's arising from continuity projections if positive eigenvalues are searched for} \allow{}
+Eigen:vectors[1]=false \default{false} \docu{save eigenvectors (binary format)} \allow{}
+EigenSubspace:imGuess[1]=0. \default{0.} \docu{real part of spectral center} \allow{}
+EigenSubspace:reGuess[1]=infty \default{infty} \docu{real part of spectral center} \allow{}
+EigenSubspace:tolerance[1]=1.e-7 \default{1.e-7} \docu{largest eigenvalue error (relative to radius)} \allow{}
+Eigensolver:method[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...use Eigen: method instead} \allow{}
+Eigensolver:shift[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...use Eigen: shift instead} \allow{}
+FactorMatrix:name[1]= \default{} \docu{name to be used in operator definition} \allow{}
+FactorMatrix:ncol[1]=0 \default{0} \docu{number of columns (default == number of rows)} \allow{}
+FactorMatrix:nrow[1]=0 \default{0} \docu{number of rows} \allow{}
+Flag:DEBUGfem[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{run FEM basis - compute exact integrals everywhere} \allow{}
+Flag:DEBUGold[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{use old code during changes} \allow{}
+Flag:DEBUGparallel[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{block, see main_trecx.cpp how to proceed} \allow{}
+Flag:DEBUGshowOp[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{show the expanded operator definitions} \allow{}
+Flag:generate-docu[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{re-write the LaTeX docu from code} \allow{}
+Flag:generate-linp[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{only generate list-of-inputs file} \allow{}
+Flag:noChecks[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{globally switch off all checks} \allow{}
+Flag:printMatrices[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{print matrices and stop} \allow{}
+Flag:recompute[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{recompute all amplitudes and spectra} \allow{}
+Flag:showDiscretization[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{print the discretization and stop} \allow{}
+Flag:showMatrices[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{show matrices and stop} \allow{}
+Flag:showOperators[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{show operator structure and stop} \allow{}
+FloquetAnalysis:compare[1]= \default{} \docu{list of runs as in "{Dir}[0001,0007,0009]", Dir is omitted, use current top} \allow{}
+FloquetAnalysis:maxE[1]=0 \default{0} \docu{(mutable) upper boundary for field free energies} \allow{}\mutable{}
+FloquetAnalysis:maxErr[1]=1.e-2 \default{1.e-2} \docu{(mutable) maximal deviation between energies} \allow{}\mutable{}
+FloquetAnalysis:maxImag[1]=1.e-1 \default{1.e-1} \docu{(mutable) maximal modulus of imaginary part} \allow{}\mutable{}
+FloquetAnalysis:minE[1]=-2 \default{-2} \docu{(mutable) lower boundary for field free energies} \allow{}\mutable{}
+FloquetAnalysis:minOvr[1]=0.1 \default{0.1} \docu{(mutable) minimal overlap for a match} \allow{}\mutable{}
+FloquetAnalysis:nFree[1]=10 \default{10} \docu{(mutable) compare lowest nFree states of free problem} \allow{}\mutable{}
+IndexConstraint:axes[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...use BasisContraint: axes instead} \allow{}
+IndexConstraint:name[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...use BasisContraint: kind instead} \allow{}
+Initial:kind[1]=atBegin \default{atBegin} \docu{initial state: atBegin...eigenstate of time-evolution at t=tBegin, mln...for polar select by quantum numbers, Hinitial...eigenstate of specified operator, inFlux...zero, incoming flux, manyBody...many-body calc, Orbital...orbital in basis, ProductFunction...replaces Function, External...numerical external orbital, Eigenstate...[oper:n:refIdx] n'th eigenstate of operator wrt refIdx, EigenSubblock...[Hinitial(i0,i1,..):n] n'th eigenstate of (i0,i1,..) diagonal subblock of Hinitial, GP...ground state of Gross Pitaeskii, EE...mean field electron-electron potential} \allow{}
+Initial:state[1]=0 \default{0} \docu{initial state (number of state in Hamiltonian)} \allow{}
+Integration:DVR[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...DVR is enforced - cannot be chosen externally} \allow{}
+Laser:shape[1]=BLANK \default{BLANK} \docu{pulse shapes: gauss,cos8,cos4,cos2,sin2,flatTop,train,BLANK} \allow{}
+Operator:expectationValue[1]= \default{} \docu{expectation values (comma-separated list inside quotes), default is overlap and energy, 'suppress' for suppressing all expectation values, 'overInitial' for overlap with initial state} \allow{}
+Operator:hamiltonian[1]=0.5<d_1_d>+0.5<Q*Q> \default{NO_VALUE} \docu{Hamiltonian definition} \allow{}
+Operator:initial[1]=atBegin \default{atBegin} \docu{eigenstate of this operator will be used as initial states -- atBegin..H(tBegin), hamiltonian..H0 or general operator string} \allow{}
+Operator:interaction[1]= \default{} \docu{interaction definition} \allow{}
+Operator:parameterTerm[1]= \default{} \docu{use hamiltonian+parameterTerm for parameter studies} \allow{}
+Operator:projection[1]=hamiltonian \default{hamiltonian} \docu{spectrally project in time propagation wrt to this operator} \allow{}
+Operator:smooth[1]=1.7976931348623e+308 \default{1.7976931348623e+308} \docu{start smoothing potentials of type <<PotName>> (default=no smoothing)} \allow{}
+Operator:spectrum[1]= \default{} \docu{print spectral decomposition of wf wrt to operator} \allow{}
+Operator:truncate[1]=infty \default{infty} \docu{truncate potentials of type <<PotName>> (default=do not truncate)} \allow{}
+Output:wavefunction[1]=false \default{false} \docu{save coefficients at print interval} \allow{}
+Parallel:sort[1]=Phi.Eta.Rn \default{Phi.Eta.Rn} \docu{coordinate sorting for parallelization, first runs fastest} \allow{}
+ParameterRange:max[1]=-infty \default{-infty} \docu{upper boundary} \allow{}
+ParameterRange:min[1]=-1.79769313486e+308 \default{-1.79769313486e+308} \docu{lower boundary} \allow{}
+ParameterRange:nSteps[1]=0 \default{0} \docu{number of steps from lower to upper} \allow{}
+ParameterRange:name[1]=NOT_FOUND \default{NOT_FOUND} \docu{name of the parameter} \allow{}
+Plot:append[1]=false \default{false} \docu{append to file} \allow{}
+Plot:axis[1]=BLANK \default{BLANK} \docu{(mutable) axis to plot (must match an axis name in discretization)} \allow{}\mutable{}
+Plot:currents[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...dipole densities will automatically be included with density plots (if defined)} \allow{}
+Plot:digits[1]=8 \default{8} \docu{number of digits for plot values} \allow{}
+Plot:interval[1]=-1 \default{-1} \docu{minimal interval for plots (<=0...all w/o duplicates, <0...can be overwritten by setDefaultInterval())} \allow{}
+Plot:lowerBound[1]=0 \default{0} \docu{(mutable) upper grid boundary} \allow{}\mutable{}
+Plot:onlyMatching[1]=false \default{false} \docu{skip rather than abort if plot axes do not match index} \allow{}
+Plot:points[1]=0 \default{0} \docu{(mutable) number of points, 0...automatic} \allow{}\mutable{}
+Plot:tagMax[1]=infty \default{infty} \docu{plot only tags <= tagMax} \allow{}
+Plot:tagMin[1]=-infty \default{-infty} \docu{plot only tags >= tagMin} \allow{}
+Plot:upperBound[1]=0 \default{0} \docu{(mutable) lower grid boundary; defaults to upper=lower - single point or no grid conversion} \allow{}\mutable{}
+Plot:usage[1]=separate \default{separate} \docu{(mutable) axis usage: grid...plot axis, separate...separate plots, sum...sum over coordinates} \allow{grid,separate,sum}\mutable{}
+PlotFunction:algebra[1]= \default{} \docu{Algebra's to evaluate and plot (blank-separated strings)} \allow{}
+PlotFunction:lower[1]=0 \default{0} \docu{lower end of plot interval} \allow{}
+PlotFunction:points[1]=201 \default{201} \docu{number of plot points} \allow{}
+PlotFunction:upper[1]=0 \default{0} \docu{upper end of plot interval} \allow{}
+Plot_user:axis[1]=BLANK \default{BLANK} \docu{(mutable) axis to plot (must match an axis name in discretization)} \allow{}\mutable{}
+Plot_user:lowerBound[1]=0 \default{0} \docu{(mutable) upper grid boundary} \allow{}\mutable{}
+Plot_user:points[1]=0 \default{0} \docu{(mutable) number of points, 0...automatic} \allow{}\mutable{}
+Plot_user:upperBound[1]=0 \default{0} \docu{(mutable) lower grid boundary; defaults to upper=lower - single point or no grid conversion} \allow{}\mutable{}
+Plot_user:usage[1]=separate \default{separate} \docu{(mutable) axis usage: grid...plot axis, separate...separate plots, sum...sum over coordinates} \allow{grid,separate,sum}\mutable{}
+Polar2D:Mmax[1]=0 \default{0} \docu{maximal |m|} \allow{}
+Polar2D:Nmax[1]=10 \default{10} \docu{number of radial functions} \allow{}
+Polar2D:origin[1]=0 0 \default{0 0} \docu{x y, origin of the off-center polar basis} \allow{}
+Polar2D:quad[1]=10 \default{10} \docu{minimal number of quadrature points} \allow{}
+Polar2D:radius[1]=0 \default{0} \docu{radius around origin} \allow{}
+PolarOffCenter:Lmax[1]=2 \default{2} \docu{maximal angular momentum} \allow{}
+PolarOffCenter:Mmax[1]=2 \default{2} \docu{maximal |m|} \allow{}
+PolarOffCenter:Nmax[1]=10 \default{10} \docu{number of radial functions} \allow{}
+PolarOffCenter:origin[1]=[0,0,0] \default{[0,0,0]} \docu{[x,y,z], origin of the off-center polar basis} \allow{}
+PolarOffCenter:quad[1]=10 \default{10} \docu{minimal number of quadrature points} \allow{}
+PolarOffCenter:radius[1]=0 \default{0} \docu{radius around origin} \allow{}
+Pot3d:chargeC[1]=1/5 \default{1/5} \docu{fraction or Coulombic charge on C} \allow{}
+Pot3d:methaneAlign[1]=z \default{z} \docu{Align one symmetry axis along either 'x', 'y' or 'z'} \allow{}
+Pot3d:methaneSize[1]=2.042794 \default{2.042794} \docu{Length scale of Methane molecule (au)} \allow{}
+Pot3d:origin[1]= \default{} \docu{postion of potential origin (give in cartesian coordinates)} \allow{}
+Pot3d:potential[1]=undefined \default{undefined} \docu{: methane,hydrogen,harmOsc,identity,radial[x,y,z,V(r)]...radial around x,y,z} \allow{}
+Pot3d:quadOrder[1]=40 40 0 \default{40 40 0} \docu{quadrature order for interpolating the potential, last=0 indicates DVR)} \allow{}
+Pot3d:screenCarbon[1]=2. \default{2.} \docu{screen length for Carbon} \allow{}
+Pot3d:screenHydrogen[1]=3.100 \default{3.100} \docu{screen length for Hydrogens} \allow{}
+Print:noScreen[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{suppress output to screen} \allow{}
+Project:constraints[1]= \default{} \docu{constrain spectral projection} \allow{}
+Pulse:check[1]=false \default{false} \docu{check new against old pulse checking code} \allow{}
+Source:end[1]=infty \default{infty} \docu{stop time-integration here} \allow{}
+Source:region[1]= \default{} \docu{axis perpendicular to surface of subregion} \allow{}
+Source:turnOff[1]=6.9902756875809e-308 \default{6.9902756875809e-308} \docu{linearly turn off source over this time-interval, default = 1 OptCyc} \allow{}
+Source:undoundDOF[1]=OBSOLETE \default{OBSOLETE} \docu{OBSOLETE...do not use, instead specify region as Rn1, Rn2, Rn1.Rn2, etc.} \allow{}
+Spectrum:amplitude[1]=all \default{all} \docu{which amplituded file to sum, specify as Rn1.Rn2,Rn2.Rn1 etc.} \allow{}
+Spectrum:benchmark[1]=false \default{false} \docu{standard spectra for Bret Esry's benchmark} \allow{}
+Spectrum:energyGrid[1]=false \default{false} \docu{grid equidistant in energy (slower, not recommended)} \allow{}
+Spectrum:maxEnergy[1]=0 \default{0} \docu{spectral energy range, default = max(12Up,3 Omega)} \allow{}
+Spectrum:minEnergy[1]=0 \default{0} \docu{lowest energy} \allow{}
+Spectrum:plot[1]= \default{} \docu{(mutable) read from ampl-file and plot, default depends on coordinates:, total, partial, partialIon, intPhi...2d integrated over Phi, cutPhi[n]...n cuts at phi angles, cutEta[n]...n cuts at eta=cos(theta), sumZ...sum over Z (for XZ or YZ), sumY...sum over Y (for XY or YZ), sumX...sum over X (for XY or XZ), cone...integrate cone[phiC,etaC,gamC] axis phiC,etaC, opening gamC, zone...integrate zone[the0,the1] and phi in [0,2pi], partialRn1...sum over Rn2, partial waves, sumRn1...sum over Rn1, sumRn2...sum over Rn2, kZ...z-momentum, lPartial...partial waves summed over m, JAD[thMin{:thMax:n},eMin{:eMax:n}{~eV}{,phiMin{:phiMax:n}}]...joint angular distribution, user...read plot from Plot_user in input, grid[file]...draw the plot info from file, default (coordinate-dependent)} \allow{}\mutable{}
+Spectrum:radialPoints[1]=100 \default{100} \docu{number or momentum points in energy range} \allow{}
+Spectrum:symmetry12[1]=false \default{false} \docu{assume 1<->2 exchange symmetry and avoid unnecessary regions} \allow{}
+SpectrumPlot:noOverwrite[1]=FLAG_ONLY \default{FLAG_ONLY} \docu{suppress overwriting of spectrum file} \allow{}
+Surface:ascii[0]=FLAG_ONLY \default{FLAG_ONLY} \docu{produce ascii file with surface values} \allow{}
+Surface:points[1]= \default{} \docu{save values and derivatives at points (blank-separated list), default 2 au befor absorption} \allow{}
+TimePropagation:accuracy[1]=1.e-8 \default{1.e-8} \docu{accuracy control} \allow{}
+TimePropagation:begin[1]=0 \default{0} \docu{begin time of propagation} \allow{}
+TimePropagation:cutEnergy[1]=1.7976931348623e+308 \default{1.7976931348623e+308} \docu{remove energies above this} \allow{}
+TimePropagation:end[1]=0 \default{0} \docu{end time of propagation} \allow{}
+TimePropagation:fixStep[1]=0. \default{0.} \docu{fixed step size (0 - automatic control)} \allow{}
+TimePropagation:method[1]=RK4 \default{RK4} \docu{choices: RK4...classical RK, Butcher67...order 6 Butcher} \allow{}
+TimePropagation:operatorThreshold[1]=-1 \default{-1} \docu{consider block=0, if result remains below this treshold} \allow{}
+TimePropagation:print[1]=0 \default{0} \docu{printout intervals} \allow{}
+TimePropagation:store[1]=0 \default{0} \docu{minimal interval for file output - default=print or sample interval for spectrum,0=every valid step} \allow{}
+Title:[1]=Tutorial example  - 1d harmonic oscillator \default{tRecX calculation} \docu{title that will be printed to output} \allow{}
+_EXPERT_:FDgrid[1]=exp \default{exp} \docu{kind of grid spacing: exp,sudden,smooth} \allow{}
+_EXPERT_:FDmatrix[1]=exact \default{exact} \docu{allow inexact stensils} \allow{}
+_EXPERT_:flatDer[1]=true \default{true} \docu{absorb the inverse into new Floor operators} \allow{}
+_EXPERT_:fuseOperator[1]=true \default{true} \docu{fuse pieces of the operator as much as possible} \allow{}
+_EXPERT_:halfPlaneEta[1]=0.2 \default{0.2} \docu{smoothing for half-plane suppression} \allow{}
+_EXPERT_:halfPlaneR[1]=0 \default{0} \docu{smoothing for half-plane suppression} \allow{}
+_EXPERT_:halfPlaneS[1]=5 \default{5} \docu{smoothing for half-plane suppression} \allow{}
+_EXPERT_:newFloor[0]=false \default{false} \docu{admit use of tensor products} \allow{}
+_EXPERT_:suppressTensor[0]=false \default{false} \docu{admit use of tensor products} \allow{}

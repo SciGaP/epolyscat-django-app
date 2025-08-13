@@ -1,0 +1,87 @@
+
+
+ ===  Date [06/23 11:45:18] Tutorial example  - the screened one-dimensional "Coulomb" potential -1/sqrt(x^2+2)  
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X
+
+   Axis maxCoeff       from       to order                basis absorption: eta,inner
+     --   ------   --------   ------   ---   ------------------   -------------------
+      X      121 -Infty|-20 20|Infty 10-20 polExp[0.5]/polyn...                      
+
+ Full basis name(s): polExp[0.5]/polynomial
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5<d_1_d>-<trunc[10,15]/sqrt(Q*Q+2)>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5<d_1_d>-<trunc[10,15]/sqrt(Q*Q+2)>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/04Hyd1d/0000/
+
+
+
+ ===  GRID AND PLOT  ===========================================================
+
+             digits: 8
+
+   Axis   usage  points    from      to
+     --   -----   -----   -----   -----
+      X    grid     201     -20   -15.2
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[10]  ==========================================
+ ***  In sparse matrix, found  1 independent subsets with size(s) 121 ***
+                   real imag
+     --   ----------------   --
+   0    -0.500001174675    0
+   1     -0.23289675724    0
+   2    -0.133340360782    0
+   3    -0.078977586914    0
+   4    -0.036626495607    0
+   5 -0.000424027820949    0
+   6  0.000639254387953    0
+   7   0.00104108798359    0
+   8   0.00257383225947    0
+   9    0.0034698694125    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                              87       0.619     0.00712
+                run_trecx: all                               2      0.0743      0.0371
+                run_trecx: run                               1      0.0687      0.0687
+                run_trecx: setup                             1      0.0687      0.0687
+timer overhead/call (sec): 3.95e-08
+timer overhead/call (sec): 1.01e-09 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/04Hyd1d/0000/  ==============
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

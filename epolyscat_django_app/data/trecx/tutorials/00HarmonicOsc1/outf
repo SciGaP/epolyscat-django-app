@@ -1,0 +1,76 @@
+
+
+ ===  Date [06/23 11:45:07] Tutorial example  - 1d harmonic oscillator  ========
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X
+
+   Axis maxCoeff from   to order      basis absorption: eta,inner
+     --   ------   --   --   ---   --------   -------------------
+      X       35  -10   10    10 polynomial                      
+
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5<d_1_d>+0.5<Q*Q>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5<d_1_d>+0.5<Q*Q>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/00HarmonicOsc1/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[10]  ==========================================
+               real imag
+     --   ------------   --
+   0 0.500013777922    0
+   1  1.49994138766    0
+   2  2.49875316598    0
+   3  3.50776252045    0
+   4  4.47220606799    0
+   5   5.4885064378    0
+   6  6.58459161859    0
+   7  7.13624208587    0
+   8  8.86641760615    0
+   9  9.58583223054    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                              42       0.603      0.0143
+                run_trecx: all                               2      0.0289      0.0144
+                run_trecx: run                               1      0.0233      0.0233
+                run_trecx: setup                             1      0.0233      0.0233
+timer overhead/call (sec): 3.87e-08
+timer overhead/call (sec): 1.15e-09 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/00HarmonicOsc1/0000/  =======
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

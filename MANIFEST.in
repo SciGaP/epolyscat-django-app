@@ -1,0 +1,10 @@
+recursive-include trecx_django_app/static *
+recursive-include trecx_django_app/templates *
+recursive-include trecx_django_app/tRecX *
+recursive-include trecx_django_app/data *
+recursive-include trecx_django_app/src *
+include trecx_django_app/package.json
+include trecx_django_app/yarn.lock
+include trecx_django_app/babel.config.js
+include trecx_django_app/vue.config.js
+recursive-include trecx_django_app/tests/test-data

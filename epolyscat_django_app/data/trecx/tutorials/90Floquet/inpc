@@ -1,0 +1,62 @@
+Title:
+Photon counts in spectra
+
+#define SCREEN 2.135
+#define BOX 30
+
+#define H0 (1/2<<Laplacian>>-<1><1><1/Q+exp(-Q*SCREEN)/Q>)
+#define OM omega<1><1><1>
+
+Constant: name,value
+omega,0.1155
+
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Vec,18
+ Phi, 1
+ Eta, 5,-1,1, assocLegendre{Phi}
+ Rn, 60, 0.,BOX,polynomial,30
+ Rn, 30, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.2,BOX
+
+// model enegies: l=0: -0.903148, -0.157,-0.06439 l=1: -0.12797, -0.0565, l=2: -0.05557610
+
+// 8*0.1155+0.157  = 1.081
+// 9*0.1155+0.128  = 1.1675
+// 8*0.1155+0.0643 = 0.9883
+// 9*0.1155+0.0565 = 1.096
+// 8*0.1155+0.0556 = 0.9796
+
+
+#Operator: hamiltonian=<Id>H0+<diagonal[Q-14]>OM
+Operator: hamiltonian=<Id>H0+<diagonal[Q-14]>OM+ A[I]/2(<delta[1]>-<delta[-1]>)<<D/DZ>>
+
+# alternative ways of locating eigenvalues in the complex plane
+# (1) search vicinity of a value (shift-inverse iterative solver)
+#Eigen: select=Nearest[50,-1.07,-0.0077]
+#Eigen: vectors=true
+
+# (2) full diagonalizatio
+# get all eigenvalues on a section of the real axis
+# in the field-free case, this is very fast
+#Eigen: select=Rectangle[-1.082,-0.97,-1.e-8,1.e-8]
+
+# (3) trace eigenvalues by inverse iteration, starting from guesses
+# (3a) guess values input, imaginary parts can be specified as 1.111-i*0.222
+Trace: eigenvalues
+-0.903148  -1.081 -1.1675 -0.9883 -1.096 -0.9796
+
+
+# (3b) guess values from previos eigenvalue solution
+# eigenvalues from previous diagonalization
+#Trace: eig-file
+tutorial/90Floquet/0000/eig
+
+Trace: fromQ,      toQ,        steps,   function
+     0e13 W/cm2, 2e14 W/cm2,   21,  A[I]=sqrt(I)/omega
+
+
+
+

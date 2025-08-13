@@ -1,0 +1,67 @@
+Title:
+Tutorial example  - rotating frame for circular(*) polarization
+
+# A similar problem as 13Circular400nm
+
+# DESCRIPTION:
+# Different from tutorial/13, choose the z-x plane
+# as the polarization plane but operate in a rotating frame
+# where z-axis remains aligned with the vector potential
+
+# EXPLANATION
+# if the laser frequency is low compared to any dynamics,
+# i.e. when we are approaching adiabatic motion,
+# the wavefunction expansion requires only low |m|-values
+#
+# NOTE: contrary to the preponderance of small L-M in circular polarization,
+# the rotating frame can be used with arbitrary polarization, including non-planar
+
+# ACCURACY
+# relative accuracy of total spectrum <~ 1% with basis Eta=13, Phi=13
+# (compare to tutorial/13Circular400nm)
+
+# ALTERNATIVES
+# rotating frame is an alterative to the (dynamical) adjustment of the basis.
+# NOTE: Of course, also with a rotating frame dynamical basis can be used
+# (as in the present example), but gains are small.
+
+# TIMING:
+# about 3.5 min total (laptop): 2 min calculation of surface, 1.5 min tSurff integration
+# surfaces are stored wrt to the rotating frame
+# when computing spectra, back-rotate to fixed frame is needed
+# computation of amplitudes therefore is more expensive than fixed frame
+
+#define Rc 20.
+
+Spectrum: radialPoints=100, plot=total
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,13,,,expIm
+ Eta,13,-1,1, assocLegendre{Phi}
+ Rn,32, 0.,Rc,polynomial,8
+ Rn,20, Rc,Infty,polExp[1.]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,Rc
+
+# Interaction for rotating frame:
+#    a dc-Pulse with an angular correction that is proportional to the change of the angle
+#    the correction operator "CoriolisTheta" is essentially the Ly angular momentum
+#Operator: interaction='iLaserAabs[t]<<D/DZ>>+iLaserAdTheta[t]<<CoriolisTheta>>'
+# below we use a shorthand for the above
+Operator: interaction=<<LaserVelocityRotatingFrame>>
+
+# here is what the field interaction would look like in fixed frame (needs all m's, Phi size 25)
+# Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAz[t]<<D/DZ>>'
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm),phiCEO,polarAngle
+cos2, 1e14, 2. OptCyc, 400.
+cos2, 1e14, 2. OptCyc, 400.,pi/2,90.
+
+TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold
+6 OptCyc, 0.05 OptCyc,0.5 au,50,1.e-7,0
+
+

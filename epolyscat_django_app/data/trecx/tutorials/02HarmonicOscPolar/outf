@@ -1,0 +1,86 @@
+
+
+ ===  Date [06/23 11:45:13] Tutorial example - harmonic oscillator in 3d polar coordinates  
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Phi.Eta.Rn
+
+   Axis maxCoeff from       to order                basis absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   -------------------
+     Rn       39    0 30|Infty  2-20 polynomial/polExp...                      
+    Phi        5    0    6.283     5               cosSin                      
+    Eta        3   -1        1     3   assocLegendre{Phi}                      
+
+ Full basis name(s): polynomial/polExp[2.]
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 1/2<<Laplacian>>+0.5<Q*Q><1><1>
+         HamInitial: H(t=Begin)
+
+ Expectation Values: <<X>>,<<D/DX>>
+         Projection: 1/2<<Laplacian>>+0.5<Q*Q><1><1>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/02HarmonicOscPolar/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[15]  ==========================================
+ ***  In sparse matrix, found  9 independent subsets with size(s)  39  39  39  39  39  39  39  39  39 ***
+               real imag Exp0 Exp1
+     --   -----------   --   --   --
+    0 1.50007691968    0    0    0
+    1 2.49955917098    0    0    0
+    2 2.49955917098    0    0    0
+    3 2.49955917098    0    0    0
+    4 3.49930280249    0    0    0
+    5 3.49930280249    0    0    0
+    6 3.49930280249    0    0    0
+    7 3.49930280249    0    0    0
+    8 3.49930280249    0    0    0
+    9 3.49960501847    0    0    0
+   10 4.51213443361    0    0    0
+   11 4.51213443361    0    0    0
+   12 4.51213443361    0    0    0
+   13 5.43700327959    0    0    0
+   14 5.47485949322    0    0    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                             404       0.565      0.0014
+                run_trecx: all                               2       0.191      0.0956
+                run_trecx: run                               1       0.186       0.186
+                run_trecx: setup                             1       0.186       0.186
+timer overhead/call (sec): 3.8e-08
+timer overhead/call (sec): 9.09e-10 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/02HarmonicOscPolar/0000/  ===
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

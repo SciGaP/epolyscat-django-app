@@ -2,11 +2,11 @@
   <div id="app" class="flex-fill h-100 overflow-auto">
     <notifications-display/>
     <div class=" w-100 h-100 d-flex">
-      <div class="overflow-auto" style="max-width: 250px;min-width: 250px;box-shadow: 1px 1px 3px 1px #d8d8d8;">
+      <div class="overflow-auto app_left_nav" style="max-width: 250px;min-width: 250px;box-shadow: 1px 1px 3px 1px #d8d8d8;">
         <AppLeftNav/>
       </div>
-      <div class="flex-fill overflow-auto">
-        <router-view class="w-100"/>
+      <div class="flex-fill overflow-auto" >
+        <router-view class="w-100" :key="$route.fullPath"/>
       </div>
       <!--      <div class="overflow-auto">-->
       <!--        <AppRightNav/>-->
@@ -17,15 +17,81 @@
 
 <script>
 import "./styles.scss";
-import AppLeftNav from "@/components/block/AppLeftNav";
+import AppLeftNav from "@/components/blocks/AppLeftNav";
+import { eventBus } from "./event-bus";
+import ErrorToast from './components/overlay/ErrorToast.vue';
+import store from "./store";
 
 const {NotificationsDisplay} = window.CommonUI || {};
 
 export default {
   name: 'App',
   components: {AppLeftNav, NotificationsDisplay},
+  store,
+  methods: {
+        async refreshRuns() {
+            this.$store.commit("loading/START", { key: "runs", message: "Fetching Runs" });
+
+            try {
+                await this.$store.dispatch("run/fetchRuns", {});
+
+                this.$store.commit("loading/STOP", { key: "runs", message: "Fetching Runs" });
+            } catch (error) {
+                eventBus.$emit("error", { name: `Error while trying to fetch the runs`, error });
+            }
+        },
+        async refreshViews() {
+            this.$store.commit("loading/START", { key: "views", message: "Fetching Views" });
+
+            try {
+                await this.$store.dispatch("view/fetchViews", {});
+
+                this.$store.commit("loading/STOP", { key: "views", message: "Fetching Views" });
+            } catch (error) {
+                eventBus.$emit("error", { name: `Error while trying to fetch the views`, error });
+            }
+        }
+  },
+
+  mounted() {
+        eventBus.$on("error", ({ name, error }) => {
+            this.$toast.error({
+                component: ErrorToast,
+                props: { name, error }
+            }, {
+                position: "top-left",
+                timeout: 45000,
+                closeOnClick: false,
+            });
+        });
+
+        this.refreshRuns();
+        this.refreshViews();
+  }
 };
 </script>
+
+<style>
+    :root {
+        --primary: #226597;
+        --secondary: #303030;
+        --light: #F3F9FB;
+        --dark: #113f67;
+    }
+
+    .app_left_nav {
+        min-width: fit-content;
+        border-right: 1px solid #ddd;
+    }
+
+    .cutoffText {
+        display: inline-block;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        flex-grow: 1;
+    }
+</style>
 
 <!--<style>-->
 <!--  @import "https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css";-->

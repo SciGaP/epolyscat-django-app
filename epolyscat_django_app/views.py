@@ -39,7 +39,7 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from epolyscat_django_app import models, serializers
-from epolyscat_django_app.trecx_utils import Linp, is_empty
+from epolyscat_django_app.epolyscat_utils import Linp, is_empty
 
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 logger = logging.getLogger(__name__)
@@ -78,9 +78,14 @@ def home(request):
     return render(
         request,
         "epolyscat_django_app/application.html",
-        {"project_name": "ePolyScat Django App"},
+        {"project_name": "ePolyScat-Django-App"},
     )
 
+
+class IsOwner(permissions.BasePermission):
+    def has_object_permission(self, request, view, obj):
+        # Only the owner has write access
+        return request.user == obj.owner
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
@@ -89,11 +94,6 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
         # Only the owner has write access
         return request.user == obj.owner
 
-
-class IsOwner(permissions.BasePermission):
-    def has_object_permission(self, request, view, obj):
-        # Only the owner has write access
-        return request.user == obj.owner
 
 
 class Pagination(pagination.PageNumberPagination):
@@ -173,6 +173,44 @@ class RunViewSet(viewsets.ModelViewSet):
             )
             if len(view) > 0 and view[0].type == "unsubmitted":
                 view[0].populate_unsubmitted_runs(request=request)
+            if len(view) > 0 and view[0].type == "tutorial":
+              show_tutorial_runs = True
+              _queryset = _queryset.filter(
+              Q(views=self.request.query_params.get("viewId"))
+            )
+        # Exclude tutorials from the general listing unless we're listing tutorials
+        if self.action == "list" and not show_tutorial_runs:
+            _queryset = _queryset.exclude(experiment__owner=None)
+
+        return _queryset
+
+        '''
+        tutorial_view_id = models.View.tutorial_view().id
+ 
+        return (
+            # Returns Runs owned by the user
+            models.Run.objects.filter(
+                Q(owner=self.request.user) | Q(views__id__contains=tutorial_view_id)
+            )
+        )
+        '''
+    '''
+        request = self.request
+        _queryset = models.Run.filter_by_user(request)
+        _queryset = _queryset.filter(deleted=False)
+
+        if self.request.query_params.get("experiment"):
+            _queryset = _queryset.filter(
+                Q(experiment=self.request.query_params.get("experiment"))
+            )
+
+        show_tutorial_runs = False
+        if self.request.query_params.get("viewId"):
+            view = models.View.filter_by_user(request).filter(
+                id=self.request.query_params.get("viewId")
+            )
+            if len(view) > 0 and view[0].type == "unsubmitted":
+                view[0].populate_unsubmitted_runs(request=request)
             elif len(view) > 0 and view[0].type == "tutorial":
                 show_tutorial_runs = True
 
@@ -184,7 +222,197 @@ class RunViewSet(viewsets.ModelViewSet):
         if self.action == "list" and not show_tutorial_runs:
             _queryset = _queryset.exclude(experiment__owner=None)
 
-        return _queryset
+        #return _queryset
+        return (
+            # Returns Runs owned by the user
+            models.Run.objects.filter(
+                Q(owner=self.request.user) | Q(views__id__contains=tutorial_view_id)
+            )
+        )
+    ''' 
+    # Note: transaction.atomic doesn't affect user_storage calls, it is possible
+    # that files are created/deleted and then the method later errors out
+    # with the database changes being undone
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        run = serializer.save(owner=request.user)
+
+        user_storage.create_user_dir(request, dir_names=run.directory.split("/"))
+
+        for input in request.data["inputs_data"]:
+            self._create_input(request, run, input)
+
+        if "viewIds" in request.data:
+            for viewId in request.data["viewIds"]:
+                if int(viewId) < 0:
+                    try:
+                        tutorial_view = models.View.tutorial_view()
+                        run.views.add(tutorial_view)
+                    except models.View.DoesNotExist:
+                        pass
+                else:
+                    view = models.View.objects.get(pk=int(viewId))
+                    run.views.add(view)
+   
+        return Response(serializer.data)
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        run = self.get_object()
+        serializer = self.get_serializer(run, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        if run.owner != request.user:
+            raise Exception("You can only update a run that you own")
+
+        for updated_input in request.data["inputs_data"]:
+            self._update_input(request, run, updated_input)
+
+        return Response(serializer.data)
+
+
+    def _create_input(self, request, run_instance, input):
+        if input["type"] == "files":
+            new_input = models.Input.objects.create(
+                type="files",
+                run=run_instance,
+                name=input["name"],
+                value=None
+            )
+
+            # Right now I'm assuming that URI_COLLECTIONS are supposed
+            # to be saved with product uri's seperated by commas
+            for file_data in input["files"]:
+                self._save_file(request, run_instance, file_data, new_input)
+        else:
+            # Ensures that if a run type is previously defined as something else, it gets overidden when updated
+            if input["name"] in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"]:
+                matching_inputs = list(filter(lambda input:
+                    input.name in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"],
+                    run_instance.inputs.all()
+                ));
+
+                for matching_input in matching_inputs:
+                    matching_input.delete()
+
+            models.Input.objects.create(
+                type=input["type"],
+                run=run_instance,
+                name=input["name"],
+                value=input["value"]
+            )
+
+    def _update_input(self, request, run_instance, updated_input):
+        matching_inputs = list(filter(lambda input:
+            input.type == updated_input["type"] and
+            input.name == updated_input["name"],
+            run_instance.inputs.all()
+        ))
+
+        if not matching_inputs:
+            self._create_input(request, run_instance, updated_input)
+        else:
+            old_input = matching_inputs[0]
+
+            if updated_input["type"] == "files":
+                for updated_file in updated_input["files"]:
+                    matching_files = list(filter(lambda file:
+                        file.name == updated_file["name"],
+                        old_input.files.all()
+                    ))
+
+                    # file_exists = "dataProductURI" in updated_file and user_storage.exists(
+                    #     request,
+                    #     data_product_uri=updated_file["dataProductURI"]
+                    # )
+
+                    if not matching_files:
+                        self._save_file(request, run_instance, updated_file, old_input)
+                    else:
+                        old_file = matching_files[0]
+
+                        user_storage.delete(
+                            request,
+                            data_product_uri=old_file.data_product_uri
+                        )
+
+                        old_file.delete()
+
+                        if not updated_file["deleted"]:
+                            self._save_file(request, run_instance, updated_file, old_input)
+            else:
+                old_input.value = updated_input["value"]
+
+            old_input.save()
+
+    def _save_file(self, request, run_instance, file_data, input):
+        if "deleted" not in file_data or not file_data["deleted"]:
+            if "contents" not in file_data or file_data["contents"] == None:
+                if not "dataProductURI" in file_data and "data-product-uri" in file_data:
+                    file_data["dataProductURI"] = file_data["data-product-uri"]
+                file = user_storage.open_file(
+                    request, data_product_uri=file_data["dataProductURI"]
+                )
+                content_type = user_storage.get_data_product_metadata(
+                    request, data_product_uri=file_data["dataProductURI"]
+                )["mime_type"]
+            elif file_data["isPlaintext"]:
+                file = StringIO(file_data["contents"])
+                content_type = "text/plain"
+            else:
+                file = BytesIO(base64.b64decode(file_data["contents"]))
+                content_type = ""
+
+            saved_file = user_storage.save(
+                request,
+                run_instance.directory,
+                file,
+                name=file_data["name"],
+                content_type=content_type
+            )
+
+            models.File.objects.create(
+                name=file_data["name"],
+                data_product_uri=saved_file.productUri,
+                input=input
+            )
+
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        run: models.Run = self.get_object()
+        delete_associated = False if request.GET["deleteAssociated"] == "false" else True
+
+        if run.owner != request.user:
+            raise Exception("You can only delete a run that you own")
+
+        if delete_associated and user_storage.dir_exists(request, run.directory):
+            user_storage.delete_dir(request, run.directory)
+
+        return super().destroy(request, *args, **kwargs)
+
+    @transaction.atomic
+    @action(detail=True, methods=["POST"])
+    def clone(self, request, pk=None):
+        run: models.Run = self.get_object()
+
+        serializer = self.get_serializer(run)
+        response = serializer.data
+
+        del response["id"]
+        del response["created"]
+        del response["updated"]
+        del response["deleted"]
+        del response["executions"]
+
+        response["name"] = f"{response['name']} CLONE"
+        response["status"] = "UNSUBMITTED"
+        response["job_status"] = "UNSUBMITTED"
+
+        return Response(response)
 
     def perform_destroy(self, instance):
         instance.deleted = True
@@ -194,11 +422,45 @@ class RunViewSet(viewsets.ModelViewSet):
     def submit(self, request, pk=None):
         # Update the instance
         run: models.Run = self.get_object()
-        serializer = self.get_serializer(run, data=request.data)
+        serializer = self.get_serializer(run, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        app_interface_id = self._get_trecx_app_interface_id(request)
+        if run.owner != request.user:
+            raise Exception("You can only submit a run that you own")
+
+        # change to api call
+        app_interface_id = self._get_eployscat_app_interface_id(request)
+
+        inputs = {};
+
+        for input in run.inputs.all():
+            if input.type == "files":
+                data_product_uris = []
+
+                for file in input.files.all():
+                    opened_file = user_storage.open_file(
+                        request, data_product_uri=file.data_product_uri
+                    )
+                    data_product_uris.append(user_storage.save_input_file(
+                        request, opened_file, name=file.name
+                    ).productUri)
+
+                # still not sure if this is what URI_COLLECTION is expecting
+                inputs[input.name] = ",".join(data_product_uris)
+            else:
+                inputs[input.name] = input.value
+
+        self._create_remote_execution(request, run, inputs, app_interface_id, serializer.data["is_tutorial"])
+
+        serializer = self.get_serializer(run)
+        return Response(serializer.data)
+
+    def status(self, request, pk=None):
+        run: models.Run = self.get_object()
+
+        return Response(run.status)
+
 
         # Copy the inpc file from the run directory into the experiment
         # directory by setting it as an input file
@@ -230,7 +492,7 @@ class RunViewSet(viewsets.ModelViewSet):
                 f"Cannot resubmit run {run.id}, has no executions with a job"
             )
 
-        app_interface_id = self._get_trecx_app_interface_id(request)
+        app_interface_id = self._get_eployscat_app_interface_id(request)
 
         # prepare inputs to remote execution and call self._create_remote_execution
         inpc_file = user_storage.open_file(
@@ -253,8 +515,10 @@ class RunViewSet(viewsets.ModelViewSet):
         self,
         request,
         run: models.Run,
+        inputs: typing.Dict[str, str],
         app_interface_id: str,
         input_values: typing.Dict[str, str],
+        is_tutorial: bool
     ) -> models.RemoteExecution:
 
         # Make sure that there aren't any currently running executions
@@ -276,16 +540,29 @@ class RunViewSet(viewsets.ModelViewSet):
         experiment.projectId = run.experiment.airavata_project_id
         experiment.gatewayId = settings.GATEWAY_ID
         experiment.userName = request.user.username
-        ucd = UserConfigurationDataModel()
-        ucd.groupResourceProfileId = run.group_resource_profile_id
-        experiment.userConfigurationData = ucd
-        crs = ComputationalResourceSchedulingModel()
-        crs.resourceHostId = run.compute_resource_id
-        crs.totalCPUCount = run.core_count
-        crs.nodeCount = run.node_count
-        crs.wallTimeLimit = run.walltime_limit
-        crs.queueName = run.queue_name
-        experiment.userConfigurationData.computationalResourceScheduling = crs
+        #ucd = UserConfigurationDataModel()
+        #ucd.groupResourceProfileId = run.group_resource_profile_id
+        #ucd.shareExperimentPublicly=is_tutorial
+
+        #experiment.userConfigurationData = ucd
+        experiment.userConfigurationData = UserConfigurationDataModel(
+            groupResourceProfileId=run.group_resource_profile_id,
+            shareExperimentPublicly=is_tutorial,
+            computationalResourceScheduling=ComputationalResourceSchedulingModel(
+                resourceHostId=run.compute_resource_id,
+                totalCPUCount=run.core_count,
+                nodeCount=run.node_count,
+                wallTimeLimit=run.walltime_limit,
+                queueName=run.queue_name
+            )
+        )
+        #crs = ComputationalResourceSchedulingModel()
+        #crs.resourceHostId = run.compute_resource_id
+        #crs.totalCPUCount = run.core_count
+        #crs.nodeCount = run.node_count
+        #crs.wallTimeLimit = run.walltime_limit
+        #crs.queueName = run.queue_name
+        #experiment.userConfigurationData.computationalResourceScheduling = crs
 
         for inp in experiment.experimentInputs:
             if inp.name in input_values:
@@ -306,10 +583,42 @@ class RunViewSet(viewsets.ModelViewSet):
             airavata_experiment_id=experiment_id,
             resource_name=compute_resource.hostName,
         )
+    @action(detail=True, methods=["PATCH"])
+    def change_notification_settings(self, request, pk=None, *args, **kwargs):
+        run = self.get_object()
+        serializer = self.get_serializer(run, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
 
-    def _get_trecx_app_interface_id(self, request):
-        app_module_id = getattr(settings, "TRECX", {}).get(
-            "TRECX_APPLICATION_ID", "tRecX_70fc89f8-424f-4495-99e3-f3aa6a75f967"
+        execution = run.latest_execution
+
+        experiment = request.airavata_client.getExperiment(
+            request.authz_token, execution.airavata_experiment_id
+        )
+        if run.is_email_notification_on:
+            experiment.emailAddresses = [request.user.email]
+        else:
+            experiment.emailAddresses = []
+
+        request.airavata_client.updateExperiment(
+            request.authz_token, execution.airavata_experiment_id, experiment
+        )
+
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["GET"])
+    def tutorial_runs(self, request):
+        tutorial_view = models.View.tutorial_view()
+        runs = [run for run in models.Run.objects.all() if tutorial_view in run.views.all()]
+
+        serializer = self.get_serializer(runs, many=True)
+
+        return Response(serializer.data)
+
+
+    def _get_eployscat_app_interface_id(self, request):
+        app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+            "EPOLYSCAT_APPLICATION_ID", "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
         )
         all_app_interfaces = request.airavata_client.getAllApplicationInterfaces(
             request.authz_token, settings.GATEWAY_ID
@@ -334,8 +643,8 @@ class RunViewSet(viewsets.ModelViewSet):
     def new(self, request, pk=None):
         run: models.Run = self.get_object()
 
-        trecx_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "tRecX"
+        eployscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
+            "ePolyScat"
         ]
 
         # check if run has a linp file
@@ -345,13 +654,13 @@ class RunViewSet(viewsets.ModelViewSet):
                 include_values = True
         except FileNotFoundError:
             # otherwise use the master linp file
-            linp = Linp(trecx_settings["MASTER_LINP"])
+            linp = Linp(eployscat_settings["MASTER_LINP"])
             # since we're using the master linp file, we won't include any values from it
             include_values = False
 
         # load page/sections configuration for app
-        INPUT_PAGES = deepcopy(trecx_settings["INPUT_PAGES"])
-        INPUT_PAGES["Other"] = deepcopy(trecx_settings["ALL_INPUTS"])
+        INPUT_PAGES = deepcopy(eployscat_settings["INPUT_PAGES"])
+        INPUT_PAGES["Other"] = deepcopy(eployscat_settings["ALL_INPUTS"])
 
         # Keep track of categories and names that have already been added
         all_sections = {}
@@ -455,10 +764,10 @@ class RunViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         viewables = []
 
-        trecx_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "tRecX"
+        epolyscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
+            "ePolyScat"
         ]
-        for filename, description in trecx_settings["FILE_VIEWABLE"].items():
+        for filename, description in epolyscat_settings["FILE_VIEWABLE"].items():
             if run_file_exists(request, run, filename):
                 url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
                 viewables.append(dict(filename=filename, url=url))
@@ -484,10 +793,10 @@ class RunViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         input_files_list = []
 
-        trecx_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "tRecX"
+        eployscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
+            "ePolyScat"
         ]
-        for filename, description in trecx_settings["FILE_INPUT"].items():
+        for filename, description in eployscat_settings["FILE_INPUT"].items():
             if run_file_exists(request, run, filename):
                 url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
                 input_files_list.append(dict(filename=filename, url=url))
@@ -536,31 +845,365 @@ class PlotParametersViewSet(viewsets.ModelViewSet):
         return models.PlotParameters.filter_by_user(request).order_by("-last_use")
 
 
+@api_view(["POST"])
+def plot(request):
+    "Returns dictionary with 'mime-type' and 'plot' as base64 encoded image."
+    serializer = serializers.PlotSerializer(
+        data=request.data, context={"request": request}
+    )
+    serializer.is_valid()
+    serializer.is_valid(raise_exception=True)
+
+    plot_command = [
+        sys.executable,
+        os.path.join(apps.get_app_config("epolyscat_django_app").SCRIPTS, "plot.py"),
+    ]
+
+    plotfiles = serializer.validated_data["plotfiles"]
+
+    def map_plotfile_to_obj(plotfile):
+        file = user_storage.open_file(request, data_product_uri=plotfile["data_product_uri"])
+        sep = "" if plotfile['prefix'] == "" else "__"
+        file_name = file.name.split("/")[-1]
+        return { "file": file, "name": f"{plotfile['prefix']}{sep}{file_name}" }
+
+    plotfile_objs = list(map(map_plotfile_to_obj, plotfiles))
+    # with runs_dir(request, runs, [plotfile], ignore_missing=True) as tmp_runs_dir:
+    with get_tmp_dir(request, plotfile_objs, False) as tmp_dir:
+        plot_parameters = serializer.validated_data.get("plot_parameters", None)
+        if plot_parameters is not None:
+            obj, created = models.PlotParameters.objects.get_or_create(
+                xaxis=plot_parameters["xaxis"],
+                yaxes=plot_parameters["yaxes"],
+                flags=plot_parameters["flags"],
+                owner=request.user,
+            )
+            plot_parameters = obj
+            if not created:
+                plot_parameters.last_use = timezone.now()
+                plot_parameters.save()
+        else:
+            plot_parameters = serializer.validated_data["plot_parameters_id"]
+            plot_parameters.last_use = timezone.now()
+            plot_parameters.save()
+
+        xaxis = plot_parameters.xaxis
+        yaxes = plot_parameters.yaxes
+        flags = plot_parameters.flags
+        cols = ""
+        if xaxis:
+            cols = xaxis + ":"
+        if yaxes:
+            cols += yaxes
+        show_columns_command = plot_command.copy()
+        for plotfile_obj in plotfile_objs:
+            if cols:
+                plot_command.append(
+                    os.path.join(plotfile_obj["name"] + "[" + cols + "]")
+                )
+            else:
+                plot_command.append(os.path.join(plotfile_obj["name"]))
+
+        # For every run directory where the plotfile exists, add to the command
+        # for run in runs:
+        #     # command is executed in tmp_runs_dir and command line paths are
+        #     # relative to that base directory
+        #     rundir = os.path.join(run.root.root, run.number)
+        #     if os.path.exists(os.path.join(tmp_runs_dir, rundir, plotfile)):
+        #         if cols:
+        #             plot_command.append(
+        #                 os.path.join(rundir, plotfile + "[" + cols + "]")
+        #             )
+        #         else:
+        #             plot_command.append(os.path.join(rundir, plotfile))
+        #         # Don't include columns for showColumns in case they are out of range
+        #         show_columns_command.append(os.path.join(rundir, plotfile))
+
+        if flags:
+            plot_command += flags.split()
+        graph = "plot.png"
+        plot_command.append("-plotfile=" + graph)
+        plot_command.append("-batch")
+
+        try:
+            logger.debug(f"Running {plot_command}")
+            process = subprocess.Popen(
+                plot_command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                cwd=tmp_dir,
+            )
+            returncode = process.wait()
+            process_output = process.stdout.read().decode()
+            logger.debug(f"plot.py returncode={returncode}")
+            logger.debug(f"plot.py output={process_output}")
+
+            data = {"mime-type": "image/png"}
+            data["output"] = process_output
+            if os.path.exists(os.path.join(tmp_dir, graph)):
+                with open(os.path.join(tmp_dir, graph), "rb") as plotpng:
+                    data["plot"] = base64.b64encode(plotpng.read()).decode("utf-8")
+
+            # If there was an error, return the showColumns output
+            if returncode != 0:
+                show_columns_command.append("-batch")
+                show_columns_command.append("-showColumns")
+                logger.debug(f"Running showColumns {show_columns_command}")
+                process = subprocess.Popen(
+                    show_columns_command,
+                    stdout=subprocess.PIPE,
+                    # stderr=subprocess.STDOUT,
+                    cwd=tmp_dir,
+                )
+                process.wait()
+                process_output = process.stdout.read().decode()
+                logger.debug(f"plot.py -showColumns returncode={process.returncode}")
+                logger.debug(f"plot.py -showColumns output={process_output}")
+                data["user_guidance"] = process_output
+
+            return response.Response(data)
+        except Exception as e:
+            plot_parameters.delete()
+            logger.exception(f"Failed to generate plot for {plot_command}")
+            raise  # re-raise exception
+
+
+@contextmanager
+def get_tmp_dir(request, plotfile_objs, ignore_missing=False):
+    "Copy run files into temporary directory, keeping the existing structure"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        for plotfile in plotfile_objs:
+            file = plotfile["file"]
+            filename = plotfile["name"]
+
+            if os.path.exists(os.path.join(tmpdir, filename)):
+                i = 2
+
+                while os.path.exists(os.path.join(tmpdir, filename + "__" + str(i))):
+                    i += 1
+
+                filename += "__" + str(i)
+
+            with open(os.path.join(tmpdir, filename), "xb") as fcopy:
+                shutil.copyfileobj(file, fcopy)
+
+        yield tmpdir
+
+
+    # with tempfile.TemporaryDirectory() as tmpdir:
+    #     for run in runs:
+    #         for filename in filenames:
+    #             try:
+    #                 with open_run_file(request, run, filename) as f:
+    #                     rundir = os.path.join(tmpdir, run.root.root, run.number)
+    #                     os.makedirs(rundir, exist_ok=True)
+    #                     logger.debug(f"copying {run.filepath}/{filename} to {rundir}")
+    #                     with open(os.path.join(rundir, filename), "wb") as fcopy:
+    #                         shutil.copyfileobj(f, fcopy)
+    #             except FileNotFoundError:
+    #                 logger.debug(f"could not find {run.filepath}/{filename}")
+    #                 if not ignore_missing:
+    #                     raise
+    #     yield tmpdir
+
+
+def open_run_file(request, run: models.Run, filename: str):
+    # Handle tutorial runs specially: all of their files are available within the app
+    if False and run.is_tutorial:
+        return open(BASE_DIR / run.filepath / filename, "rb")
+    else:
+        data_product_uri = user_run_file_exists(request, run, filename)
+        if data_product_uri is not None:
+            return user_storage.open_file(request, data_product_uri=data_product_uri)
+        else:
+            raise FileNotFoundError(f"{filename} does not exist in run {run.id}")
+
+
+def run_file_exists(request, run: models.Run, filename: str) -> bool:
+    if False and run.is_tutorial:
+        return (BASE_DIR / run.directory / filename).exists()
+    else:
+        return user_run_file_exists(request, run, filename) is not None
+
+def user_run_file_exists(request, run, filename):
+    """Return data product uri for run file if it exists, else None."""
+
+    # check to see if the file is already in the run directory, for backwards compatibility
+    if run.owner == request.user:
+        data_product_uri = user_storage.user_file_exists(
+            request, os.path.join(run.directory, filename)
+        )
+        if data_product_uri is not None:
+            logger.debug(f"Found {filename} in {run.filepath}")
+            return data_product_uri
+
+    # Find the most recent completed execution (Airavata experiment) if exists
+    experiment_model = None
+    for execution in run.executions.order_by("-created"):
+        status_name = execution.get_airavata_experiment_status(request)
+        experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
+        if experiment_state == ExperimentState.COMPLETED:
+            logger.debug(f"getExperiment({execution.airavata_experiment_id})")
+            experiment_model = request.airavata_client.getExperiment(
+                request.authz_token, execution.airavata_experiment_id
+            )
+            break
+    if experiment_model is None:
+        return None
+
+    # Load the Modl_RunID file to find location of files
+    # TODO: cache this information
+    modl_runid_output = None
+    for output in experiment_model.experimentOutputs:
+        if output.name == "Modl_RunID":
+            modl_runid_output = output
+    if modl_runid_output is None or not user_storage.exists(
+        request, data_product_uri=modl_runid_output.value
+    ):
+        raise Exception("Modl_RunID file is missing")
+    modl_runid_file = user_storage.open_file(
+        request, data_product_uri=modl_runid_output.value
+    )
+    model_runid = modl_runid_file.read().decode()
+    m = re.match(r"(\S+) (\S+)", model_runid)
+    if m is None:
+        raise Exception(f"Invalid Modl_RunID file contents: {model_runid}")
+    model, run_id = m.group(1, 2)
+
+
+    # Check for the file in ARCHIVE/model/run_id/ directory
+    data_product_uri = user_storage.user_file_exists(
+        request,
+        os.path.join("ARCHIVE", model, run_id, filename),
+        experiment_id=experiment_model.experimentId,
+    )
+    return data_product_uri
+
+
+@api_view(["GET"])
+def api_settings(request):
+    app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+        "EPOLYSCAT_APPLICATION_ID",
+        # "BSR:_B-Spline_atomic_R-matrix_code_9ae142cb-689f-4440-8d2d-e131f2891005"
+        #"BSR3_82b15174-04a1-471e-82a3-33c77c8c6281"
+        "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
+    )
+    return response.Response({"EPOLYSCAT": {"EPOLYSCAT_APPLICATION_ID": app_module_id}})
+
+
+def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
+    # Find most recent execution
+    if run.executions.exists():
+        most_recent_execution: models.RemoteExecution = run.executions.order_by(
+            "-created"
+        )[0]
+    else:
+        return None
+
+    experiment_model: ExperimentModel = request.airavata_client.getExperiment(
+        request.authz_token, most_recent_execution.airavata_experiment_id
+    )
+    # Find the output by data type
+    output = None
+    for output in experiment_model.experimentOutputs:
+        output_type_name = DataType._VALUES_TO_NAMES[output.type]
+        if output_type_name == data_type:
+            output = output
+            break
+    # If experiment is finished, see if there is an experimentOutput available
+    if most_recent_execution.is_airavata_experiment_finished(request):
+        if output is not None or user_storage.exists(
+            request, data_product_uri=output.value
+        ):
+            return output.value
+        else:
+            return None
+    # otherwise, see if there is an intermediate output available
+    else:
+        data_products = (
+            experiment_util.intermediate_output.get_intermediate_output_data_products(
+                request, experiment_model, output.name
+            )
+        )
+        if len(data_products) == 1 and user_storage.exists(
+            request, data_product=data_products[0]
+        ):
+            return data_products[0].productUri
+        else:
+            return None
+
+
 class ViewsViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.ViewSerializer
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
     pagination_class = Pagination
 
     def get_queryset(self):
-        request = self.request
-
-        queryset = models.View.filter_by_user(request)
-
-        if self.action == "list":
-            queryset = queryset.exclude(type="tutorial")
-
-        if self.action == "list" and "type" in self.request.query_params:
-            types = self.request.query_params.getlist("type")
-            logger.debug(f"filtering by types={types}")
-            queryset = queryset.filter(type__in=types)
-
-        queryset = (
-            queryset.filter(deleted=False)
-            .annotate(recent_activity_date=Coalesce(Max("runs__updated"), "updated"))
-            .order_by("-order", "-recent_activity_date")
+        #request = self.request
+        return (
+            # Returns Runs owned by the user
+            models.View.objects.filter(
+                Q(owner=self.request.user)
+            )
         )
 
-        return queryset
+#        #queryset = models.View.filter_by_user(request)
+#
+#        if self.action == "list":
+#            queryset = queryset.exclude(type="tutorial")
+#
+#        if self.action == "list" and "type" in self.request.query_params:
+#            types = self.request.query_params.getlist("type")
+#            logger.debug(f"filtering by types={types}")
+#            queryset = queryset.filter(type__in=types)
+#
+#        queryset = (
+#            queryset.filter(deleted=False)
+#            .annotate(recent_activity_date=Coalesce(Max("runs__updated"), "updated"))
+#            .order_by("-order", "-recent_activity_date")
+#        )
+#
+#        return queryset
+
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        view = serializer.save(owner=request.user)
+
+        for run in models.Run.objects.all():
+            if run.id in request.data["runIds"]:
+                run.views.add(view)
+
+        return Response(serializer.data)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        view = self.get_object()
+        serializer = self.get_serializer(view, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        if request.data['overide']:
+            for run in view.runs.all():
+                run.views.remove(view)
+
+        for run in models.Run.objects.all():
+            if run.id in request.data["runIds"]:
+                run.views.add(view)
+        
+                # if serializer.data["is_tutorial"]:
+                    # for execution in run.executions:
+                    #     experiment = request.airavata_client.getExperiment(
+                    #         request.authz_token, execution.experiment_id
+                    #     )
+
+                    #     experiment.userConfigurationData.shareExperimentPublicly = True
+
+        return Response(serializer.data)
+
+''' 
+     ###  changing tRecX to BSR model 
 
     def list(self, request, *args, **kwargs):
         models.View.create_default_views(request)
@@ -629,6 +1272,211 @@ class ViewsViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(tutorials_view)
         return Response(serializer.data)
 
+#    @transaction.atomic
+#    def update(self, request, *args, **kwargs):
+#        partial = kwargs.pop('partial', False)
+#        view = self.get_object()
+#        serializer = self.get_serializer(view, data=request.data, partial=partial)
+#        serializer.is_valid(raise_exception=True)
+#
+#        if request.data['overide']:
+#            for run in view.runs.all():
+#                run.views.remove(view)
+#
+#        for run in models.Run.objects.all():
+#            if run.id in request.data["runIds"]:
+#                run.views.add(view)
+#
+#                # if serializer.data["is_tutorial"]:
+#                    # for execution in run.executions:
+#                    #     experiment = request.airavata_client.getExperiment(
+#                    #         request.authz_token, execution.experiment_id
+#                    #     )
+#
+#                    #     experiment.userConfigurationData.shareExperimentPublicly = True
+#
+#        return Response(serializer.data)
+
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        run = self.get_object()
+        serializer = self.get_serializer(run, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        if run.owner != request.user:
+            raise Exception("You can only update a run that you own")
+
+        for updated_input in request.data["inputs_data"]:
+            self._update_input(request, run, updated_input)
+
+        return Response(serializer.data)
+
+    def _create_input(self, request, run_instance, input):
+        if input["type"] == "files":
+            new_input = models.Input.objects.create(
+                type="files",
+                run=run_instance,
+                name=input["name"],
+                value=None
+            )
+
+            # Right now I'm assuming that URI_COLLECTIONS are supposed
+            # to be saved with product uri's seperated by commas
+            for file_data in input["files"]:
+                self._save_file(request, run_instance, file_data, new_input)
+        else:
+            # Ensures that if a run type is previously defined as something else, it gets overidden when updated
+            if input["name"] in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"]:
+                matching_inputs = list(filter(lambda input:
+                    input.name in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"],
+                    run_instance.inputs.all()
+                ));
+                for matching_input in matching_inputs:
+                    matching_input.delete()
+
+            models.Input.objects.create(
+                type=input["type"],
+                run=run_instance,
+                name=input["name"],
+                value=input["value"]
+            )
+
+    def _update_input(self, request, run_instance, updated_input):
+        matching_inputs = list(filter(lambda input:
+            input.type == updated_input["type"] and
+            input.name == updated_input["name"],
+            run_instance.inputs.all()
+        ))
+
+        if not matching_inputs:
+            self._create_input(request, run_instance, updated_input)
+        else:
+            old_input = matching_inputs[0]
+
+            if updated_input["type"] == "files":
+                for updated_file in updated_input["files"]:
+                    matching_files = list(filter(lambda file:
+                        file.name == updated_file["name"],
+                        old_input.files.all()
+                    ))
+
+                    # file_exists = "dataProductURI" in updated_file and user_storage.exists(
+                    #     request,
+                    #     data_product_uri=updated_file["dataProductURI"]
+                    # )
+
+                    if not matching_files:
+                        self._save_file(request, run_instance, updated_file, old_input)
+                    else:
+                        old_file = matching_files[0]
+
+                        user_storage.delete(
+                            request,
+                            data_product_uri=old_file.data_product_uri
+                        )
+
+                        old_file.delete()
+
+                        if not updated_file["deleted"]:
+                            self._save_file(request, run_instance, updated_file, old_input)
+            else:
+                old_input.value = updated_input["value"]
+
+            old_input.save()
+
+
+    def _save_file(self, request, run_instance, file_data, input):
+        if "deleted" not in file_data or not file_data["deleted"]:
+            if "contents" not in file_data or file_data["contents"] == None:
+                if not "dataProductURI" in file_data and "data-product-uri" in file_data:
+                    file_data["dataProductURI"] = file_data["data-product-uri"]
+                file = user_storage.open_file(
+                    request, data_product_uri=file_data["dataProductURI"]
+                )
+                content_type = user_storage.get_data_product_metadata(
+                    request, data_product_uri=file_data["dataProductURI"]
+                )["mime_type"]
+            elif file_data["isPlaintext"]:
+                file = StringIO(file_data["contents"])
+                content_type = "text/plain"
+            else:
+                file = BytesIO(base64.b64decode(file_data["contents"]))
+                content_type = ""
+
+            saved_file = user_storage.save(
+                request,
+                run_instance.directory,
+                file,
+                name=file_data["name"],
+                content_type=content_type
+            )
+
+            models.File.objects.create(
+                name=file_data["name"],
+                data_product_uri=saved_file.productUri,
+                input=input
+            )
+
+    @transaction.atomic
+    def destroy(self, request, *args, **kwargs):
+        run: models.Run = self.get_object()
+        delete_associated = False if request.GET["deleteAssociated"] == "false" else True
+
+        if run.owner != request.user:
+            raise Exception("You can only delete a run that you own")
+
+        if delete_associated and user_storage.dir_exists(request, run.directory):
+            user_storage.delete_dir(request, run.directory)
+
+        return super().destroy(request, *args, **kwargs)
+
+
+    @transaction.atomic
+    @action(detail=True, methods=["POST"])
+    def clone(self, request, pk=None):
+        run: models.Run = self.get_object()
+
+        serializer = self.get_serializer(run)
+        response = serializer.data
+
+        del response["id"]
+        del response["created"]
+        del response["updated"]
+        del response["deleted"]
+        del response["executions"]
+
+        response["name"] = f"{response['name']} CLONE"
+        response["status"] = "UNSUBMITTED"
+        response["job_status"] = "UNSUBMITTED"
+
+        return Response(response)
+
+    @action(detail=True, methods=["GET"])
+    def get_output_files(self, request, pk=None):
+        lst = list(get_list_or_404(self.get_queryset(), pk=pk))
+        run = self.get_object()
+        output_files = []
+
+        if len(run.executions.all()) > 0:
+            most_recent_execution = run.executions.order_by(
+                "-created"
+            )[0]
+
+            try:
+                output_files = user_storage.list_experiment_dir(
+                    request, most_recent_execution.airavata_experiment_id, path="ARCHIVE"
+                )[1]
+            except Exception:
+                pass
+
+        return Response(output_files)
+
+
+
+
+
     @transaction.atomic
     def _create_tutorials_view(self):
 
@@ -637,7 +1485,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         tutorials_experiment = models.Experiment.objects.create(
             name="Tutorials", owner=None, root=tutorials_root
         )
-        tutorials_dir = Path(BASE_DIR, "data", "trecx", "tutorials")
+        tutorials_dir = Path(BASE_DIR, "data", "epolyscat", "tutorials")
         for tutorial_dir in tutorials_dir.iterdir():
             models.Run.objects.create(
                 number=tutorial_dir.name,
@@ -659,7 +1507,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         tutorials_experiment: models.Experiment = run.experiment
         tutorials_root: models.RunsRoot = tutorials_experiment.root
 
-        tutorials_dir = Path(BASE_DIR, "data", "trecx", "tutorials")
+        tutorials_dir = Path(BASE_DIR, "data", "epolyscat", "tutorials")
         for tutorial_dir in tutorials_dir.iterdir():
             run, created = models.Run.objects.get_or_create(
                 number=tutorial_dir.name,
@@ -837,10 +1685,10 @@ def plotables(request):
 
     runs = serializer.validated_data["runs"]
     plotable_files = set()
-    trecx_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-        "tRecX"
+    epolyscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
+        "ePolyScat"
     ]
-    for filename, description in trecx_settings["FILE_PLOTABLE"].items():
+    for filename, description in epolyscat_settings["FILE_PLOTABLE"].items():
         # Return filename if at least one run has the file
         for run in runs:
             try:
@@ -854,10 +1702,11 @@ def plotables(request):
 
 @api_view(["GET"])
 def api_settings(request):
-    app_module_id = getattr(settings, "TRECX", {}).get(
-        "TRECX_APPLICATION_ID", "tRecX_70fc89f8-424f-4495-99e3-f3aa6a75f967"
+    app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+        "EPOLYSCAT_APPLICATION_ID", "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
     )
-    return response.Response({"TRECX": {"TRECX_APPLICATION_ID": app_module_id}})
+    return response.Response({"EPOLYSCAT": {"EPOLYSCAT_APPLICATION_ID": app_module_id}})
+'''
 
 
 class LRunsResult(typing.NamedTuple):
@@ -926,7 +1775,7 @@ def runs_dir(request, runs, filenames, ignore_missing=False):
 
 def open_run_file(request, run: models.Run, filename: str):
     # Handle tutorial runs specially: all of their files are available within the app
-    if run.is_tutorial:
+    if FALSE and run.is_tutorial:
         return open(BASE_DIR / run.filepath / filename, "rb")
     else:
         data_product_uri = user_run_file_exists(request, run, filename)
@@ -937,7 +1786,7 @@ def open_run_file(request, run: models.Run, filename: str):
 
 
 def run_file_exists(request, run: models.Run, filename: str) -> bool:
-    if run.is_tutorial:
+    if FALSE and run.is_tutorial:
         return (BASE_DIR / run.filepath / filename).exists()
     else:
         return user_run_file_exists(request, run, filename) is not None
@@ -948,18 +1797,27 @@ def user_run_file_exists(request, run, filename):
 
     # check to see if the file is already in the run directory, for backwards compatibility
     if run.owner == request.user:
-        data_product_uri = user_storage.user_file_exists(
-            request, os.path.join(run.filepath, filename)
-        )
-        if data_product_uri is not None:
-            logger.debug(f"Found {filename} in {run.filepath}")
-            return data_product_uri
+        print(f"DEBUG: Checking run directory for owner {run.owner}")
+        try:
+            data_product_uri = user_storage.user_file_exists(
+                request, os.path.join(run.filepath, filename)
+            )
+            if data_product_uri is not None:
+                 print(f"DEBUG: Found {filename} in {run.filepath} with URI: {data_product_uri}")
+                 logger.debug(f"Found {filename} in {run.filepath}")
+                 return data_product_uri
+        except Exception as e:
+            print(f"DEBUG: Failed to check run directory: {e}")
+    else:
+       print(f"DEBUG: Run owner {run.owner} != request user {request.user}, skipping run directory check")        
 
     # Find the most recent completed execution (Airavata experiment) if exists
+    print(f"DEBUG: Looking for completed execution in {run.executions.count()} executions")
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
         experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
+        print(f"DEBUG: Execution {execution.airavata_experiment_id} status: {status_name}")
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
             experiment_model = request.airavata_client.getExperiment(
@@ -967,34 +1825,71 @@ def user_run_file_exists(request, run, filename):
             )
             break
     if experiment_model is None:
+        print(f"DEBUG: No completed execution found for run {run.id}")
         return None
 
     # Load the Modl_RunID file to find location of files
     # TODO: cache this information
+    print(f"DEBUG: Looking for Modl_RunID in {len(experiment_model.experimentOutputs)} experiment outputs")
     modl_runid_output = None
     for output in experiment_model.experimentOutputs:
         if output.name == "Modl_RunID":
             modl_runid_output = output
-    if modl_runid_output is None or not user_storage.exists(
-        request, data_product_uri=modl_runid_output.value
-    ):
+            print(f"DEBUG: Found Modl_RunID output with URI: {output.value}")
+            break
+    if modl_runid_output is None:
+        print(f"DEBUG: Modl_RunID output not found")
         raise Exception("Modl_RunID file is missing")
+    if  not user_storage.exists(request, data_product_uri=modl_runid_output.value):
+        print(f"DEBUG: Modl_RunID file does not exist at URI: {modl_runid_output.value}")
+        raise Exception("Modl_RunID file is missing")
+
+    print(f"DEBUG: Opening Modl_RunID file from URI: {modl_runid_output.value}")
     modl_runid_file = user_storage.open_file(
         request, data_product_uri=modl_runid_output.value
     )
     model_runid = modl_runid_file.read().decode()
+    print(f"DEBUG: Modl_RunID file contents: '{model_runid.strip()}'")
+
     m = re.match(r"(\S+) (\S+)", model_runid)
     if m is None:
+        print(f"DEBUG: Failed to parse Modl_RunID contents: '{model_runid}'")
         raise Exception(f"Invalid Modl_RunID file contents: {model_runid}")
     model, run_id = m.group(1, 2)
-
+    print(f"DEBUG: Parsed model: '{model}', run_id: '{run_id}'")
+    
+    try:
+        print(f"DEBUG: Using list_experiment_dir for experimen     t: '{experiment_model.experimentId}'")
+        directories, files = user_storage.list_experiment_dir(     request, experiment_model.experimentId)
+        print(f"DEBUG: Found {len(directories)} directories an     d {len(files)} files in experiment directory")
+ 
+        available_files = [file['name'] for file in files]
+        print(f"DEBUG: Available files: {available_files}") 
     # Check for the file in ARCHIVE/model/run_id/ directory
-    data_product_uri = user_storage.user_file_exists(
-        request,
-        os.path.join("ARCHIVE", model, run_id, filename),
-        experiment_id=experiment_model.experimentId,
-    )
-    return data_product_uri
+        for file in files:
+            if file['name'] == filename:
+                print(f"DEBUG: Found file '{filename}' with data product URI: '{file['data-product-uri']}'")
+                return file['data-product-uri']
+     
+        print(f"DEBUG: File '{filename}' not found in experiment directory")
+        return None 
+         
+    except Exception as e:
+        print(f"DEBUG: Failed to list experiment directory: {e}")
+
+        archive_path = os.path.join("ARCHIVE", model, run_id, filename)
+        print(f"DEBUG: Fallback - checking archive path: '{archive_path}'")     
+        
+        try:
+           data_product_uri = user_storage.user_file_exists(
+               request,
+               os.path.join("ARCHIVE", model, run_id, filename),
+               experiment_id=experiment_model.experimentId,
+           )
+           return data_product_uri
+        except Exception as fallback_e:
+            print(f"DEBUG: Fallback also failed: {fallback_e}")
+            return None
 
 
 def get_run_output_data_product_uri(request, run: models.Run, data_type: str):

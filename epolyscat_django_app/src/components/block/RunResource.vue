@@ -7,9 +7,9 @@
           :value="groupResourceProfileId"
       />
       <adpf-experiment-compute-resource-selector
-          v-if="trecxApplicationModuleId" :disabled="!isResourceSelectionAllowed"
+          v-if="epolyscatApplicationModuleId" :disabled="!isResourceSelectionAllowed"
           class="p-2 d-flex flex-row flex-fill" v-on:input="onComputeResourceSelector"
-          :application-module-id="trecxApplicationModuleId"
+          :application-module-id="epolyscatApplicationModuleId"
           :value="computeResourceId"
       />
     </div>
@@ -52,8 +52,8 @@ export default {
     isResourceSelectionAllowed() {
       return !this.disabled && !!this.run && ["Unsubmitted", "FAILED"].indexOf(this.run.status) >= 0;
     },
-    trecxApplicationModuleId() {
-      return this.$store.getters["settings/trecxApplicationModuleId"];
+    epolyscatApplicationModuleId() {
+      return this.$store.getters["settings/epolyscatApplicationModuleId"];
     }
   },
   methods: {

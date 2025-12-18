@@ -53,7 +53,7 @@
           </div>
         </div>
       </b-overlay>
-
+      
       <RunViewableEditor :run-id="cloneRunId" :run="cloneRun" filename="inpc" :read-only="false"
                          v-on:change="onInpcContentChange"/>
 
@@ -65,9 +65,9 @@
               :value="groupResourceProfileId"
           />
           <adpf-experiment-compute-resource-selector
-              v-if="trecxApplicationModuleId"
+              v-if="epolyscatApplicationModuleId"
               class="p-2 d-flex flex-row flex-fill" v-on:input="onComputeResourceSelector"
-              :application-module-id="trecxApplicationModuleId"
+              :application-module-id="epolyscatApplicationModuleId"
               :value="computeResourceId"
           />
         </div>
@@ -134,7 +134,7 @@
 </template>
 
 <script>
-import {ExperimentService, RunService} from "@/service/trecx-service";
+import {ExperimentService, RunService} from "@/service/epolyscat-service";
 import store from "@/store";
 import ButtonOverlay from "@/components/overlay/button-overlay";
 import RunViewableEditor from "@/components/block/RunViewableEditor";
@@ -304,8 +304,8 @@ export default {
         viewId: this.viewId
       });
     },
-    trecxApplicationModuleId() {
-      return this.$store.getters["settings/trecxApplicationModuleId"];
+    epolyscatApplicationModuleId() {
+      return this.$store.getters["settings/epolyscatApplicationModuleId"];
     },
   },
   methods: {

@@ -1,0 +1,42 @@
+Title:
+Tutorial example  - "tailored" field at 400 nm and 200 nm and 2e14 W/cm2
+
+# TIMING
+#       setup: ~ 30 sec
+# propagation:
+    full basis                        ~15 min
+    with detection of low amplitudes  ~ 6 min (TimePropagator: operatorThreshold)
+    (errors due to omission of low amplitudes are < 1.e-14 in the energy spectrum)
+#    Spectrum: ~ 1 min at -nR=100
+
+# for explanations of the input, see tutorial/13Circular400nm
+
+# NOTE: as there is no simple preponderance for L-M,
+        we cannot use a constraint;
+        however, low amplitude detection is still effective
+
+#define Rc 20.
+
+Spectrum: radialPoints=200, plot=cutEta[5]
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,33,,,expIm
+ Eta,17,-1,1, assocLegendre{Phi}
+ Rn,40, 0.,Rc,polynomial,10
+ Rn,20, Rc,Infty,polExp[1.]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,Rc
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle, azimuthAngle, phiCEO
+cos2, 1.e14, 2. OptCyc, 400., 90., 0.
+cos2, 1.e14, 2. OptCyc, 200., 90.,90.,pi/2
+
+TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold
+6. OptCyc, 0.05 OptCyc,0.05 au,50,1.e-7,1.e-6
+
+

@@ -1,0 +1,20 @@
+// tRecX = tSurff+irECS - a universal Schroedinger solver
+// Copyright (c) 2015 - 2021 by Armin Scrinzi (armin.scrinzi@lmu.de)
+// 
+// This program is free software; you can redistribute it and/or modify it 
+// under the terms of the GNU General Public License as published by the Free Software Foundation; 
+// either version 2 of the License, or (at your option) any later version.
+// End of license
+ 
+#ifndef INDEXCOULXNEW_H
+#define INDEXCOULXNEW_H
+
+#include "indexDerived.h"
+
+class IndexCoulXNew:public IndexDerived
+{
+public:
+    IndexCoulXNew(const Index *Idx, double RC, double RMax, const std::vector<double> KGrid, bool BandOvr, bool PureBessel, bool Bottom=false);
+};
+
+#endif // INDEXCOULXNEW_H

@@ -30,7 +30,7 @@ class epolyscatDjangoAppConfig(AppConfig):
     fa_icon_class = "fa-atom"
     settings = Settings()
     default_auto_field = "django.db.models.BigAutoField"
-    SCRIPTS = os.path.join(BASE_DIR, "tRecX", "SCRIPTS")
+    SCRIPTS = os.path.join(BASE_DIR, "ePolyScat", "SCRIPTS")
 
     APPLICATION_SETTINGS = {
         "EPOLYSCAT_DJANGO_APP": {
@@ -228,7 +228,7 @@ class epolyscatDjangoAppConfig(AppConfig):
                     ]
                 },
             ],
-            "MASTER_LINP": os.path.join(BASE_DIR, "data", "trecx", "linp"),
+            "MASTER_LINP": os.path.join(BASE_DIR, "data", "eployscat", "linp"),
             "FILE_PLOTABLE": {
                 "spec_total": "energy-differential spectrum",
                 "spec_partial": "partial-wave spectrum",

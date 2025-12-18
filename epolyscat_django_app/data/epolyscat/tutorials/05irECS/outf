@@ -1,0 +1,78 @@
+
+
+ ===  Date [06/23 11:45:21] Tutorial example - exterior complex scaling  =======
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X
+
+   Axis maxCoeff       from       to order                basis     absorption: eta,inner
+     --   ------   --------   ------   ---   ------------------   -----------------------
+      X      121 -Infty|-20 20|Infty 10-20 polExp[0.5]/polyn... ECS:(0.955,0.296)[-10,10]
+
+ Full basis name(s): polExp[0.5]/polynomial
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5<d_1_d>-<1/sqrt(Q*Q+2)>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5<d_1_d>-<1/sqrt(Q*Q+2)>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/05irECS/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[10]  ==========================================
+ ***  In sparse matrix, found  1 independent subsets with size(s) 121 ***
+                 real               imag
+     --   --------------   ----------------
+   0   -0.50000117571  3.25985366116e-17
+   1  -0.232902711868  2.95608537592e-16
+   2  -0.133829229535  4.65621425243e-16
+   3 -0.0847777114238  5.05970846824e-16
+   4 -0.0588574961542 -8.60212006368e-16
+   5 -0.0428185505685  1.25180281797e-15
+   6 -0.0327409377961 -2.70209915294e-13
+   7 -0.0256813464546  2.99763358526e-10
+   8 -0.0207848921552 -4.16611144391e-08
+   9 -0.0170807511881 -1.33421821596e-06
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                              78       0.627     0.00804
+                run_trecx: all                               2       0.102       0.051
+                run_trecx: run                               1      0.0958      0.0958
+                run_trecx: setup                             1      0.0958      0.0958
+timer overhead/call (sec): 3.76e-08
+timer overhead/call (sec): 9.32e-10 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/05irECS/0000/  ==============
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

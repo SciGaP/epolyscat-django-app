@@ -1,0 +1,67 @@
+Title:
+Tutorial example - 1d hydrogen in a laser field
+
+The purpose of this exercise is
+(1) see how time-propagation with an external field is done
+(2) monitor the restricted norm in [-5,5] during time-propagation
+(3) see irECS "perfect absorption" at work
+
+[TASK] have a look at input and output,
+       try to understand how the time-dependence comes into the operator
+       NOTE: by-pass pulse definition, in the end just the desired vector potential is computed
+[TASK] plot the time-evolution of various observables (see file "xxTimeProp/00xx/expec")
+       interprete what you see
+[TASK] Vary the scaling angle theta, what happens?
+[TASK] Move the scaling radius all the way to R0=5,
+       remove the chi[-10,10]:
+       if complex scaled, it would produce a complex expectation value, which is not allowed
+       look at the expectationvalues again, which ones are affected?
+
+# laser pulse parameters: cos2 pulse
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 2.e14, 1. OptCyc, 800.
+
+# time-progation
+# from -1 optical cycle (start of the pulse)
+#   to  several optical cycles (long after the field is gone)
+#       print output at the given intervals
+TimePropagation: begin,end,print
+-1 OptCyc, 5 OptCyc, 0.1 OptCyc
+
+# NOTE: as a rule, you can specify units for the input
+        if nothing is specified, usually atomic units are understood
+        some inputs by default go in units customary in the field
+        this is noted by the units specified in the definition
+
+# NOTE: the specified units can be overruled by explicitly specifying the
+#        units after the number, for example
+#
+#      Laser: I(W/cm2)
+#       0.01 au
+#  will result in the equivalent of ~3.51e14W/cm2
+#
+# internally, the code uses atomic units (to which all numbers will be converted upon input)
+
+Absorption: kind, axis, theta, upper
+ECS,X,0.5,20.
+
+# piece-wise specification of discretization with exponential tails at both ends
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X,20,-Infty,-20,polExp[1.]
+X,80,-20, 20,polynomial,10
+X,20, 20, Infty,polExp[1.]
+
+Operator: hamiltonian='0.5<d_1_d>-<1/sqrt(Q*Q+2)>'
+
+# interation with the 0 component of a laser field in velocity gauge
+# the time-dependent factor is the vector potential A_x(t)
+
+Operator: interaction='iLaserAz[t]<1_d>'
+
+
+# monitor and also write to file
+# the expectation value of the characteristic function in [-5,5] and [-10,10]
+Operator: expectationValue='<chi[-5,5]>,<chi[-10,10]>'
+
+
+

@@ -3,13 +3,32 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from airavata_django_portal_sdk import user_storage
+from airavata_django_portal_sdk import experiment_util, user_storage
+from airavata.model.workspace.ttypes import Project
 from django.db import transaction
 from django.db.models import Q
+from django.conf import settings
 from django.utils.text import get_valid_filename
 from rest_framework import reverse, serializers, validators
 
 from epolyscat_django_app import models
+
+class FileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = models.File
+        fields = ['name', 'data_product_uri']
+
+class InputSerializer(serializers.ModelSerializer):
+    files = serializers.SerializerMethodField()
+
+    class Meta:
+        model = models.Input
+        fields = ['type', 'name', 'value', 'files']
+
+    def get_files(self, input_instance):
+        files = models.File.objects.filter(input=input_instance)
+
+        return FileSerializer(files, many=True).data
 
 
 class UniqueToUserValidator(validators.UniqueValidator):
@@ -30,64 +49,95 @@ class UniqueToUserValidator(validators.UniqueValidator):
 
 
 class RunSerializer(serializers.ModelSerializer):
-    root = serializers.CharField(max_length=100, required=False)
-    directedit = serializers.CharField(
-        style={"base_template": "textarea.html"},
-        allow_blank=True,
-        write_only=True,
-        required=False,
-    )
-    inpc_download_url = serializers.SerializerMethodField()
-    status = serializers.SerializerMethodField()
-    resource = serializers.SerializerMethodField()
-    resource_short = serializers.SerializerMethodField()
+    inputs = serializers.SerializerMethodField()
     executions = serializers.SlugRelatedField(
         slug_field="airavata_experiment_id", read_only=True, many=True
-    )
-    input_table = serializers.JSONField(allow_null=True, required=False)
-    can_resubmit = serializers.SerializerMethodField()
-    cancelable = serializers.SerializerMethodField()
+    )   
+
+    #root = serializers.CharField(max_length=100, required=False)
+    #directedit = serializers.CharField(
+    #    style={"base_template": "textarea.html"},
+    #    allow_blank=True,
+    #    write_only=True,
+    #    required=False,
+    #)
+    #inpc_download_url = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    job_status = serializers.SerializerMethodField()
+    is_tutorial = serializers.SerializerMethodField()
+    job_id = serializers.SerializerMethodField()
+    #resource = serializers.SerializerMethodField()
+    #resource_short = serializers.SerializerMethodField()
+    #executions = serializers.SlugRelatedField(
+    #    slug_field="airavata_experiment_id", read_only=True, many=True
+    #)
+    #input_table = serializers.JSONField(allow_null=True, required=False)
+    #can_resubmit = serializers.SerializerMethodField()
+    #cancelable = serializers.SerializerMethodField()
 
     class Meta:
         model = models.Run
         fields = (
-            "id",
-            "name",
-            "number",
-            "root",
-            "experiment",
-            "created",
-            "updated",
-            "deleted",
-            "directedit",
-            "inpc_download_url",
-            "group_resource_profile_id",
-            "compute_resource_id",
-            "queue_name",
-            "core_count",
-            "node_count",
-            "walltime_limit",
-            "total_physical_memory",
-            "status",
-            "resource",
-            "resource_short",
-            "executions",
-            "input_table",
-            "can_resubmit",
-            "cancelable",
+            "id", "owner", "name", "description", "airavata_project_id", "views",
+            "created", "updated", "deleted", 'is_email_notification_on',
+            "group_resource_profile_id", "compute_resource_id",
+            "queue_name", "core_count", "node_count", "walltime_limit", "total_physical_memory",
+            "inputs", "executions", "status", "job_status", "is_tutorial", "job_id", 
+            #"directedit", "inpc_download_url", "cancelable","can_resubmit", "input_table", "root",
+            #"number", "root", "experiment", "resource", #"resource_short", "job_id", 
         )
-        read_only_fields = ("deleted", "number", "experiment", "name")
+        #read_only_fields = ("deleted", "number", "experiment", "name")
 
-    def to_representation(self, instance):
-        rep = super().to_representation(instance)
-        rep["root"] = instance.root.root
-        if instance.input_table is not None:
-            rep["input_table"] = json.loads(instance.input_table)
-        return rep
+    #def to_representation(self, instance):
+    #    rep = super().to_representation(instance)
+    #    rep["root"] = instance.root.root
+    #    if instance.input_table is not None:
+    #        rep["input_table"] = json.loads(instance.input_table)
+    #    return rep
 
     @transaction.atomic
     def create(self, validated_data):
         request = self.context["request"]
+
+        projects = request.airavata_client.getUserProjects(
+            request.authz_token,
+            settings.GATEWAY_ID,
+            request.user.username,
+            -1,
+            0
+        )
+        epolyscat_project_choices = ([p for p in projects if "EPOLYSCAT_app_project" in p.projectID] or
+            [p for p in projects if "Default_Project" in p.projectID] or
+            [p for p in projects if "Default" in p.projectID] or
+            [p for p in projects if "default" in p.projectID])
+
+        if len(epolyscat_project_choices) > 0:
+            airavata_project_id = epolyscat_project_choices[0].projectID
+        else:
+            new_project = Project(
+                owner=request.user.username,
+                gatewayId=settings.GATEWAY_ID,
+                name="EPOLYSCAT app project",
+            )
+
+            airavata_project_id = request.airavata_client.createProject(
+                request.authz_token,
+                settings.GATEWAY_ID,
+                new_project
+            )
+
+        # print(projects, [p for p in projects if p.projectID.startswith("Default_Project")])
+        # default_project = next(p for p in projects if p.projectID.startswith("Default_Project"))
+
+        # airavata_project_id = default_project.projectID
+
+        return models.Run.objects.create(
+            **validated_data,
+            airavata_project_id=airavata_project_id,
+            directory=""
+        )
+
+        '''
         root = get_valid_filename(validated_data.pop("root"))
         runs_root, created = models.RunsRoot.objects.get_or_create(
             root=root, owner=request.user
@@ -107,6 +157,8 @@ class RunSerializer(serializers.ModelSerializer):
             root=runs_root,
             number=number,
             experiment=experiment,
+            airavata_project_id=airavata_project_id,
+            directory="",
         )
         run_dirs = ("Runs", runs_root.root, run.number)
         user_storage.create_user_dir(request, dir_names=run_dirs)
@@ -221,22 +273,124 @@ class RunSerializer(serializers.ModelSerializer):
             )
         else:
             return None
+    '''
+    def get_inputs(self, run_instance: models.Run):
+        inputs = models.Input.objects.filter(run=run_instance)
 
-    def get_status(self, instance: models.Run):
+        return InputSerializer(inputs, many=True).data
+
+    def get_is_tutorial(self, run_instance: models.Run):
         request = self.context["request"]
-        if not instance.executions.exists():
-            return "Unsubmitted"
+            
+        tutorial_view = models.View.tutorial_view()
+            
+        return tutorial_view in run_instance.views.all() and request.user != tutorial_view.owner
+            
+#    def get_status(self, instance: models.Run):
+#        request = self.context["request"]
+#        if not instance.executions.exists():
+#            return "Unsubmitted"
+#        else:
+#            # get the last execution and return it's status
+#            latest_execution: models.RemoteExecution = instance.latest_execution
+#            # If not finished, try to get application specific status
+#            if not latest_execution.is_airavata_experiment_finished(request):
+#                application_status = latest_execution.get_application_specific_status(
+#                    request
+#                )
+#                if application_status is not None:
+#                    return application_status
+#            return latest_execution.get_airavata_experiment_status(request)
+
+    def get_status(self, run_instance: models.Run):
+        request = self.context["request"]
+        if not run_instance.executions.exists():
+            return "UNSUBMITTED"
         else:
             # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = instance.latest_execution
+            latest_execution: models.RemoteExecution = run_instance.latest_execution
             # If not finished, try to get application specific status
             if not latest_execution.is_airavata_experiment_finished(request):
-                application_status = latest_execution.get_application_specific_status(
-                    request
+                # experiment: ExperimentModel = request.airavata_client.getExperiment(
+                #     request.authz_token, latest_execution.airavata_experiment_id
+                # )
+
+                # application_status = experiment_util.intermediate_output.get_intermediate_output_process_status(
+                #     request, experiment, "bsr_prep.log"
+                # )
+
+                application_status = request.airavata_client.getExperimentStatus(
+                    request.authz_token, latest_execution.airavata_experiment_id
                 )
+
                 if application_status is not None:
-                    return application_status
+                    state = application_status.state
+                    status = "CREATED" if state == 0 else (
+                        "VALIDATED" if state == 1 else
+                        "SCHEDULED"     if state == 2 else
+                        "LAUNCHED"      if state == 3 else
+                        "EXECUTING"     if state == 4 else
+                        "CANCELING"     if state == 5 else
+                        "CANCELED"      if state == 6 else
+                        "COMPLETED"     if state == 7 else
+                        "FAILED"
+                    )
+
+                    return status
+
             return latest_execution.get_airavata_experiment_status(request)
+
+
+
+    def get_job_status(self, run_instance: models.Run):
+        request = self.context["request"]
+            
+        if not run_instance.executions.exists():
+            return "UNSUBMITTED"
+        else:
+            # get the last execution and return it's status
+            latest_execution: models.RemoteExecution = run_instance.latest_execution
+
+            try:
+                job_statuses = request.airavata_client.getJobStatuses(
+                    request.authz_token, latest_execution.airavata_experiment_id
+                )
+        
+                job_statuses_list = list(job_statuses.values());
+            
+                if len(job_statuses_list) > 0:
+                    # gets the most recent status
+                    job_statuses_list.sort(key=lambda status: status.timeOfStateChange, reverse=True)
+                    state = job_statuses_list[0].jobState
+
+                    status = "SUBMITTED"    if state == 0 else (
+                        "QUEUED"            if state == 1 else
+                        "ACTIVE"            if state == 2 else
+                        "COMPLETED"         if state == 3 else
+                        "CANCELED"          if state == 4 else
+                        "FAILED"            if state == 5 else
+                        "SUSPENDED"         if state == 6 else
+                        "UNKNOWN"           if state == 7 else
+                        "NON_CRITICAL_FAIL"     if state == 8 else "UNKNOWN_"
+                    )
+
+                    return status
+                else:
+                    return "NO STATUS"
+            except:
+                return "---"
+
+    def get_job_id(self, run_instance: models.Run):
+        request = self.context["request"]
+
+        if not run_instance.executions.exists():
+            return None
+        else:
+            # get the last execution and return it's status
+            latest_execution: models.RemoteExecution = run_instance.latest_execution
+            return latest_execution.get_job_id(request)
+
+
 
     def get_resource(self, instance):
         request = self.context["request"]
@@ -395,6 +549,10 @@ class RunIdRelatedField(serializers.PrimaryKeyRelatedField):
         request = self.context["request"]
         return models.Run.filter_by_user(request)
 
+class PlotfileSerializer(serializers.Serializer):
+    prefix = serializers.CharField(max_length=50, allow_blank=True)
+    data_product_uri = serializers.CharField(max_length=200)
+
 
 class PlotParametersIdRelatedField(serializers.PrimaryKeyRelatedField):
     def get_queryset(self):
@@ -444,6 +602,7 @@ class PlotParametersSerializer(serializers.ModelSerializer):
 class PlotSerializer(serializers.Serializer):
     runs = RunIdRelatedField(many=True)
     plotfile = serializers.CharField(max_length=20)
+    plotfiles = PlotfileSerializer(many=True)
     plot_parameters = PlotParametersSerializer(required=False)
     plot_parameters_id = PlotParametersIdRelatedField(required=False)
 
@@ -475,24 +634,26 @@ class ViewSerializer(serializers.ModelSerializer):
     run_count = serializers.SerializerMethodField()
     active_run_count = serializers.SerializerMethodField()
     owner = serializers.SlugRelatedField(slug_field="username", read_only=True)
+    runs = serializers.SerializerMethodField()
 
     class Meta:
         model = models.View
-        fields = (
-            "id",
-            "name",
-            "owner",
-            "created",
-            "updated",
-            "deleted",
-            "type",
-            "run_count",
-            "active_run_count",
-        )
-        read_only_fields = ("owner", "created", "updated", "deleted", "type")
+        fields = ("id", "name", "owner", "created", "updated", "deleted", "type", "run_count", "runs", "active_run_count", 'is_tutorial')
+        #read_only_fields = ("owner", "created", "updated", "deleted", "type")
 
-    def get_run_count(self, obj):
-        return obj.runs.exclude(experiment__owner=None).count()
+    def get_runs(self, view_instance: models.View):
+        runs = filter(
+            lambda run: any(map(lambda view: view==view_instance,run.views.all())),
+            models.Run.objects.all()
+        )
+
+        return RunSerializer(runs, many=True, context={'request': self.context['request']}).data
+
+    def get_run_count(self, view_instance: models.View):
+        return len(self.get_runs(view_instance))
+
+#//    def get_run_count(self, obj):
+#//        return obj.runs.exclude(experiment__owner=None).count()
 
     def get_active_run_count(self, obj):
         return obj.runs.exclude(experiment__owner=None).filter(Q(deleted=False)).count()

@@ -19,6 +19,27 @@
 
     <div class="w-100 left-nav-menu">
       <div class="w-100">
+        <router-link :to="documentsLink" v-slot="{ href, route, navigate, isActive,isExactActive }">
+          <b-overlay :show="!documentsLink">
+            <b-link :class="{active: isExactActive}" :href="href" @click="navigate">
+              <svg class="d-inline-block" width="20" height="20" viewBox="0 0 20 20" fill="none"
+                   xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 20H0V4.80005H20V20ZM0.8 19.2H19.2V5.60005H0.8V19.2Z" fill="black"/>
+                <path d="M16.3996 1.6001H3.59961V2.4001H16.3996V1.6001Z" fill="black"/>
+                <path d="M14.7997 0H5.19971V0.8H14.7997V0Z" fill="black"/>
+                <path d="M17.9995 3.2002H1.99951V4.0002H17.9995V3.2002Z" fill="black"/>
+              </svg>
+              <div class="d-inline-block" style="flex: 1;padding-left:10px">Documentation</div>
+            </b-link>
+            <b-icon icon="caret-right-fill" scale="0.5"></b-icon>
+          </b-overlay>
+        </router-link>
+
+      </div>
+    </div>
+
+    <div class="w-100 left-nav-menu">
+      <div class="w-100">
         <router-link :to="tutorialsLink" v-slot="{ href, route, navigate, isActive,isExactActive }">
           <b-overlay :show="!tutorialsLink">
             <b-link :class="{active: isExactActive}" :href="href" @click="navigate">
@@ -160,6 +181,9 @@ export default {
     views() {
       return this.$store.getters["view/getViews"]();
     },
+    documentViews() {
+      return this.$store.getters["view/getViews"]({documents: true});
+    },
     tutorialViews() {
       return this.$store.getters["view/getViews"]({tutorials: true});
     },
@@ -169,12 +193,22 @@ export default {
       } else {
         return null;
       }
-    }
+    },
+    documentsLink() {
+      if (this.documentViews && this.documentViews.length > 0) {
+        return `/documentation/?viewId=${this.documentViews[0].viewId}`;
+      } else {
+        return null;
+      }            
+    },          
+
+
   },
   async mounted() {
     await this.$store.dispatch("experiment/fetchExperiments");
     await this.$store.dispatch("view/fetchViews");
     await this.$store.dispatch("view/fetchViews", {tutorials: true});
+    await this.$store.dispatch("view/fetchViews", {documents: true});
   }
 }
 </script>

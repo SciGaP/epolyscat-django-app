@@ -1,0 +1,201 @@
+
+
+ ===  Date [06/23 11:45:57] Tutorial example  - photo-electron spectra of hydrogen  
+
+ Master host = linux-hxdi(4 processes) 
+
+ *** using ParallelLayout Phi.Eta.Rn ***
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Phi.Eta.Rn
+
+   Axis maxCoeff from       to order                basis     absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   -----------------------
+     Rn       57    0 20|Infty    20 polynomial/polExp... ECS:(0.955,0.296)[-20,20]
+    Phi        1    0    6.283     1               cosSin                          
+    Eta        4   -1        1     4   assocLegendre{Phi}                          
+
+ Full basis name(s): polynomial/polExp[1.]
+
+
+           Surfaces: default (at complex scaling radius)
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 1/2<<Laplacian>>-<trunc[15,20]/Q><1><1>
+        Interaction: iLaserAz[t]<<D/DZ>>
+         HamInitial: H(t=Begin)
+
+ Expectation Values: <chi[0,20]><1><1>
+         Projection: 1/2<<Laplacian>>-<trunc[15,20]/Q><1><1>
+
+
+ ===  Laser  ===================================================================
+
+   polAxis Shape Intens(W/cm2) lambda(nm)  FWHM  begin   end phiCEO
+     -----   ---   -----------   --------   ---   ----   ---   ----
+   [1 0 0]  cos2         1e+15         20 22.06 -22.06 22.06       
+
+ ponderomotive potential (eV): 0.03735
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/09HydrogenSpectrum/0000/
+
+
+ !!! WARNING --- trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ] --- WARNING !!!
+ Exact numerical integration needs integrands that are analytic within every finite element.
+ Matrix elements will be discretization dependent and non-systematic errors may appear 
+    - errors may be acceptably low, but convergence with order may be inconsistent 
+    - for consistent convergence place element boundaries on non-analytic points
+
+
+                 !!! Limit=1 reached, no further warnings:  trunc[15,20]/Q  has... !!!
+
+ ***  In sparse matrix, found  4 independent subsets with size(s)  57  57  57  57 ***
+ *** running parallel with 4 processes ***
+
+Parallel layout of Interaction+H0
+total load =80.8997     (pre-receive)->[oper]->(post-send)    dataSize{#blocks}
+Process no 0,	loadDelta= 40%,	blocks= 10, (1)->[0]->()	Recv= 19{1}
+Process no 1,	loadDelta=-36%,	blocks= 5, (0)->[1]->(0)	Recv/Send= 39{2}/20{1}
+Process no 2,	loadDelta= 18%,	blocks= 9, (0,1)->[2]->(0,1)	Recv/Send= 59{3}/59{3}
+Process no 3,	loadDelta=-22%,	blocks= 6, (2)->[3]->(2)	Recv/Send= 39{2}/39{2}
+
+Parallel layout of mapFromFullToContracted
+total load =13.6563     (pre-receive)->[oper]->(post-send)    dataSize{#blocks}
+Process no 0,	loadDelta= 60%,	blocks= 5, ()->[0]->()
+Process no 1,	loadDelta=-34%,	blocks= 2, ()->[1]->(0)	Send= 7{1}
+Process no 2,	loadDelta=  5%,	blocks= 3, ()->[2]->(1)	Send= 8{1}
+Process no 3,	loadDelta=-31%,	blocks= 2, ()->[3]->(2)	Send= 8{1}
+
+Parallel layout of mapToFullFromContracted
+total load =11.0138     (pre-receive)->[oper]->(post-send)    dataSize{#blocks}
+Process no 0,	loadDelta= 27%,	blocks= 5, ()->[0]->()
+Process no 1,	loadDelta=-33%,	blocks= 2, (0)->[1]->()	Recv= 7{1}
+Process no 2,	loadDelta= 23%,	blocks= 3, (1)->[2]->()	Recv= 8{1}
+Process no 3,	loadDelta=-17%,	blocks= 2, (2)->[3]->()	Recv= 8{1}
+
+ *** non-constant parameters in operator "Interaction+H0": iLaserAz[t] ***
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ]
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ]
+                  0: trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ]
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+               mpiWrapper: MPI                            2711       0.514     0.00019
+                run_trecx: all                               2       0.174      0.0871
+                run_trecx: setup                             1       0.111       0.111
+            operatorFloor: cost                            282     0.00122    4.34e-06
+                run_trecx: run                               1           0           0
+timer overhead/call (sec): 3.96e-08
+timer overhead/call (sec): 1.15e-09 (sample=1024)
+ *** initial state: eigenvector 1 of time-evolution at t=-22.063996478176 ***
+
+
+ ===  PROPAGATION PARAMETERS  ==================================================
+
+    begin   end print     store  fixStep accuracy cutEnergy method
+     ----   ---   ---   -------   ------   ------   -------   ----
+   -22.06 55.16 1.379 0.05[100] variable    1e-10        30    RK4
+
+ ***  Expectation values sampled only every 100 'th store time ***
+
+
+ ===  TIME PROPAGATION (/home/scrinzi/projects/tRecX/tutorial/09HydrogenSpectrum/0000/)
+
+             <Exp0>: +<1><1><chi[0,20]> at hierarchy Rn.Phi.Eta.Rn
+
+       Initial <H0>: -0.49999999999986
+
+      CPU   (%)    Time <Ovr(Rn.Phi.Et...>              <H0> <Exp0>
+     -----   --   -----   ----------------   ---------------   ----
+         0    0 -22.064                  1 -0.49999999999986      1
+   0.03606 1.786 -20.685   0.99999999999972 -0.49999999120283 0.99999999999972
+   0.08085 3.571 -19.306   0.99999999999968 -0.49999954150194 0.99999999999968
+    0.1325 5.357 -17.927   0.99999999999966 -0.49999652348118 0.99999999999966
+    0.1906 7.143 -16.548   0.99999999999964 -0.49998630367699 0.99999999999964
+    0.2543 8.929 -15.169   0.99999999999882 -0.49996081120272 0.99999999999882
+    0.3223 10.71  -13.79   0.99999999996735 -0.49990945779813 0.99999999996738
+    0.3935  12.5 -12.411   0.99999999928426  -0.4998189915632 0.99999999928503
+    0.4683 14.29 -11.032    0.9999999898704 -0.49967585001209 0.99999998988052
+     0.547 16.07  -9.653   0.99999990461762 -0.49946739810911 0.99999990470247
+    0.6278 17.86  -8.274   0.99999938454036 -0.49918422414424 0.99999938501038
+    0.7106 19.64  -6.895   0.99999719140926 -0.49882366676453 0.99999719318259
+    0.7952 21.43  -5.516   0.99999057143072  -0.4983904303302 0.99999057619426
+    0.8815 23.21  -4.137   0.99997544106203 -0.49789940298233 0.99997545089301
+    0.9851    25  -2.758   0.99994699537038 -0.49737222288895 0.99994701267422
+     1.079 26.79  -1.379   0.99989937013898 -0.49683840696404 0.99989939801987
+     1.175 28.57       0    0.9998261750761 -0.49633148583471 0.99982621629304
+     1.263 30.36   1.379    0.9997226187265 -0.49588442854609 0.99972267495185
+      1.35 32.14   2.758   0.99958523041712  -0.4955279146468  0.9995853032508
+     1.436 33.93   4.137   0.99941195959925 -0.49528508160402 0.99941204922502
+     1.522 35.71   5.516   0.99920461154314 -0.49517027219135 0.99920471611605
+     1.607  37.5   6.895   0.99896735941635 -0.49518590405006 0.99896747691498
+     1.689 39.29   8.274   0.99870637341832 -0.49532423831573 0.99870650000853
+     1.768 41.07   9.653   0.99843125936528 -0.49556673667043 0.99843139004721
+     1.849 42.86  11.032   0.99815196554026 -0.49588727220732 0.99815209600828
+     1.944 44.64  12.411   0.99787887638284 -0.49625595142551 0.99787900126023
+     2.041 46.43   13.79   0.99762261897652 -0.49664095652752 0.99762273385076
+     2.126 48.21  15.169   0.99739111730624 -0.49701415111201  0.9973912191115
+     2.206    50  16.548   0.99719077640948 -0.49735231486601 0.99719086232063
+     2.279 51.79  17.927   0.99702527098523 -0.49763980171363 0.99702534037837
+     2.345 53.57  19.306   0.99689486735655 -0.49786928470688 0.99689492053644
+     2.404 55.36  20.685   0.99679798390842 -0.49804072782442 0.99679802208581
+     2.454 57.14  22.064   0.99673045297128 -0.49816019322859 0.99673047870264
+     2.491 58.93  23.443   0.99668683271127 -0.49823715852966 0.99668684851336
+     2.528 60.71  24.822   0.99666134128324 -0.49828214650849 0.99666134998863
+     2.565  62.5  26.201    0.9966481088608 -0.49830534522975 0.99664811305712
+     2.602 64.29   27.58   0.99664231761906 -0.49831540798172 0.99664231924103
+     2.638 66.07  28.959    0.9966403242771 -0.49831880413754  0.9966403247643
+     2.675 67.86  30.338   0.99663980348162 -0.49831961803985 0.99663980360188
+     2.713 69.64  31.717   0.99663968818624 -0.49831977853806 0.99663968821353
+     2.749 71.43  33.096    0.9966396621004 -0.49831981163194 0.99663966210744
+     2.786 73.21  34.475   0.99663965500139 -0.49831981896929 0.99663965500408
+     2.823    75  35.854   0.99663965236278 -0.49831982084053 0.99663965236435
+      2.86 76.79  37.233    0.9966396507805 -0.49831982183131 0.99663965078158
+       2.9 78.57  38.612   0.99663964984298 -0.49831982247854 0.99663964984347
+     2.949 80.36  39.991    0.9966396495171 -0.49831982268456 0.99663964951726
+     2.994 82.14   41.37   0.99663964936109 -0.49831982275325 0.99663964936122
+     3.039 83.93  42.749   0.99663964918327 -0.49831982287012 0.99663964918338
+     3.077 85.71  44.128    0.9966396490597 -0.49831982293156 0.99663964905979
+     3.116  87.5  45.507   0.99663964898661 -0.49831982294855 0.99663964898671
+     3.154 89.29  46.886   0.99663964889163 -0.49831982297893 0.99663964889176
+     3.192 91.07  48.265   0.99663964880653 -0.49831982299572 0.99663964880666
+     3.229 92.86  49.644   0.99663964874003 -0.49831982300361 0.99663964874017
+     3.266 94.64  51.023   0.99663964866838 -0.49831982301381 0.99663964866852
+     3.302 96.43  52.402   0.99663964861154 -0.49831982301802 0.99663964861167
+     3.339 98.21  53.781   0.99663964855866 -0.49831982302224  0.9966396485588
+     3.377   100   55.16   0.99663964850988  -0.4983198230256 0.99663964851001
+
+ TimePropagator RK4: calls=60132, accept/reject 4989/22, average step=0.0079, step variance=0.0035
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  0: trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ]
+                  0: trunc[15,20]/Q  has non-analytic point in quadrature interval [ 10 , 20 ]
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2        3.95        1.98
+                run_trecx: run                               1        3.78        3.78
+               mpiWrapper: MPI                          798947       0.747    9.35e-07
+                run_trecx: setup                             1       0.111       0.111
+             initialState: get                               1      0.0305      0.0305
+            operatorFloor: cost                            282     0.00122    4.34e-06
+timer overhead/call (sec): 5.89e-08
+timer overhead/call (sec): 1.44e-09 (sample=1024)
+
+
+ *** further output on /home/scrinzi/projects/tRecX/tutorial/09HydrogenSpectrum/0000/S_Rn/outf ***

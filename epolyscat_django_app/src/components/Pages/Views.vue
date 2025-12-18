@@ -93,7 +93,7 @@
 import store from "@/store";
 import TableOverlayInfo from "@/components/overlay/table-overlay-info";
 import ButtonOverlay from "@/components/overlay/button-overlay";
-import {ViewService} from "@/service/trecx-service";
+import {ViewService} from "@/service/epolyscat-service";
 
 export default {
   name: "Views",

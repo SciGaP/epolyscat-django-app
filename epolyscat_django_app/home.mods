@@ -1,0 +1,25 @@
+.stats-card {
+  background: #2265970D;
+}
+
+.exp-card {
+  width: 300px !important;
+  height: 180px !important;
+}
+
+.create-exp-card {
+  border: 2px dashed #1C6296;
+  box-sizing: border-box;
+  border-radius: 5px;
+  font-weight: bold;
+  line-height: 70px;
+}
+
+.grid-container {
+  column-gap: 20px !important;
+  row-gap: 40px !important;
+  display: grid;
+  grid-auto-columns: auto;
+  grid-template-columns: repeat( auto-fit, 300px);
+}
+

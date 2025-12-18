@@ -1,0 +1,80 @@
+  8           <b-breadcrumb>
+  9             <template v-if="experimentId">
+ 10               <b-breadcrumb-item to="/experiments">Experiments</b-breadcrumb-item>
+ 11               <b-breadcrumb-item v-if="experiment" :to="`/runs/?experimentId=${experimentId}`">
+ 12                 {{ experiment.name }}
+ 13               </b-breadcrumb-item>
+ 14             </template>
+ 15             <template v-else-if="viewId">
+ 16               <b-breadcrumb-item to="/views">Views</b-breadcrumb-item>
+ 17               <b-breadcrumb-item v-if="view" :to="`/runs/?viewId=${viewId}`">
+ 18                 {{ view.name }}
+ 19               </b-breadcrumb-item>
+ 20             </template>
+ 21           </b-breadcrumb>
+
+83... 
+
+ 80               <b-badge v-if="!!experiment">{{ experiment.status }}</b-badge>
+ 81             </div>
+ 82             <div class="pl-3" v-if="!view || !view.readonly">
+ 83                  <!-- router-link :to="`/create-run?experimentId=${experimentId}`"
+ 84                            v-if="!viewId && runIds && runIds.length === 0"
+ 85                            v-slot="{ href, route, navigate, isActive,isExactActive }" -->
+ 86                 <!-- b-button variant="primary" size="sm" tag="a" :class="{active: isExactActive}" :href="href" @click="navigate" -->
+ 87                 <!-- router-link :to="`runs/new`" v-slot="{isExactActive, href, navigate}">
+ 88                 <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
+ 89                   Add a new run
+ 90                 </b-button>
+ 91                 </router-link -->
+
+
+156 
+
+153           <div class="w-100 mt-3">
+154             <b-form-input size="sm" type="text" placeholder="Search a run"/>
+155           </div>
+156           <!-- /div -->
+157 
+158         <div class="w-100 p-3 overflow-auto">
+159           <table-overlay-info :data="runs" :rows="5" :columns="5" empty-label="No runs available.">
+160             <b-table-simple>
+
+
+
+249 
+
+242       <div class="h-100 m-1" v-if="isCompareEnabled" style="overflow-y: scroll;">
+243            <ComparePlots :selectedRuns="selected"/>
+244       </div>    
+245               
+246       <!-- multipane-resizer v-if="selectedCount > 0"/>
+247       <div class="h-100 m-1" v-if="selectedCount > 0">
+248         <PostProcessing :selectedRunIds="selectedRunIds"/>
+249       </div -->  
+
+
+641   mounted() {
+642       if (this.viewId != null)
+643                 this.refreshData(true);
+644 
+645       this.refreshDataInterval = setInterval(() => {
+646                 this.refreshData(false);
+647             }, 45000);
+648       },
+649       beforeDestroy() {
+650       clearInterval(this.refreshDataInterval);
+651     }
+652 
+653     //this.$emit('on-select-runs', this.selectedRuns);
+654     //this.refreshData();
+655 //
+656     //this.runListRefreshTimeout = setInterval(() => {
+657     //  this.refreshList();
+658     //}, 15000);
+659   //},
+660   //beforeDestroy() {
+661   //  clearInterval(this.runListRefreshTimeout);
+662  //}
+663 }
+

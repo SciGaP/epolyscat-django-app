@@ -9,11 +9,12 @@ import Run from "@/components/Pages/Run";
 import Viewable from "@/components/Pages/Viewable";
 
 // Containers
-// const Home = () => import('@/components/home');
+//const Home = () => import('@/components/home');
 
 const Login = () => import('@/components/Pages/Login');
 const SignUp = () => import('@/components/Pages/SignUp');
 const Home = () => import('@/components/Pages/Home');
+const Documentation = () => import('@/components/Pages/Documentation');
 const CreateRun = () => import('@/components/Pages/CreateRun')
 
 
@@ -29,6 +30,11 @@ export default new Router({
             path: '/',
             name: 'home',
             component: Home,
+        },
+        {
+            path: '/documentation',
+            name: 'Documentation',
+            component: Documentation,
         },
         {
             path: '/signup',
@@ -56,6 +62,12 @@ export default new Router({
             component: Runs,
         },
         {
+            path: '/runs/new',
+            name: 'Run',
+            component: Run,
+        },
+
+        {
             path: '/runs/:runId',
             name: 'Run',
             component: Run,
@@ -74,6 +86,16 @@ export default new Router({
             path: '/create-run',
             name: 'CreateRun',
             component: CreateRun
+        },
+        {
+            path: '/views/:viewId',
+            name: 'Runs',
+            component: Runs,
+        },
+        {
+            path: '/tutorials',
+            name: 'Runs',
+            component: Runs
         },
         {
             path: '/resubmit-run',

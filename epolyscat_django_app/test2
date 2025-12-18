@@ -1,0 +1,42 @@
+./src/components/Pages/Run.vue:          computeResourceId: null,
+./src/components/Pages/ResubmitRun.vue:              :value="computeResourceId"
+./src/components/Pages/ResubmitRun.vue:        <b-form-invalid-feedback :state="inputState.computeResourceId">
+./src/components/Pages/ResubmitRun.vue:      computeResourceId: null,
+./src/components/Pages/ResubmitRun.vue:        "computeResourceId",
+./src/components/Pages/ResubmitRun.vue:        computeResourceId: this.computeResourceId === null ? null : this.isValid.computeResourceId,
+./src/components/Pages/ResubmitRun.vue:        computeResourceId: !!this.computeResourceId,
+./src/components/Pages/ResubmitRun.vue:        this.computeResourceId = evt.detail[0];
+./src/components/Pages/ResubmitRun.vue:          computeResourceId: this.computeResourceId,
+./src/components/Pages/ResubmitRun.vue:        this.computeResourceId = this.run.computeResourceId;
+./src/components/Pages/CreateRun.vue:              :value="computeResourceId"
+./src/components/Pages/CreateRun.vue:        <b-form-invalid-feedback :state="inputState.computeResourceId">
+./src/components/Pages/CreateRun.vue:      computeResourceId: null,
+./src/components/Pages/CreateRun.vue:        "computeResourceId",
+./src/components/Pages/CreateRun.vue:        computeResourceId: this.computeResourceId === null ? null : this.isValid.computeResourceId,
+./src/components/Pages/CreateRun.vue:        computeResourceId: !!this.computeResourceId,
+./src/components/Pages/CreateRun.vue:        this.computeResourceId = evt.detail[0];
+./src/components/Pages/CreateRun.vue:          computeResourceId: this.computeResourceId,
+./src/components/Pages/CreateRun.vue:      if (this.latestRun && this.latestRun.groupResourceProfileId && this.latestRun.computeResourceId && this.latestRun.queueName) {
+./src/components/Pages/CreateRun.vue:        this.computeResourceId = this.latestRun.computeResourceId;
+./src/components/block/RunResource.vue:          :value="computeResourceId"
+./src/components/block/RunResource.vue:      computeResourceId: null,
+./src/components/block/RunResource.vue:        this.computeResourceId = evt.detail[0];
+./src/components/block/RunResource.vue:        this.computeResourceId = this.run.computeResourceId;
+./src/service/trecx-service.js:            computeResourceId: obj.compute_resource_id,
+./src/service/trecx-service.js:    async createRun({root, experimentId, directedit, inputTable, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory}, submit = false) {
+./src/service/trecx-service.js:            "compute_resource_id": computeResourceId,
+./src/service/trecx-service.js:    async submitRun({runId, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory}) {
+./src/service/trecx-service.js:            "compute_resource_id": computeResourceId,
+./src/service/trecx-service.js:    async resubmitRun({runId, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory}) {
+./src/service/trecx-service.js:            "compute_resource_id": computeResourceId,
+./src/store/modules/run-storage.store.js:                computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:                computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:            computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:            computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:    async createRun({commit}, {root, experimentId, directedit, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory}) {
+./src/store/modules/run-storage.store.js:            root, experimentId, directedit, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount,
+./src/store/modules/run-storage.store.js:            runId, name, experimentId, directedit, groupResourceProfileId, computeResourceId, queueName, coreCount,
+./src/store/modules/run-storage.store.js:        computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:            computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:        computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,
+./src/store/modules/run-storage.store.js:                computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, status,

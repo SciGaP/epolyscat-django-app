@@ -1,0 +1,19 @@
+<!--
+    <Wrapper to allow for tooltips to show when disabled >
+    <span id="saveButton" style="width: fit-content">
+       <b-button variant="primary" :disabled="saveIssues.length > 0" @click="saveRun()">Save</b-button>
+    </span>
+    <b-tooltip target="saveButton" placement="top" v-if="saveIssues.length > 0">
+       <div v-html="saveIssues.join('<br>')" />
+    </b-tooltip>
+    <!-- Wrapper to allow for tooltips to show when disabled -->
+    <span id="submitButton" style="width: fit-content">
+      <b-button variant="primary" :disabled="submitIssues.length > 0" @click="submitRun">Save & Submit</b-button>
+    </span>
+    <b-tooltip target="submitButton" placement="top" v-if="submitIssues.length > 0">
+        <div v-html="submitIssues.join('<br>')" />
+    </b-tooltip>
+    </div>
+    </LoadingOverlay>
+    -->
+

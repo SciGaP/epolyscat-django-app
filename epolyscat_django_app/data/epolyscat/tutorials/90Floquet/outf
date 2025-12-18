@@ -1,0 +1,59 @@
+
+
+ ===  Date [06/23 13:37:57] Photon counts in spectra  ==========================
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Vec.Phi.Eta.Rn
+
+   Axis maxCoeff from       to order                basis    absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   ----------------------
+    Vec       18    0       17    18               vector                         
+    Phi        1    0    6.283     1               cosSin                         
+    Eta        5   -1        1     5   assocLegendre{Phi}                         
+     Rn       87    0 30|Infty    30 polynomial/polExp... ECS:(0.98,0.199)[-30,30]
+
+ Full basis name(s): polynomial/polExp[0.5]
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: <Id>(1/2<<Laplacian>>-<1><1><1/Q+exp(-Q*2.135)/Q>)+<diagonal[Q-14]>omega<1><1><1>+ A[I]/2(<delta[1]>-<delta[-1]>)<<D/DZ>>
+         HamInitial: H(t=Begin)
+
+         Projection: <Id>(1/2<<Laplacian>>-<1><1><1/Q+exp(-Q*2.135)/Q>)+<diagonal[Q-14]>omega<1><1><1>+ A[I]/2(<delta[1]>-<delta[-1]>)<<D/DZ>>
+
+
+ ===  Trace eigenvalues  =======================================================
+
+   name function(Q=I) from I     to I
+     --   -----------   ----   ------
+   A[I] sqrt(Q)/omega      0 0.005699
+
+    initial guesses: 6 values in [-1.1675,-0.903148]
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: tutorial/90Floquet/0000/
+
+
+
+
+ ===   Trace root starting from  (-0.903,0)  ===================================
+
+      I(W/cm2)     A[I]         Re(E)          Im(E)    Overlap w. previous
+     ---------   --------   ------------   ------------   -----------------
+             0          0  -0.9031487186              0                   0

@@ -1,0 +1,42 @@
+Title:
+Tutorial example  - IR photo-electron spectrum of hydrogen
+
+The purpose of this exercise is to demonstrate scaling with propagation time
+
+# TIMING ~ 2.5 + 2 min for tRecX + spectral analysis with given parameters
+(results with Intel i7 on laptop)
+
+[TASK] run Spectrum, inspect the spectra obtained by Rc=20 and 30
+[TASK] perform convergence studies
+
+the initial parameters in this file are adjusted to yield ~ 1% accuracy in much of the spectrum
+# Verify by varying:
+# Eta-axis  (i.e. angular momenta)
+# Rn-axis   radial basis
+# TimePropagation: accuracy and/or fixStep
+# TimePropagation: cutEnergy
+
+#define BOX 20
+
+Spectrum: radialPoints=100,plot=total,iSurff=true
+
+# basis for about 1% good results (some optimization tried)
+Axis: name,order,lower end, upper end,functions,nElem
+ Phi,1
+ Eta,30,-1,1, assocLegendre{Phi}
+ Rn,20, 0.,BOX,polynomial,2
+ Rn,20, BOX,Infty,polExp[0.5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><1/Q>'
+Operator: interaction='iLaserA0[t]<<D/DZ>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos8, 2.e14, 10. OptCyc, 800.
+
+TimePropagation: print,cutEnergy,operatorThreshold,fixStep
+0.25 OptCyc,50,5.e-8,0.05

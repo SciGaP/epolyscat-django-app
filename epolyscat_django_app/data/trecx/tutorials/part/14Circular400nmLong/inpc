@@ -1,0 +1,58 @@
+Title:
+Tutorial example  - spectra for circular polarization at 400 nm and 2e14 W/cm2
+
+# see comments in 13Circular400nm
+# only change is longer pulse duration
+# run-times grow a bit less than linearly
+
+# new feature: select from angular basis by preponderance rule
+
+Spectrum: radialPoints=200, plot=total, maxEnergy=20 eV
+
+#define Rc 20.
+
+# We set up the complete set of spherical harmonics
+# here: 33 m's (-16...16) on Phi for 17 l's (0...16) on Eta
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,33,,,expIm
+ Eta,17,-1,1, assocLegendre{Phi}
+ Rn,40, 0.,Rc,polynomial,10
+ Rn,20, Rc,Infty,polExp[1.]
+
+# impose preponderance rule L-M<4
+# NOTE: this implies chirality as defined below
+# results agree to ~ 1% with full calc
+BasisConstraint: kind, axes
+L-M[4;3],Phi.Eta
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,Rc
+
+# setup of operators may take some time for large l
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+# specify the components of the pulse
+# each component is considered as linearly polarized
+# with polarAngle and azimuthAngle (degrees)
+# circularly polarized pulse in the xy-plane - preponderance rules apply
+Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle, azimuthAngle, phiCEO
+cos2, 1.e14, 10. OptCyc, 400., 90., 0., 0
+cos2, 1.e14, 10. OptCyc, 400., 90.,90., pi/2
+
+
+# TimePropgation: operatorThreshold
+#  ... used for dynamical adjustment of expansion
+#      operator is not applied where amplidutes would remain
+#      below this threshold after application
+
+# also note: begin time is omitted
+#            defaults to time of first non-zero of pulse
+
+# cutEnergy: at 50 au we are at the limit of the admissible:
+             relative errors of 1.e-3 in total spectrum dominate over other truncation errors
+
+TimePropagation: end,print,cutEnergy,accuracy,fixStep
+15 OptCyc, 0.25 OptCyc,50,1.e-7,0.03

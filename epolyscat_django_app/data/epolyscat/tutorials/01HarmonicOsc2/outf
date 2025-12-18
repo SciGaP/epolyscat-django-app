@@ -1,0 +1,88 @@
+
+
+ ===  Date [06/23 11:45:09] Tutorial example  - 2d harmonic oscillator  ========
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X1.X2
+
+   Axis maxCoeff from   to order      basis absorption: eta,inner
+     --   ------   --   --   ---   --------   -------------------
+     X1       21   -7    7    12 polynomial                      
+     X2       27   -7    7     8 polynomial                      
+
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5(<d_1_d><1>+<1><d_1_d>)+0.5<Q*Q><1>+0.5<1><Q*Q>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5(<d_1_d><1>+<1><d_1_d>)+0.5<Q*Q><1>+0.5<1><Q*Q>
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/01HarmonicOsc2/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[20]  ==========================================
+ ***  In sparse matrix, found  1 independent subsets with size(s) 567 ***
+                real imag
+     --   ------------   --
+    0 0.999997453379    0
+    1  1.99965676393    0
+    2   2.0003353644    0
+    3  2.99823423539    0
+    4  2.99999467495    0
+    5  3.00007042166    0
+    6  3.99789354594    0
+    7  4.00040833269    0
+    8  4.00073126018    0
+    9  4.00718991589    0
+   10  4.95072748123    0
+   11  4.99830720367    0
+   12  5.00039057073    0
+   13  5.00752782692    0
+   14  5.00892388189    0
+   15  5.92335698567    0
+   16  5.95106539225    0
+   17  6.00080422846    0
+   18   6.0054266979    0
+   19  6.00858319244    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2        2.13        1.07
+                run_trecx: setup                             1        2.13        2.13
+                run_trecx: run                               1        2.13        2.13
+               mpiWrapper: MPI                             130       0.612     0.00471
+timer overhead/call (sec): 3.62e-08
+timer overhead/call (sec): 8.64e-10 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/01HarmonicOsc2/0000/  =======
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

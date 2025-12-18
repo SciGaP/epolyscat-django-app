@@ -1,13 +1,51 @@
-import {ViewService} from "@/service/trecx-service";
+import {ViewService} from "@/service/epolyscat-service";
 
 const state = {
-    viewListMap: {},
-    viewListPaginationMap: {},
+    //viewListMap: {},
+    //viewListPaginationMap: {},
     viewMap: {}
 }
 
 const actions = {
+    //async fetchViews({commit}) {
     async fetchViews({commit}, {page = 1, pageSize = 1000, tutorials = false} = {
+        page: 1, pageSize: 1000, tutorials: false
+    }) {
+        const queryString = JSON.stringify({page, pageSize, tutorials});
+
+        const viewsRes = await ViewService.fetchAllViews({page, pageSize, tutorials});
+        const views = viewsRes.results;
+        const viewIds = views.map(({viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly}) => {
+            commit("SET_VIEW", {
+                viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
+            });
+
+            return viewId;
+        });
+
+        commit("SET_VIEW_LIST", {
+            queryString,
+            viewIds,
+            pagination: {page, pageSize, total: viewsRes.count}
+        });
+    },
+ 
+        //const views = await ViewService.fetchViews();
+        //commit("SET_VIEW_MAP", { views });
+
+        //return views;
+    //},
+    async deleteView({commit}, { viewId }) {
+        await ViewService.deleteView(viewId);
+
+        commit("REMOVE_VIEW", { viewId });
+        commit("run/REMOVE_VIEW", { viewId }, { root: true });
+    },
+
+
+    /*
+    async fetchViews({commit}) {
+                             , {page = 1, pageSize = 1000, tutorials = false} = {
         page: 1, pageSize: 1000, tutorials: false
     }) {
         const queryString = JSON.stringify({page, pageSize, tutorials});
@@ -29,7 +67,13 @@ const actions = {
             pagination: {page, pageSize, total: viewsRes.count}
         });
     },
+    */
     async fetchView({commit}, {viewId}) {
+        //const view = (viewId == -1) ? await ViewService.fetchTutorialsView() : await ViewService.fetchView(viewId);
+
+        //commit("SET_VIEW_MAP", { views: [view] });
+
+
         const view = await ViewService.fetchView({viewId});
         const {name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
         commit("SET_VIEW", {
@@ -38,25 +82,69 @@ const actions = {
     },
     async createView({commit}, {name, runIds}) {
         const view = await ViewService.createView({name, runIds});
-        const {viewId, owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
-        commit("SET_VIEW", {
-            viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
-        });
+        //const {viewId, owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
+        commit("SET_VIEW_MAP", { views: [view] });
+
+        //commit("SET_VIEW", {
+        //    viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
+        //});
 
         return view;
     },
-    async updateView({commit}, {viewId, name, runIds}) {
-        const view = await ViewService.updateView({viewId, name, runIds});
-        const {owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
-        commit("SET_VIEW", {
-            viewId, name, runIds, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
-        });
+    //async updateView({commit}, {viewId, name, runIds}) {
+    async updateView({commit}, {viewId, name, runIds, override }) {
+        //const view = await ViewService.updateView({viewId, name, runIds});
+        const view = await ViewService.updateView({viewId, name, runIds, override });
+        //const {owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
+
+        commit("SET_VIEW_MAP", { views: [view] });
+
+        //commit("SET_VIEW", {
+        //    viewId, name, runIds, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
+        //});
 
         return view;
+    },
+    async insertIntoViews({commit, getters}, { viewIds, run }) {
+        for (const viewId of viewIds) {
+            let view = getters["getView"](viewId);
+
+            if (!view) {
+                view = await ViewService.fetchView(viewId);
+                commit("SET_VIEW_MAP", { views: [view] });
+            }
+
+            commit("INSERT_RUN", { viewId, run });
+        }
     }
 }
 
 const mutations = {
+    UPDATE_VIEW(state, { viewId, viewData }) {
+        Object.entries(viewData).forEach(([key, value]) => {
+            state.viewMap[viewId][key] = value;
+        });
+
+        state.viewMap = {...state.viewMap};
+    },
+    SET_VIEW_MAP(state, { views }) {
+        views.forEach(view => state.viewMap[view.id] = view);
+        state.viewMap = {...state.viewMap};
+    },
+    REMOVE_VIEW(state, { viewId }) {
+        delete state.viewMap[viewId];
+        state.viewMap = {...state.viewMap};
+    },
+    INSERT_RUN(state, { viewId, run }) {
+        // console.log(viewId, state.viewMap[viewId])
+        if (!(viewId in state.viewMap)) {
+          //print to log
+          console.log('no viewId in vewMap')
+        }
+
+        state.viewMap[viewId].runs.push(run);
+        state.viewMap[viewId].runCount = state.viewMap[viewId].runs.length;
+    },
     SET_VIEW_LIST(state, {queryString, viewIds, pagination: {page, pageSize, total}}) {
         state.viewListMap = {
             ...state.viewListMap,
@@ -77,6 +165,8 @@ const mutations = {
 
 
 const getters = {
+
+/*
     getViews: (state, getters) => {
         return ({page = 1, pageSize = 1000, tutorials = false} = {page: 1, pageSize: 1000, tutorials: false}) => {
             const queryString = JSON.stringify({page, pageSize, tutorials});
@@ -88,6 +178,11 @@ const getters = {
             }
         }
     },
+*/
+    getViews: (state) => {
+        return () => Object.values(state.viewMap).filter(view => view.id != -1);
+    },
+
     getViewsPagination: (state) => {
         return ({page = 1, pageSize = 1000, tutorials = false} = {page: 1, pageSize: 1000, tutorials: false}) => {
             const queryString = JSON.stringify({page, pageSize, tutorials});

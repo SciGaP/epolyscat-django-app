@@ -1,0 +1,43 @@
+Title:
+Tutorial example  - 1d harmonic oscillator
+
+The purpose of this exercise is  to
+(1) understand how to specify input
+(2) study the accuracy of for a simple eigenvalue problem as a function of
+   (a) number of elements
+   (b) finite element order
+
+[TASK 1] have a look at the output and see whether you understand it
+[TASK 2] vary the Axis and see what happens to the eigenvalues
+
+# Below we define our discretization axis:
+# X-axis means that integrals will be performed as <f|g> = int dx f(x) g(x)
+# note: in all our examples, we use only real basis functions
+# there will be ~ nElem*order coefficients
+
+Axis: name,order,lower end, upper end,functions,nElem
+X,10,-10,10,polynomial,4
+
+Comment on how to specify input (refers to lines above)
+in the category "Axis" one has "name", "nCoefficients", etc.
+the corresponding values are specified in the line below
+
+Note also that unless there is a colon in the line,
+it will be treated as comments
+# if you want to include a : as a comment, you need to specify # in the first column
+
+# the "hamiltonian" operator
+# <d_1_d>   i.e. the 1-d Laplacian, d_ means derivative to the left function, _d derivative to the right
+# <Q*Q>     harmonic potential
+# as in this example, one can  specify input in line
+
+Operator: hamiltonian='0.5<d_1_d>+0.5<Q*Q>'
+
+# we will print the lowest eigenvalues and stop
+Eigen: select=SmallReal[10]
+
+
+# NOTE: a list of allowed inputs can be found on "tRecX.doc"
+
+
+

@@ -1,0 +1,10 @@
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2    1.17e+03         587
+                run_trecx: run                               1    1.17e+03    1.17e+03
+                run_trecx: setup                             1        27.8        27.8
+               mpiWrapper: MPI                         3441944        21.3    6.17e-06
+             initialState: get                               1        5.33        5.33
+            operatorFloor: cost                          83456       0.123    1.48e-06
+timer overhead/call (sec): 3.92e-08
+timer overhead/call (sec): 1.01e-09 (sample=1024)

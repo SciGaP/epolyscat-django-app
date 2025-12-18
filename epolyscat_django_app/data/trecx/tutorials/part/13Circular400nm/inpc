@@ -1,0 +1,106 @@
+# --- complete input with all comments removed ---
+# Title:
+# Tutorial example  - spectra for circular(*) polarization
+# 
+# #..define Nelem 4
+# 
+# Surface: points
+# Nelem*5
+# 
+# Axis: name,nCoefficients,lower end, upper end,functions,order
+#  Phi,33
+#  Eta,17,-1,1, assocLegendre{Phi}
+#  Rn,Nelem*10, 0.,Nelem*5,polynomial,20
+#  Rn,20, Nelem*5,Infty,polExp[1.]
+# 
+# Absorption: kind, axis, theta, upper
+# ECS,Rn,0.3,Nelem*5
+# 
+# Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+# Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>'
+# Operator: expectationValue='<1><1><chi[0,20]>'
+# 
+# Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle, azimuthAngle, phiCEO
+# cos2, 1.e14, 2. OptCyc, 400., 90., 0.
+# cos2, 1.e14, 2. OptCyc, 400., 90.,90.,pi/2
+# 
+# TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold
+# 6 OptCyc, 0.05 OptCyc,0.5 au,50,1.e-7,1.e-6
+#--------------------------------------------------------- 
+# but more useful with comments:
+
+Title:
+Tutorial example  - spectra for circular(*) polarization
+
+(*) the concept of "circular" has limited meaning with the short pulse used
+
+# We choose the x-y plane as the polarization plane
+# In this geometry, spherical harmonics Ylm remain close to |m|~l
+# The code can automatically detect small amplitudes and saves time
+# controlled by TimePropagation::operatorThreshold
+
+# TIMING - run time with given parameters:
+# total ~ 6 min on my laptop (time propagation 3.5 min, tSurff 2.5 min)
+
+[TASK] Look at various cuts of the 3d spectrun
+       Spectrum tutorial/13Circular400nm/00xx -plot=cutPhi[9] or -plot=cutEta[5]
+
+#------------------------------------
+# Example of using input file macros: string Nelem will be substituted below
+#------------------------------------
+#define NELEM 4
+#define BOX NELEM*5
+
+# polarizaiton plane is xy, plot cuts different polar angles
+Spectrum: radialPoints=200, plot=cutEta[5]
+
+# We set up the complete set of spherical harmonics
+# here: 15 m's (-12...12) on Phi for 17 l's (0...12) on Eta
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,25,,,cosSin
+ Eta,13,-1,1, assocLegendre{Phi}
+ Rn,NELEM*8, 0.,BOX,polynomial,16
+ Rn,20,BOX,Infty,polExp[1.]
+
+
+#----------------------------------------------------------
+# Relative accurcay with the above discretization:
+    about 1% up to 0.7 au in momentum
+    at this point, spectral density is about 0.5% of peak
+    at larger energies, errors increase to ~ 10%
+    !!! NO SYSTEMATIC CONVERGENCE STUDIES WERE PERFORMED !!!
+#-----------------------------------------------------------
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,BOX
+
+# setup of operators may take some time for large l
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><1/Q>'
+Operator: interaction='iLaserAx[t]<<D/DX>>+iLaserAy[t]<<D/DY>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+# specify the components of the pulse
+# each component is considered as linearly polarized
+# with polarAngle and azimuthAngle (degrees)
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm), polarAngle, azimuthAngle, phiCEO
+cos2, 1.e14, 2. OptCyc, 400., 90., 0.
+cos2, 1.e14, 2. OptCyc, 400., 90.,90.,pi/2
+
+
+# TimePropgation: operatorThreshold
+#  ... used for dynamical adjustment of expansion
+#      operator is not applied where amplidutes would remain
+#      below this threshold after application
+
+# also note: begin time is omitted
+#            defaults to time of first non-zero of pulse
+
+# cutEnergy: at 50 au we are at the limit of the admissible:
+             relative errors of 1.e-3 in total spectrum dominate over other truncation errors
+
+TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold
+6 OptCyc, 0.125 OptCyc,0.5 au,50,1.e-7,1.e-6
+
+

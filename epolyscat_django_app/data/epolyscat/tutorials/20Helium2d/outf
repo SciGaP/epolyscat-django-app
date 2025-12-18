@@ -1,0 +1,126 @@
+
+
+ ===  Date [06/23 13:24:13] Tutorial example  - spectra from 2d Helium in a laser field  
+
+ !!! WARNING --- Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recommended shape is cos8 --- WARNING !!!
+
+ Master host = linux-hxdi(2 processes) 
+
+ *** using ParallelLayout X1.X2 ***
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: X1.X2
+
+   Axis maxCoeff       from       to order                basis     absorption: eta,inner
+     --   ------   --------   ------   ---   ------------------   -----------------------
+     X1       57 -Infty|-20 20|Infty 10-20 polExp[0.5]/polyn... ECS:(0.955,0.296)[-20,20]
+     X2       57 -Infty|-20 20|Infty 10-20 polExp[0.5]/polyn... ECS:(0.955,0.296)[-20,20]
+
+ Full basis name(s): polExp[0.5]/polynomial, polExp[0.5]/polynomial
+
+
+           Surfaces: 20
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: (0.5<d_1_d>-<2/sqrt(Q*Q+0.5)>)<1>+<1>(0.5<d_1_d>-<2/sqrt(Q*Q+0.5)>)+<{}><1./sqrt(pow[2](X1-X2)+0.3)>
+        Interaction: iLaserAz[t]<1_d><1>+iLaserAz[t]<1><1_d>
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5<d_1_d>:X1+0.5<d_1_d>:X2
+
+
+ ===  Laser  ===================================================================
+
+   polAxis Shape Intens(W/cm2) lambda(nm)  FWHM  begin   end phiCEO
+     -----   ---   -----------   --------   ---   ----   ---   ----
+   [1 0 0]  cos2         4e+14        100 68.95 -68.95 68.95       
+
+ ponderomotive potential (eV): 0.3735
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/20Helium2d/0000/
+
+
+ ***  In sparse matrix, found  1 independent subsets with size(s)  57 ***
+
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: setup                             1       0.793       0.793
+               mpiWrapper: MPI                            4481        0.55    0.000123
+                run_trecx: all                               2       0.151      0.0756
+            operatorFloor: cost                            472     0.00501    1.06e-05
+                run_trecx: run                               1           0           0
+timer overhead/call (sec): 3.62e-08
+timer overhead/call (sec): 9.38e-10 (sample=1024)
+
+
+ ===  PROPAGATION PARAMETERS  ==================================================
+
+    begin   end print     store  fixStep accuracy cutEnergy method
+     ----   ---   ---   -------   ------   ------   -------   ----
+   -68.95 206.8 13.79 0.69[100] variable    1e-09       100    RK4
+
+
+
+ ===  TIME PROPAGATION (/home/scrinzi/projects/tRecX/tutorial/20Helium2d/0000/)
+
+       Initial <H0>: -2.8791275522854
+
+      CPU   (%)    Time <Ovr(X1.X2.X1.X2)>             <H0>
+     -----   --   -----   ----------------   --------------
+         0    0  -68.95                  1 -2.8791275522854
+     4.669    5  -55.16   0.99999999947965 -2.8787120334663
+     9.342   10  -41.37    0.9999999724644 -2.8709655585558
+        14   15  -27.58    0.9999993187599  -2.856798302551
+     18.67   20  -13.79   0.99996970028147 -2.8300552278763
+     23.33   25       0   0.99938203021871 -2.8058757403162
+     27.97   30   13.79   0.99557613096882 -2.7781251396257
+      32.6   35   27.58   0.98454113444815 -2.7624243912237
+     37.19   40   41.37   0.96480625005662 -2.7329376466763
+     41.77   45   55.16   0.94395952322947 -2.6980004546013
+     46.31   50   68.95   0.93112946845107 -2.6729321562263
+     48.98   55   82.74   0.92704609777155 -2.6647717157276
+     51.66   60   96.53   0.92630045826999 -2.6632938973865
+     54.33   65  110.32   0.92634999308009 -2.6634126841041
+     57.02   70  124.11   0.92666389895476 -2.6640654400931
+     59.75   75   137.9   0.92710061577727 -2.6649670329723
+     62.45   80  151.69   0.92760685754901 -2.6660094864777
+     65.14   85  165.48   0.92813313109887 -2.6670913336449
+     67.81   90  179.27   0.92861975576311 -2.6680904794659
+     70.49   95  193.06   0.92902065027723 -2.6689127954694
+     73.15  100  206.85   0.92930607586846 -2.6694968954387
+
+ TimePropagator RK4: calls=307692, accept/reject 25629/12, average step=0.0054, step variance=0.00066
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: Pulse shape cos2 can produce artefacts for short pulses (here: 5 cycles), recomm...
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2        75.5        37.7
+                run_trecx: run                               1        75.3        75.3
+               mpiWrapper: MPI                         1292118        1.51    1.17e-06
+             initialState: get                               1        1.12        1.12
+                run_trecx: setup                             1       0.793       0.793
+            operatorFloor: cost                            472     0.00501    1.06e-05
+timer overhead/call (sec): 4.7e-08
+timer overhead/call (sec): 1.15e-09 (sample=1024)
+
+

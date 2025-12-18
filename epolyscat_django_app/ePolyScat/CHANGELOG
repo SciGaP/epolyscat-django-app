@@ -1,0 +1,18 @@
+Summary of recent changes (since July 2018)
+
+User level:
+- ERROR-fix: 1d spectra are computed correctly again (tutorial/08Hyd1dSpectrum)
+- improved SCRIPTS/plot.py, lRuns.py, e.g. -compare flag
+- new tutorials added (2d potentials)
+- new options Spectrum ... -plot=zone and =cone
+- split given discretization into subspaces, see tutorial/220HybridSubspace.inp
+- compiles with Intel (cmake)
+- MPI revived
+
+Developer level:
+- several new BasisAbstract classes, e.g. BasisExpIm, BasisBesselCoulomb, BasisOrbital, BasisEigen, BasisVector
+- class SpectrumPlot for transparent handling of Spectrum plots
+- improvements on CMake - more automatic handling of FFTW, GSL
+- re-organized memory for Index and Coefficients (massive reduction)
+
+

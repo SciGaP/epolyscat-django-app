@@ -11,6 +11,7 @@ With the Airavata Django Portal virtual environment activated, clone this repo a
 ```bash
 git clone --recursive https://github.com/SciGaP/epolyscat-django-app.git
 cd epolyscat-django-app
+export NODE_OPTIONS=--openssl-legacy-provider
 pip install -e .
 ````
 

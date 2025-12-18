@@ -1,0 +1,64 @@
+Title:
+Tutorial example - full Helium in cylindrical symmetry
+
+# Run time on a 2020 laptop single CPU ~< 5 min
+# (2 min setup, 2 min 2-particle propagation, rest tSurff spectra)
+# basis size ~ 1e5 with parameters NEL/ORD/SIZ/ANG = 2/20/10/4
+# accuracy of double-differential spectra ~ 1% (rough estimate)
+
+#define NEL 4
+#define SIZ 5
+#define BOX NEL*SIZ
+
+# NEA are the number of functions on radial interval [0,1], much denser than the rest
+#define ORD 10
+#define NEA 8
+#define NAB 10
+
+#define ANG 3
+#define MSZ 3
+
+# k-grid will be 64 x 64, take advantage of 1<->2 exchange symmetry
+Spectrum: radialPoints=64, symmetry12=true
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+Phi1,MSZ,0.,2*pi,expIm
+Phi2,MSZ,0.,2*pi,expIm
+Eta1,ANG,-1,1, assocLegendre{Phi1}
+Eta2,ANG,-1,1, assocLegendre{Phi2}
+Rn1,NEA, 0.,1.,polynomial,NEA
+Rn1,NEL*ORD, 1.,BOX,polynomial,ORD
+Rn1,NAB, BOX,Infty,polExp[1.]
+Rn2,NEA, 0.,1.,polynomial,NEA
+Rn2,NEL*ORD, 1.,BOX,polynomial,ORD
+Rn2,NAB, BOX,Infty,polExp[1.]
+
+# contstraints on the basis:
+# M=0: m1+m2=0
+# Lshape[3;5]...exclude (l1>=3 && l2>=3) except l1+l2<5
+BasisConstraint: axes,kind
+Phi1.Phi2,M=0
+Eta1.Eta2,Lshape[3;5]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn1,0.3,BOX
+ECS,Rn2,0.3,BOX
+
+Operator: hamiltonian=1/2<<Laplacian>>-2.<<Coulomb>>+[[eeInt6DHelium]]
+Operator: multipoleOrder=4
+
+# electron repulsion - truncate smoothly in acrosss r1,r2 in [15.25,20]
+Operator: smooth=15.25, truncate=20
+
+Operator: interaction='iLaserAz[t]<<D/DZ>>'
+Operator: expectationValue='<1><1><1><1><chi[0,20]><chi[0,20]>'
+
+# remove large Eigenvectors of this operator
+Operator: projection=(0.5<<Laplacian>>-2<<Coulomb>>):Phi1.Eta1.Rn1+(0.5<<Laplacian>>-2<<Coulomb>>):Phi2.Eta2.Rn2
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 1.e15, 3. OptCyc, 20.
+
+TimePropagation: begin,end,print,store,accuracy,cutEnergy,fixStep
+-3 OptCyc, 5 OptCyc, 0.5 OptCyc,0.,1.e-7,60,0.02
+

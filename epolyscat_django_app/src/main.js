@@ -8,7 +8,7 @@ import router from './router';
 // import store from "./store";
 import App from './App.vue';
 import VueFilterDateFormat from 'vue-filter-date-format';
-// import Toast from "vue-toastification";
+import Toast from "vue-toastification";
 import "vue-toastification/dist/index.css";
 
 // Vue.component('font-awesome-icon', FontAwesomeIcon);
@@ -25,7 +25,16 @@ Vue.use(VueFilterDateFormat);
 //   // You can set your default options here
 //   timeout: 5000,
 // };
-// Vue.use(Toast, toasterOptions);
+Vue.use(Toast, {
+    maxToasts: 5,
+    filterBeforeCreate: (newToast, toasts) => {
+        return (toasts.length > 0 && toasts.some(toast =>
+            toast.content.props.name == newToast.content.props.name &&
+            toast.content.props.error.message == newToast.content.props.error.message
+        )) ? false : newToast;
+    }
+});
+
 
 new Vue({
   // store,

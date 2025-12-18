@@ -1,0 +1,8 @@
+file(GLOB tRecX_tools_SRC "${CMAKE_CURRENT_SOURCE_DIR}/CPP/*.cpp")
+if(CMAKE_BUILD_TYPE STREQUAL "Ctypes")
+add_library(tRecX_tools SHARED ${tRecX_tools_SRC})
+else()
+add_library(tRecX_tools ${tRecX_tools_SRC})
+endif()
+set_target_properties(tRecX_tools PROPERTIES LINK_FLAGS "-Wl,-rpath,${CMAKE_SOURCE_DIR}/TOOLS")
+#set_target_properties(tRecX_tools PROPERTIES INSTALL_RPATH "../LIBRARIES/")

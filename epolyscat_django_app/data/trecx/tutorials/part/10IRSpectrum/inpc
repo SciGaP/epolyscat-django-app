@@ -1,0 +1,56 @@
+Title:
+Tutorial example  - IR photo-electron spectrum of hydrogen
+
+The purpose of this exercise is to explore the calculation of IR spectra
+    in linear polarization, learn to assess accuracy and convergence
+
+[TASK] inspect the spectra
+[TASK] experiment with TimePropation:fixStep to see effect
+[TASK] vary cutEnergy, check impact (larger values require smaller fixStep)
+[TASK] perform another calculation with absorption starting only at 30 au
+       vary the basis, from comparisons, assess the result
+[TASK] increase end time of propagation, see how much spectra are affected
+[TASK] set iSurff=false and instead propagate longer, see effect on total spectrum
+
+# TIMING  ~ 12 sec on single CPU  for tRecX + spectral analysis with given parameters
+         (results with Intel i7 on laptop)
+
+# plot=total generates total energy spectrum rather than defaul (partial for spherical coordinates)
+# iSurff=true indicates that after end of time-propagation the
+#             iSurff method for integrating the spectra will be used
+#             time propagation needs to proceed to the end of the pulse
+#             for now: ONLY for spherically symmetric systems
+Spectrum: radialPoints=100, iSurff=true, plot=total
+
+# basis comparatively small, to get results quickly
+# nElem...specify number of element (defaults 1), corresponds to nCoefficients=nElem*order
+Axis: name,order,nElem,lower end, upper end,functions
+ Phi,1
+ Eta,19, ,-1,1, assocLegendre{Phi}
+ Rn,12, 4, 0.,20.,polynomial
+ Rn,20,  , 20.,Infty,polExp[1.]
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.3,20.
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><trunc[15,20]/Q>'
+Operator: interaction='iLaserA0[t]<<D/DZ>>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+# writes population of field-free states to output and expec files
+Occupation: states=0:10, operator=hamiltonian
+# note: there is a frequent desire to see the populations
+# BUT physical meaning can only be attached to it after the pulse is over
+# during the pulse, the values are gauge-dependent
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm)
+cos2, 1.e14, 2. OptCyc, 800.
+
+# cutEnergy ...impose a spectral cut on the Hamiltonian
+               this essential to speed up up the time-propagation
+# fixStep   ...fixed step size for time-stepper (fixStep=0: automatic step size control)
+               once known, fixStep>0 may be faster
+               find estimate of fixStep: run with fixStep=0 and see "step=..." in outf
+TimePropagation: end,print,cutEnergy,accuracy,fixStep
+  2 OptCyc, 0.25 OptCyc,30,1e-7,0.045
+

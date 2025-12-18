@@ -1,4 +1,4 @@
-import {ExperimentService} from "@/service/trecx-service";
+import {ExperimentService} from "@/service/epolyscat-service";
 
 const state = {
     experimentListMap: {},

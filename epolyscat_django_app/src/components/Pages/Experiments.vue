@@ -93,7 +93,7 @@
 import store from "@/store";
 import TableOverlayInfo from "@/components/overlay/table-overlay-info";
 import ButtonOverlay from "@/components/overlay/button-overlay";
-import {ExperimentService} from "@/service/trecx-service";
+import {ExperimentService} from "@/service/epolyscat-service";
 
 export default {
   name: "Experiments",

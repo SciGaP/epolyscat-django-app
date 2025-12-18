@@ -1,0 +1,80 @@
+
+
+ ===  Date [06/23 13:29:40] Example - harmonic oszillator in parabolic coordinates  
+
+ !!! WARNING --- no pulse given - dummy zero pulse --- WARNING !!!
+
+ Master host = linux-hxdi
+
+
+
+ ===  DVR --- DISCRETIZATION  ==================================================
+
+               Name: Phi.PXi.PEta
+
+   Axis maxCoeff from       to order                basis absorption: eta,inner
+     --   ------   --   ------   ---   ------------------   -------------------
+    Phi        5    0    6.283     5               cosSin                      
+    PXi       39    0 10|Infty    20 polynomial/polExp...                      
+   PEta       39    0 10|Infty    20 polynomial/polExp...                      
+
+ Full basis name(s): polynomial/polExp[2.], polynomial/polExp[2.]
+
+
+
+
+ ===  OPERATORS  ===============================================================
+
+        Hamiltonian: 0.5<<Laplacian>>+1/32<1>(<Q*Q*Q><1>+<3*Q*Q><Q>+<Q><3*Q*Q>+<1><Q*Q*Q>)
+         HamInitial: H(t=Begin)
+
+         Projection: 0.5<<Laplacian>>+1/32<1>(<Q*Q*Q><1>+<3*Q*Q><Q>+<Q><3*Q*Q>+<1><Q*Q*Q>)
+
+
+ ===  Laser  ===================================================================
+
+ *** no non-zero component ***
+      Initial state: atBegin for operator H(t=Begin)
+
+
+ ===  OUTPUT  ==================================================================
+          Directory: /home/scrinzi/projects/tRecX/tutorial/51ParabolicHarmonic/0000/
+
+
+
+
+
+ ===  EIGENVALUES  ==  SmallReal[10]  ==========================================
+ ***  In sparse matrix, found  1 independent subsets with size(s) 1521 ***
+              real imag
+     --   -----------   --
+   0           1.5    0
+   1 2.48541825702    0
+   2 2.48541825702    0
+   3           2.5    0
+   4 3.46931759488    0
+   5 3.46931759488    0
+   6           3.5    0
+   7           3.5    0
+   8           3.5    0
+   9           3.5    0
+
+
+ ===  timer information  =======================================================
+
+                     File: Name                          calls   cpu(total)   cpu/call [samp]
+                run_trecx: all                               2         165        82.5
+                run_trecx: run                               1         165         165
+                run_trecx: setup                             1         165         165
+               mpiWrapper: MPI                             574       0.599     0.00104
+timer overhead/call (sec): 3.95e-08
+timer overhead/call (sec): 9.53e-10 (sample=1024)
+
+
+ *** Description of input on file /home/scrinzi/projects/tRecX/tRecX.doc ***
+
+
+ ===  done - /home/scrinzi/projects/tRecX/tutorial/51ParabolicHarmonic/0000/  ==
+ 
+ !!! --- CURRENT WARNINGS --- !!!
+                  1: no pulse given - dummy zero pulse

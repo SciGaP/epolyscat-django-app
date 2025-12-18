@@ -1,0 +1,33 @@
+ 37     <!--        
+ 38     <div class="w-100 overflow-auto">
+ 39       <div class="w-100 d-flex mb-3">
+ 40         <div class="d-inline pr-3 flex-fill overflow-auto" style="font-weight: 400; font-size: 19px;">
+ 41               <span v-if="run">{{ run.name }}</span>
+ 42         </div>
+ 43             <RunActions :run="run" :experiment="experiment" :view="view" variant="outline-primary"
+ 44                         :showButtonText="true" v-on:delete="onDelete"/>
+ 45         </div>
+ 46       </div>
+ 47     </div>
+ 48     -->
+
+
+44                 <!-- <h3 style="margin: 0;" v-if="runViewType == RUN_VIEW_TYPE.creating">Create New Run</h3>
+ 45                 <h3 style="margin: 0;" v-else>{{ run.name }}</h3> -->
+ 46                 <!-- <span class="mr-2">Run name: </span> -->
+  
+82         <!-- <div class="mb-2">
+ 83                     <b>Experiment status:</b>
+ 84                     <Badge :status="run.status" class="mx-3" ref="badge"></Badge>
+ 85                 </div>
+ 86                 <div class="mb-2">
+ 87                     <b>Job status:</b>
+ 88                     <Badge :status="run.jobStatus" class="mx-3" ref="badge"></Badge>
+ 89                </div> -->
+
+
+126                 <!-- <a href="." @click="showDescriptions = !showDescriptions">
+127                     <span v-if="!showDescriptions">(Show)</span>
+128                     <span v-else>(Hide)</span>
+129                 </a> -->
+

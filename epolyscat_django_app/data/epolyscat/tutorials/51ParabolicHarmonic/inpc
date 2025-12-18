@@ -1,0 +1,16 @@
+Title:
+Example - harmonic oszillator in parabolic coordinates
+
+Axis: name, nCoefficients, lower end, upper end, functions, order
+ Phi, 5,
+ PXi ,20, 0.,10., polynomial,20
+ PXi ,20,10.,Infty, polExp[2.]
+ PEta,20, 0.,10., polynomial,20
+ PEta,20,10.,Infty, polExp[2.]
+
+# potential: 1/2*r**2 dV = r**3 / 4 =(xi+eta)**3/32
+Operator: hamiltonian
+0.5<<Laplacian>>+1/32<1>(<Q*Q*Q><1>+<3*Q*Q><Q>+<Q><3*Q*Q>+<1><Q*Q*Q>)
+
+# compute a few eigenvalues of the field free system
+Eigen: select=SmallReal[10]

@@ -1,0 +1,60 @@
+Title:
+Circular polarization at 800 nm
+
+# (Compare tutorial/16RotatingFrame)
+
+# longer wavelength requires many more angular momenta
+
+# ACCURACY (not studied exhaustively)
+# <~1 % in total spectrum for sizes Phi=11, Eta=50, lMax=35
+
+# TIMING: (Eta: L<50, Phi: 2*|M|<11, lMax=35)
+# ~ 20 min total (single CPU, laptop):
+#   12 min calculation of surface, rest tSurff integration
+# Note:
+#   at fixed Phi-size, surface calculation time grows ~ linearly with Lmax
+# BUT: tSurff times inrease ~ Lmax^3:
+#   - angular momentum space of spectra grows as Lmax^2 as all m's appear,
+#   - transformation for Volkov phases grow as Lmax
+
+#define Rc 20.
+
+# NOTE: tSurff integration times grow linearly with maxEnergy and with radialPoints
+#       choosing this narrow spectral range speeds up calculation
+Spectrum: radialPoints=40, plot=total, minEnergy=10~eV, maxEnergy=20~eV
+
+# tSurff times grow with lMax^3:
+# we need high angular momenta >~ 50 for getting  ionization right,
+# but spectra mostly appear up to 35 angular momenta  (<~1% accurate)
+# fewer angular momenta will suppress the higher energies
+SurfaceFlux: lMax=35
+
+Axis: name,nCoefficients,lower end, upper end,functions,order
+ Phi,11,,,cosSin
+ Eta,50,-1,1, assocLegendre{Phi}
+ Rn,40, 0.,Rc,RpowL*polynomial,20
+ Rn,40, Rc,Infty,polExp[0.5]
+
+#NOTE: RpowL-basis above imposes correct behavior near Rn=0, reduces stiffness and speeds up
+
+Absorption: kind, axis, theta, upper
+ECS,Rn,0.05,Rc
+
+# Interaction for rotating frame:
+#    a dc-Pulse with an angular correction that is proportional to the change of the angle
+#    the correction operator "CoriolisTheta" is the Ly angular momentum
+#Operator: interaction='iLaserAabs[t]<<D/DZ>>+iLaserAdTheta[t]<<CoriolisTheta>>'
+Operator: interaction=<<LaserVelocityRotatingFrame>>
+#Operator: interaction=<<LaserLengthRotatingFrame>>
+
+Operator: hamiltonian='1/2<<Laplacian>>-<1><1><1/Q>'
+Operator: expectationValue='<1><1><chi[0,20]>'
+
+Laser: shape, I(W/cm2), FWHM, lambda(nm),phiCEO,polarAngle
+cos2, 1e14, 2. OptCyc, 800.
+cos2, 1e14, 2. OptCyc, 800.,pi/2,90.
+
+TimePropagation: end,print,store,cutEnergy,accuracy,operatorThreshold,fixStep
+3 OptCyc, 0.05 OptCyc,0.5 au,50,1.e-7,1.e-6,0.04
+
+

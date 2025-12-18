@@ -1,0 +1,148 @@
+/* Group 7 */
+
+position: absolute;
+width: 686px;
+height: 152px;
+left: 536px;
+top: 220px;
+
+
+
+/* Component 2 */
+
+position: absolute;
+width: 686px;
+height: 152px;
+left: 536px;
+top: 220px;
+
+
+
+/* Screenshot 2025-05-05 at 11.54.15 1 */
+
+position: absolute;
+height: 88.65px;
+left: 2.13%;
+right: 1.96%;
+top: 39.5px;
+
+background: url(Screenshot 2025-05-05 at 11.54.15.png);
+
+
+/* Group 3 */
+
+position: absolute;
+left: 0.15%;
+right: -0.15%;
+top: 0%;
+bottom: 2.68%;
+
+
+
+/* Data Generation */
+
+position: absolute;
+left: 0.15%;
+right: 81.12%;
+top: 84.45%;
+bottom: 2.68%;
+
+font-family: 'Inter';
+font-style: normal;
+font-weight: 600;
+font-size: 16px;
+line-height: 19px;
+/* identical to box height */
+
+color: #000000;
+
+
+
+/* EpolyScat Options */
+
+position: absolute;
+left: 26.33%;
+right: 52.45%;
+top: 84.45%;
+bottom: 2.68%;
+
+font-family: 'Inter';
+font-style: normal;
+font-weight: 600;
+font-size: 16px;
+line-height: 19px;
+/* identical to box height */
+
+color: #000000;
+
+
+
+/* Visualization & Analysis */
+
+position: absolute;
+left: 52.04%;
+right: 8.6%;
+top: 83.55%;
+bottom: 3.29%;
+
+font-family: 'Inter';
+font-style: normal;
+font-weight: 600;
+font-size: 16px;
+line-height: 19px;
+/* identical to box height */
+
+color: #000000;
+
+
+
+/* Vector 1 */
+
+position: absolute;
+left: 68.37%;
+right: -0.15%;
+top: 0%;
+bottom: 27.35%;
+
+background: #FFFFFF;
+
+
+/* Screenshot 2025-05-05 at 12.06.29 1 */
+
+position: absolute;
+width: 63.88px;
+height: 67px;
+left: 754px;
+top: 279px;
+
+background: url(Screenshot 2025-05-05 at 12.06.29.png);
+
+
+/* Vector 2 */
+
+position: absolute;
+width: 22.5px;
+height: 26px;
+left: 774px;
+top: 302.5px;
+
+background: #FFFFFF;
+
+
+/* 2 */
+
+position: absolute;
+width: 14px;
+height: 26px;
+left: 778px;
+top: 302px;
+
+font-family: 'Inter';
+font-style: normal;
+font-weight: 600;
+font-size: 24px;
+line-height: 29px;
+
+color: #443B3B;
+
+

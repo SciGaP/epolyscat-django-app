@@ -104,7 +104,7 @@
 </template>
 
 <script>
-import {PlotService} from "@/service/trecx-service";
+import {PlotService} from "@/service/epolyscat-service";
 import store from "@/store";
 import Errors from "@/components/block/Errors";
 

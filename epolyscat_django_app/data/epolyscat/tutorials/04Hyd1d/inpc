@@ -1,0 +1,40 @@
+Title:
+Tutorial example  - the screened one-dimensional "Coulomb" potential -1/sqrt(x^2+2)
+
+The purpose of this exercise is
+(1) become familiar with the popular "1d hydrogen" model
+(2) study the effect of truncating the Coulomb-like tail
+
+[TASK] Remove the turncation from the potential and observe its effect on
+       the bound state energies
+[TASK] Try to determine a small basis to get the ground state accurate to 4 digits
+       Do not make the basis too large! What is the role of polynomial order?
+
+# piece-wise specification of discretization with exponntial tails at both ends
+Axis: name,nCoefficients,lower end, upper end,functions,order
+X,20,-Infty,-20,polExp[0.5]
+X,15,-20,-15,polynomial,15
+X,60,-15, 15,polynomial,10
+X,15, 15, 20,polynomial,15
+X,20, 20, Infty,polExp[0.5]
+
+# the function "trunc" serves to smoothly truncate a potential
+# trunc[from,to]
+#       =1 for  |Q| < from
+#       =0 for  |Q| > to
+#       else 3rd order polynmial in Q with 0 derivatives at Q=from and Q=to
+
+Operator: hamiltonian='0.5<d_1_d>-<trunc[10,15]/sqrt(Q*Q+2)>'
+
+# NOTE: it is essential that the the trunc-boundaries coincide with element boudaries
+#       although the code should work even if this is violated,
+#       the high order and with it efficienty is lost
+
+
+# we will print the lowest eigenvalues and stop
+Eigen: select=SmallReal[10]
+
+Plot: axis,points,lowerBound,upperBound
+      X,201,-20.,20.
+
+

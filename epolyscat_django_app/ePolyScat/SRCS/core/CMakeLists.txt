@@ -1,0 +1,6 @@
+file(GLOB tRecX_core_SRC "${CMAKE_CURRENT_SOURCE_DIR}/CPP/*.cpp")
+if(CMAKE_BUILD_TYPE STREQUAL "Ctypes")
+add_library(tRecX_core SHARED ${tRecX_core_SRC})
+else()
+add_library(tRecX_core ${tRecX_core_SRC})
+endif()

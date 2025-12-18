@@ -57,7 +57,7 @@
 </template>
 
 <script>
-import {RunService, ViewService} from "@/service/trecx-service";
+import {RunService, ViewService} from "@/service/epolyscat-service";
 import ButtonOverlay from "@/components/overlay/button-overlay";
 
 export default {

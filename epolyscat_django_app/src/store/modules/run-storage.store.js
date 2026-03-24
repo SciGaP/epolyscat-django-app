@@ -13,7 +13,8 @@ const state = {
 
 const actions = {
     async fetchRuns({commit}) {
-        const runs = await RunService.fetchRuns();
+        const data = await RunService.fetchRuns();
+        const runs = data.results;
 
         commit("SET_RUN_MAP", { runs });
 

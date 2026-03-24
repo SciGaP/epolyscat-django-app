@@ -803,7 +803,8 @@ export const RunService = {
     async fetchRuns() {
         const {data} = await axiosInstance.get(appBaseUrl + 'runs/');
 
-        return data.map(this.encodeObj);
+        data.results = data.results.map(this.encodeObj);
+        return data;
     },
 
     async fetchRun({runId = null} = {}) {

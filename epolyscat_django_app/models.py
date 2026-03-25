@@ -180,12 +180,12 @@ class Run(models.Model):
     directory = models.CharField(max_length=300, blank=True)
     views = models.ManyToManyField(View, related_name="runs", blank=True)
 
-    number = models.CharField(max_length=64)
-    root = models.ForeignKey(RunsRoot, on_delete=models.CASCADE, related_name="runs")
+    number = models.CharField(max_length=64, blank=True, default="")
+    root = models.ForeignKey(RunsRoot, on_delete=models.CASCADE, related_name="runs", null=True, blank=True)
     experiment = models.ForeignKey(
-        Experiment, on_delete=models.CASCADE, related_name="runs"
+        Experiment, on_delete=models.CASCADE, related_name="runs", null=True, blank=True
     )
-    filepath = models.CharField(max_length=255)
+    filepath = models.CharField(max_length=255, blank=True, default="")
     inpc_data_product_uri = models.CharField(max_length=64, null=True, default=None)
 
     created = models.DateTimeField(auto_now_add=True)
@@ -326,7 +326,7 @@ class RemoteExecution(models.Model):
     updated = models.DateTimeField(auto_now=True)
     airavata_experiment_status = models.CharField(
         max_length=255,
-        default=ExperimentState.CREATED.name,
+        default=ExperimentState._VALUES_TO_NAMES[ExperimentState.CREATED],
     )
     resource_name = models.CharField(max_length=255, blank=True, default="")
     job_id = models.CharField(max_length=255, null=True)
@@ -343,7 +343,7 @@ class RemoteExecution(models.Model):
 
     def get_airavata_experiment_status(self, request):
         terminal_states = self.get_airavata_experiment_terminal_states()
-        old_state = ExperimentState[self.airavata_experiment_status]
+        old_state = ExperimentState._NAMES_TO_VALUES[self.airavata_experiment_status]
         if old_state in terminal_states:
             return self.airavata_experiment_status
         else:
@@ -351,15 +351,15 @@ class RemoteExecution(models.Model):
             current_status = request.airavata_client.getExperimentStatus(
                 request.authz_token, self.airavata_experiment_id
             )
-            self.airavata_experiment_status = ExperimentState(
+            self.airavata_experiment_status = ExperimentState._VALUES_TO_NAMES[
                 current_status.state
-            ).name
+            ]
             self.save()
             return self.airavata_experiment_status
 
     def is_airavata_experiment_finished(self, request):
         status = self.get_airavata_experiment_status(request)
-        state = ExperimentState[status]
+        state = ExperimentState._NAMES_TO_VALUES[status]
         return state in self.get_airavata_experiment_terminal_states()
 
     def get_application_specific_status(self, request) -> Union[str, None]:
@@ -441,7 +441,7 @@ class RemoteExecution(models.Model):
 
     def is_cancelable(self, request) -> bool:
         status = self.get_airavata_experiment_status(request)
-        state = ExperimentState[status]
+        state = ExperimentState._NAMES_TO_VALUES[status]
         return state in self.get_airavata_experiment_cancelable_states()
 
 

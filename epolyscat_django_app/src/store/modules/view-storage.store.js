@@ -69,16 +69,11 @@ const actions = {
     },
     */
     async fetchView({commit}, {viewId}) {
-        //const view = (viewId == -1) ? await ViewService.fetchTutorialsView() : await ViewService.fetchView(viewId);
-
-        //commit("SET_VIEW_MAP", { views: [view] });
-
-
         const view = await ViewService.fetchView({viewId});
-        const {name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly} = view;
-        commit("SET_VIEW", {
-            viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
-        });
+
+        commit("SET_VIEW_MAP", { views: [view] });
+
+        return view;
     },
     async createView({commit}, {name, runIds}) {
         const view = await ViewService.createView({name, runIds});

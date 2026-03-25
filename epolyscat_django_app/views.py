@@ -360,10 +360,10 @@ class RunViewSet(viewsets.ModelViewSet):
                     request, data_product_uri=file_data["dataProductURI"]
                 )["mime_type"]
             elif file_data["isPlaintext"]:
-                file = StringIO(file_data["contents"])
+                file = io.StringIO(file_data["contents"])
                 content_type = "text/plain"
             else:
-                file = BytesIO(base64.b64decode(file_data["contents"]))
+                file = io.BytesIO(base64.b64decode(file_data["contents"]))
                 content_type = ""
 
             saved_file = user_storage.save(
@@ -418,7 +418,7 @@ class RunViewSet(viewsets.ModelViewSet):
         instance.deleted = True
         instance.save()
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["post", "patch"])
     def submit(self, request, pk=None):
         # Update the instance
         run: models.Run = self.get_object()
@@ -451,7 +451,7 @@ class RunViewSet(viewsets.ModelViewSet):
             else:
                 inputs[input.name] = input.value
 
-        self._create_remote_execution(request, run, inputs, app_interface_id, serializer.data["is_tutorial"])
+        self._create_remote_execution(request, run, inputs, app_interface_id, inputs, serializer.data["is_tutorial"])
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
@@ -527,17 +527,21 @@ class RunViewSet(viewsets.ModelViewSet):
 
         # create experiment
         experiment = ExperimentModel()
-        experiment.experimentName = f"{run.root.root}/{run.number} execution number {run.executions.count() + 1}"
+        run_label = f"{run.root.root}/{run.number}" if run.root else run.name
+        experiment.experimentName = f"{run_label} execution number {run.executions.count() + 1}"
         application_interface = request.airavata_client.getApplicationInterface(
             request.authz_token, app_interface_id
         )
         experiment.experimentInputs = application_interface.applicationInputs.copy()
         experiment.experimentOutputs = application_interface.applicationOutputs.copy()
         experiment.executionId = app_interface_id
-        if run.experiment.airavata_project_id is None:
-            run.experiment.create_airavata_project(request)
-            run.experiment.save()
-        experiment.projectId = run.experiment.airavata_project_id
+        if run.experiment is not None:
+            if run.experiment.airavata_project_id is None:
+                run.experiment.create_airavata_project(request)
+                run.experiment.save()
+            experiment.projectId = run.experiment.airavata_project_id
+        else:
+            experiment.projectId = run.airavata_project_id
         experiment.gatewayId = settings.GATEWAY_ID
         experiment.userName = request.user.username
         #ucd = UserConfigurationDataModel()
@@ -567,6 +571,8 @@ class RunViewSet(viewsets.ModelViewSet):
         for inp in experiment.experimentInputs:
             if inp.name in input_values:
                 inp.value = input_values[inp.name]
+            elif inp.type in (DataType.URI, DataType.URI_COLLECTION) and not inp.value:
+                inp.isRequired = False
 
         # Save experiment
         experiment_id = request.airavata_client.createExperiment(
@@ -609,6 +615,8 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["GET"])
     def tutorial_runs(self, request):
         tutorial_view = models.View.tutorial_view()
+        if tutorial_view is None:
+            return Response([])
         runs = [run for run in models.Run.objects.all() if tutorial_view in run.views.all()]
 
         serializer = self.get_serializer(runs, many=True)
@@ -1041,7 +1049,7 @@ def user_run_file_exists(request, run, filename):
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name]
+        experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
             experiment_model = request.airavata_client.getExperiment(
@@ -1106,7 +1114,7 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     # Find the output by data type
     output = None
     for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+        output_type_name = DataType._VALUES_TO_NAMES[output.type]
         if output_type_name == data_type:
             output = output
             break
@@ -1399,10 +1407,10 @@ class ViewsViewSet(viewsets.ModelViewSet):
                     request, data_product_uri=file_data["dataProductURI"]
                 )["mime_type"]
             elif file_data["isPlaintext"]:
-                file = StringIO(file_data["contents"])
+                file = io.StringIO(file_data["contents"])
                 content_type = "text/plain"
             else:
-                file = BytesIO(base64.b64decode(file_data["contents"]))
+                file = io.BytesIO(base64.b64decode(file_data["contents"]))
                 content_type = ""
 
             saved_file = user_storage.save(
@@ -1816,7 +1824,7 @@ def user_run_file_exists(request, run, filename):
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name]
+        experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
         print(f"DEBUG: Execution {execution.airavata_experiment_id} status: {status_name}")
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
@@ -1907,7 +1915,7 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     # Find the output by data type
     output = None
     for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+        output_type_name = DataType._VALUES_TO_NAMES[output.type]
         if output_type_name == data_type:
             output = output
             break

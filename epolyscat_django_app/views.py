@@ -843,6 +843,22 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(run)
         return Response(serializer.data)
 
+    @action(detail=True, methods=["GET"])
+    def get_output_files(self, request, pk=None):
+        run = self.get_object()
+        output_files = []
+
+        if len(run.executions.all()) > 0:
+            most_recent_execution = run.executions.order_by("-created")[0]
+            try:
+                output_files = user_storage.list_experiment_dir(
+                    request, most_recent_execution.airavata_experiment_id, path="ARCHIVE"
+                )[1]
+            except Exception:
+                pass
+
+        return Response(output_files)
+
 
 class PlotParametersViewSet(viewsets.ModelViewSet):
     serializer_class = serializers.PlotParametersSerializer

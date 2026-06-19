@@ -28,9 +28,17 @@ class epolyscatDjangoAppConfig(AppConfig):
     verbose_name = "Epolyscat Django App"
     url_home = "epolyscat_django_app:home"
     fa_icon_class = "fa-atom"
-    settings = Settings()
     default_auto_field = "django.db.models.BigAutoField"
     SCRIPTS = os.path.join(BASE_DIR, "ePolyScat", "SCRIPTS")
+
+    def merge_settings(self, settings):
+        # epolyscat's models FK to auth.User, which the new portal dropped.
+        for app in ("django.contrib.contenttypes", "django.contrib.auth"):
+            if app not in settings.INSTALLED_APPS:
+                settings.INSTALLED_APPS.append(app)
+        wl = dict(getattr(settings, "WEBPACK_LOADER", {}) or {})
+        wl.update(Settings.WEBPACK_LOADER)
+        settings.WEBPACK_LOADER = wl
 
     APPLICATION_SETTINGS = {
         "EPOLYSCAT_DJANGO_APP": {

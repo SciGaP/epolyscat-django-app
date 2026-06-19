@@ -7,6 +7,9 @@ import setuptools
 
 
 def build_js():
+    # EPOLYSCAT_SKIP_JS_BUILD=1 decouples the dashboard build from package install.
+    if os.environ.get("EPOLYSCAT_SKIP_JS_BUILD"):
+        return
     subprocess.check_call(["yarn"],
                           cwd=os.path.join(os.getcwd(), "epolyscat_django_app"))
     subprocess.check_call(["yarn", "run", "build"],

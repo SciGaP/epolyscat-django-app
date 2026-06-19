@@ -12,11 +12,11 @@ from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 
-from airavata.model.application.io.ttypes import DataType
-from airavata.model.experiment.ttypes import ExperimentModel, UserConfigurationDataModel
-from airavata.model.scheduling.ttypes import ComputationalResourceSchedulingModel
-from airavata.model.status.ttypes import ExperimentState
-from airavata_django_portal_sdk import experiment_util, user_storage
+from .airavata_grpc import DataType
+from .airavata_grpc import ExperimentModel, UserConfigurationDataModel
+from .airavata_grpc import ComputationalResourceSchedulingModel
+from .airavata_grpc import ExperimentState
+from .airavata_grpc import django_user, experiment_util, user_storage
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -85,14 +85,14 @@ def home(request):
 class IsOwner(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         # Only the owner has write access
-        return request.user == obj.owner
+        return django_user(request) == obj.owner
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
         # Only the owner has write access
-        return request.user == obj.owner
+        return django_user(request) == obj.owner
 
 
 
@@ -116,7 +116,7 @@ class ExperimentViewSet(viewsets.ModelViewSet):
             # Returns Experiments where user is Experiment owner or Experiment is shared via project
             models.Experiment.objects.filter(
                 Q(deleted=False)
-                & Q(owner=request.user)
+                & Q(owner=django_user(request))
                 # & (Q(owner=request.user) | Q(airavata_project_id__in=project_ids))
             )
             .annotate(recent_activity_date=Coalesce(Max("runs__updated"), "updated"))
@@ -237,7 +237,7 @@ class RunViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        run = serializer.save(owner=request.user)
+        run = serializer.save(owner=django_user(request))
 
         user_storage.create_user_dir(request, dir_names=run.directory.split("/"))
 
@@ -265,7 +265,7 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only update a run that you own")
 
         for updated_input in request.data["inputs_data"]:
@@ -386,7 +386,7 @@ class RunViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         delete_associated = False if request.GET["deleteAssociated"] == "false" else True
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only delete a run that you own")
 
         if delete_associated and user_storage.dir_exists(request, run.directory):
@@ -426,7 +426,7 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only submit a run that you own")
 
         # change to api call
@@ -526,68 +526,50 @@ class RunViewSet(viewsets.ModelViewSet):
             raise Exception("Run already has a currently running execution")
 
         # create experiment
-        experiment = ExperimentModel()
         run_label = f"{run.root.root}/{run.number}" if run.root else run.name
-        experiment.experimentName = f"{run_label} execution number {run.executions.count() + 1}"
-        application_interface = request.airavata_client.getApplicationInterface(
-            request.authz_token, app_interface_id
+        application_interface = request.airavata.research.get_application_interface(app_interface_id)
+        experiment = ExperimentModel(
+            experiment_name=f"{run_label} execution number {run.executions.count() + 1}",
+            execution_id=app_interface_id,
+            gateway_id=settings.GATEWAY_ID,
+            user_name=request.user.username,
         )
-        experiment.experimentInputs = application_interface.applicationInputs.copy()
-        experiment.experimentOutputs = application_interface.applicationOutputs.copy()
-        experiment.executionId = app_interface_id
+        experiment.experiment_inputs.extend(application_interface.application_inputs)
+        experiment.experiment_outputs.extend(application_interface.application_outputs)
         if run.experiment is not None:
             if run.experiment.airavata_project_id is None:
                 run.experiment.create_airavata_project(request)
                 run.experiment.save()
-            experiment.projectId = run.experiment.airavata_project_id
+            experiment.project_id = run.experiment.airavata_project_id
         else:
-            experiment.projectId = run.airavata_project_id
-        experiment.gatewayId = settings.GATEWAY_ID
-        experiment.userName = request.user.username
-        #ucd = UserConfigurationDataModel()
-        #ucd.groupResourceProfileId = run.group_resource_profile_id
-        #ucd.shareExperimentPublicly=is_tutorial
+            experiment.project_id = run.airavata_project_id
+        experiment.user_configuration_data.CopyFrom(UserConfigurationDataModel(
+            group_resource_profile_id=run.group_resource_profile_id,
+            share_experiment_publicly=is_tutorial,
+            computational_resource_scheduling=ComputationalResourceSchedulingModel(
+                resource_host_id=run.compute_resource_id,
+                total_cpu_count=run.core_count,
+                node_count=run.node_count,
+                wall_time_limit=run.walltime_limit,
+                queue_name=run.queue_name,
+            ),
+        ))
 
-        #experiment.userConfigurationData = ucd
-        experiment.userConfigurationData = UserConfigurationDataModel(
-            groupResourceProfileId=run.group_resource_profile_id,
-            shareExperimentPublicly=is_tutorial,
-            computationalResourceScheduling=ComputationalResourceSchedulingModel(
-                resourceHostId=run.compute_resource_id,
-                totalCPUCount=run.core_count,
-                nodeCount=run.node_count,
-                wallTimeLimit=run.walltime_limit,
-                queueName=run.queue_name
-            )
-        )
-        #crs = ComputationalResourceSchedulingModel()
-        #crs.resourceHostId = run.compute_resource_id
-        #crs.totalCPUCount = run.core_count
-        #crs.nodeCount = run.node_count
-        #crs.wallTimeLimit = run.walltime_limit
-        #crs.queueName = run.queue_name
-        #experiment.userConfigurationData.computationalResourceScheduling = crs
-
-        for inp in experiment.experimentInputs:
+        for inp in experiment.experiment_inputs:
             if inp.name in input_values:
                 inp.value = input_values[inp.name]
             elif inp.type in (DataType.URI, DataType.URI_COLLECTION) and not inp.value:
-                inp.isRequired = False
+                inp.is_required = False
 
-        # Save experiment
-        experiment_id = request.airavata_client.createExperiment(
-            request.authz_token, settings.GATEWAY_ID, experiment
-        )
-        # launch experiment
-        experiment_util.launch(request, experiment_id)
+        # Save + launch experiment
+        experiment_id = request.airavata.research.create_experiment(settings.GATEWAY_ID, experiment)
+        request.airavata.research.launch_experiment(experiment_id, settings.GATEWAY_ID)
 
         # add experiment to the run's executions
-        compute_resource = request.airavata_client.getComputeResource(
-            request.authz_token, run.compute_resource_id
-        )
+        compute_resource = request.airavata.compute.get_compute_resource(run.compute_resource_id)
         return run.executions.create(
             airavata_experiment_id=experiment_id,
-            resource_name=compute_resource.hostName,
+            resource_name=compute_resource.host_name,
         )
     @action(detail=True, methods=["PATCH"])
     def change_notification_settings(self, request, pk=None, *args, **kwargs):
@@ -633,9 +615,9 @@ class RunViewSet(viewsets.ModelViewSet):
         )
         app_interfaces = []
         for app_interface in all_app_interfaces:
-            if not app_interface.applicationModules:
+            if not app_interface.application_modules:
                 continue
-            if app_module_id in app_interface.applicationModules:
+            if app_module_id in app_interface.application_modules:
                 app_interfaces.append(app_interface)
         if len(app_interfaces) == 1:
             app_interface_id = app_interfaces[0].applicationInterfaceId
@@ -900,7 +882,7 @@ def plot(request):
                 xaxis=plot_parameters["xaxis"],
                 yaxes=plot_parameters["yaxes"],
                 flags=plot_parameters["flags"],
-                owner=request.user,
+                owner=django_user(request),
             )
             plot_parameters = obj
             if not created:
@@ -1053,7 +1035,7 @@ def user_run_file_exists(request, run, filename):
     """Return data product uri for run file if it exists, else None."""
 
     # check to see if the file is already in the run directory, for backwards compatibility
-    if run.owner == request.user:
+    if run.owner == django_user(request):
         data_product_uri = user_storage.user_file_exists(
             request, os.path.join(run.directory, filename)
         )
@@ -1167,7 +1149,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         return (
             # Returns Runs owned by the user
             models.View.objects.filter(
-                Q(owner=self.request.user)
+                Q(owner=django_user(self.request))
             )
         )
 
@@ -1193,7 +1175,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        view = serializer.save(owner=request.user)
+        view = serializer.save(owner=django_user(request))
 
         for run in models.Run.objects.all():
             if run.id in request.data["runIds"]:
@@ -1820,7 +1802,7 @@ def user_run_file_exists(request, run, filename):
     """Return data product uri for run file if it exists, else None."""
 
     # check to see if the file is already in the run directory, for backwards compatibility
-    if run.owner == request.user:
+    if run.owner == django_user(request):
         print(f"DEBUG: Checking run directory for owner {run.owner}")
         try:
             data_product_uri = user_storage.user_file_exists(

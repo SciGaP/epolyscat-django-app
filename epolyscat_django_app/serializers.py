@@ -3,8 +3,8 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from airavata_django_portal_sdk import experiment_util, user_storage
-from airavata.model.workspace.ttypes import Project
+from .airavata_grpc import django_user, experiment_util, user_storage
+from .airavata_grpc import Project
 from django.db import transaction
 from django.db.models import Q
 from django.conf import settings
@@ -140,11 +140,11 @@ class RunSerializer(serializers.ModelSerializer):
         '''
         root = get_valid_filename(validated_data.pop("root"))
         runs_root, created = models.RunsRoot.objects.get_or_create(
-            root=root, owner=request.user
+            root=root, owner=django_user(request)
         )
         if created:
             experiment = models.Experiment.objects.create(
-                name=root, root=runs_root, owner=request.user
+                name=root, root=runs_root, owner=django_user(request)
             )
             experiment.create_airavata_project(request)
             experiment.save()
@@ -284,7 +284,7 @@ class RunSerializer(serializers.ModelSerializer):
             
         tutorial_view = models.View.tutorial_view()
             
-        return tutorial_view in run_instance.views.all() and request.user != tutorial_view.owner
+        return tutorial_view in run_instance.views.all() and django_user(request) != tutorial_view.owner
             
 #    def get_status(self, instance: models.Run):
 #        request = self.context["request"]
@@ -519,10 +519,10 @@ class ExperimentSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context["request"]
         name = get_valid_filename(validated_data.pop("name"))
-        root = models.RunsRoot.objects.create(root=name, owner=request.user)
+        root = models.RunsRoot.objects.create(root=name, owner=django_user(request))
         experiment = models.Experiment.objects.create(
             **validated_data,
-            owner=request.user,
+            owner=django_user(request),
             root=root,
             name=name,
         )
@@ -580,7 +580,7 @@ class PlotParametersSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         plot_parameters, created = models.PlotParameters.objects.get_or_create(
             **validated_data,
-            owner=request.user,
+            owner=django_user(request),
         )
         return plot_parameters
 
@@ -664,7 +664,7 @@ class ViewSerializer(serializers.ModelSerializer):
         view = models.View.objects.create(
             **validated_data,
             type="user-defined",
-            owner=request.user,
+            owner=django_user(request),
         )
         view.save()
         return view

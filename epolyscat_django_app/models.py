@@ -3,10 +3,10 @@ import re
 from typing import Union
 
 from django.db import models
-from airavata.model.workspace.ttypes import Project
-from airavata.model.experiment.ttypes import ExperimentModel
-from airavata.model.status.ttypes import ExperimentState
-from airavata_django_portal_sdk import experiment_util, user_storage
+from .airavata_grpc import Project
+from .airavata_grpc import ExperimentModel
+from .airavata_grpc import ExperimentState
+from .airavata_grpc import django_user, experiment_util, user_storage
 from django.conf import settings
 from django.db.models import Q
 
@@ -151,7 +151,7 @@ class View(models.Model):
 
     @staticmethod
     def filter_by_user(request):
-        return View.objects.filter(Q(owner=request.user) | Q(owner=None))
+        return View.objects.filter(Q(owner=django_user(request)) | Q(owner=None))
 
     def populate_unsubmitted_runs(self, request):
         executions = RemoteExecution.objects.filter(run=models.OuterRef("pk"))
@@ -266,7 +266,7 @@ class Run(models.Model):
         # project_ids = list(map(lambda p: p.projectID, user_projects))
         # Returns Runs where user is Experiment owner or Experiment is shared via project
         return Run.objects.filter(
-            Q(owner=request.user)
+            Q(owner=django_user(request))
             # Tutorial runs have no owner
             | Q(owner=None)
             # | models.Q(experiment__airavata_project_id__in=project_ids)
@@ -459,7 +459,7 @@ class PlotParameters(models.Model):
 
     @staticmethod
     def filter_by_user(request):
-        return PlotParameters.objects.filter(owner=request.user)
+        return PlotParameters.objects.filter(owner=django_user(request))
 
     def __str__(self) -> str:
         return f"x={self.xaxis} y={self.yaxes} {self.flags}"

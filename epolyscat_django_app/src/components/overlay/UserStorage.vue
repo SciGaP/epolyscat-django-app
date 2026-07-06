@@ -10,7 +10,7 @@
         <LoadingOverlay name="directory" #default="{  }" style="min-height: 100px; height: calc(100% - 50px)">
             <ListView 
                 :items="items" :columns="[['name', 'Name'], ['modifiedTime', 'Last Modified'], ['size', 'Size']]" 
-                :canSelectMultiple="selectionType != 'folder'" identifier="name"
+                :canSelectMultiple="allowMultipleSelection" identifier="name"
                 style="height: 100%" @updateSelected="updateSelected" 
                 :sorters="[
                     (item1, item2) => item1.name.localeCompare(item2.name), 
@@ -57,6 +57,16 @@
             onlyShowEditable: {
                 type: Boolean,
                 default: false
+            },
+            canSelectMultiple: {
+                default: null,
+                validator(value) {
+                    return value === null || typeof value === "boolean";
+                }
+            },
+            modalTitle: {
+                type: String,
+                default: null
             }
         },
         components: { ListView, LoadingOverlay },
@@ -117,7 +127,18 @@
                 return selected.map(file => file.name).join(", ");
             },
             title() {
-                return ((this.selectionType == "folder") ? "Select a folder" : "Select all files");
+                if (this.modalTitle) {
+                    return this.modalTitle;
+                }
+
+                return ((this.selectionType == "folder") ? "Select a folder" : "Select files");
+            },
+            allowMultipleSelection() {
+                if (this.canSelectMultiple !== null) {
+                    return this.canSelectMultiple;
+                }
+
+                return this.selectionType !== "folder";
             }
         }, 
         methods: {

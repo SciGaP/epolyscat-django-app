@@ -6,6 +6,7 @@ from urllib.parse import urlencode
 
 from airavata_django_portal_sdk import experiment_util, user_storage
 from airavata.model.workspace.ttypes import Project
+from django.apps import apps
 from django.db import transaction
 from django.db.models import Q
 from django.conf import settings
@@ -77,6 +78,7 @@ class RunSerializer(serializers.ModelSerializer):
     is_tutorial = serializers.SerializerMethodField()
     job_id = serializers.SerializerMethodField()
     resource = serializers.SerializerMethodField()
+    presentation = serializers.SerializerMethodField()
     #resource_short = serializers.SerializerMethodField()
     #executions = serializers.SlugRelatedField(
     #    slug_field="airavata_experiment_id", read_only=True, many=True
@@ -92,8 +94,11 @@ class RunSerializer(serializers.ModelSerializer):
             "created", "updated", "deleted", 'is_email_notification_on',
             "group_resource_profile_id", "compute_resource_id",
             "queue_name", "core_count", "node_count", "walltime_limit", "total_physical_memory",
-            "inputs", "executions", "status", "job_status", "is_tutorial", "job_id", "resource",
-            "experiment",
+            "run_mode", "module_application", "workflow_stage", "workflow_application",
+            "utility_application", "workflow_metadata",
+            "parent_run", "workflow_step_order", "workflow_step_status",
+            "inputs", "executions", "status", "job_status", "is_tutorial", "job_id",
+            "resource", "presentation", "experiment",
             #"directedit", "inpc_download_url", "cancelable","can_resubmit", "input_table", "root",
             #"number", "root", "resource", #"resource_short", "job_id",
         )
@@ -289,6 +294,347 @@ class RunSerializer(serializers.ModelSerializer):
         inputs = models.Input.objects.filter(run=run_instance)
 
         return InputSerializer(inputs, many=True).data
+
+    def get_presentation(self, run_instance: models.Run):
+        mode = run_instance.run_mode or "module"
+        metadata = run_instance.workflow_metadata or {}
+        context_run = self._presentation_context_run(run_instance)
+        schema = self._presentation_file_schema(run_instance, context_run)
+        workflow_stage = schema["active_stage_id"]
+        input_files = self._run_file_names(run_instance, "files")
+        output_files = metadata.get("output_files") or schema["output_files"]
+        target_states = {
+            "input_columns": metadata.get("target_state_input_columns") or schema["input_columns"],
+            "output_files": output_files,
+        }
+        selectable_inputs = input_files or schema["input_files"]
+        selectable_files = selectable_inputs or output_files or [""]
+        file_groups = [
+            {"label": "Inputs", "files": selectable_inputs},
+            {"label": "Outputs", "files": output_files + schema["output_extras"]},
+        ]
+
+        presentation = {
+            "mode": mode,
+            "subtitle": schema["subtitle"],
+            "active_stage_id": workflow_stage,
+            "target_states": target_states,
+            "file_groups": file_groups,
+            "selected_file": metadata.get("selected_file") or selectable_files[0],
+            "code": metadata.get("code") or self._default_code(run_instance),
+            "parameters": metadata.get("parameters") or [
+                {"label": "Coupling mode", "value": "LS"},
+                {"label": "Nuclear charge/Atomic number", "value": "2"},
+                {"label": "Number of electrons", "value": "1"},
+            ],
+            "plot": metadata.get("plot") or {
+                "file": schema["plot_file"],
+                "x_axis": "energy",
+                "y_axis": "cross section",
+                "flags": "-linY",
+            },
+            "plottable_file_names": self._plottable_file_names(),
+            "applications": self._workflow_applications(run_instance.workflow_application),
+            "stages": self._workflow_stages("epolyscat-dmat"),
+        }
+
+        if mode == "workflow":
+            child_stages = self._workflow_child_stages(run_instance)
+            presentation["stages"] = child_stages or self._workflow_stages(workflow_stage)
+            presentation.update(self._workflow_progress(run_instance, presentation["stages"]))
+
+        return presentation
+
+    def _run_file_names(self, run_instance: models.Run, input_type):
+        names = []
+        inputs = models.Input.objects.filter(run=run_instance, type=input_type)
+        for input_instance in inputs:
+            names.extend(file.name for file in input_instance.files.all())
+        return names
+
+    def _plottable_file_names(self):
+        settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
+            "EPOLYSCAT_DJANGO_APP"
+        ]
+        return list(settings["FILE_PLOTABLE"].keys())
+
+    def _presentation_context_run(self, run_instance):
+        if run_instance.run_mode != "workflow" or run_instance.parent_run_id is not None:
+            return run_instance
+
+        children = list(run_instance.workflow_steps.order_by("workflow_step_order", "id"))
+        if not children:
+            return run_instance
+
+        metadata = run_instance.workflow_metadata or {}
+        active_child_run_id = metadata.get("active_child_run_id")
+        if active_child_run_id:
+            active_child = next(
+                (child for child in children if child.id == active_child_run_id),
+                None,
+            )
+            if active_child is not None:
+                return active_child
+
+        active_child = next(
+            (
+                child for child in children
+                if child.workflow_step_status in ("submitted", "running")
+                or child.executions.exists()
+            ),
+            None,
+        )
+        return active_child or children[0]
+
+    def _presentation_file_schema(self, display_run, context_run):
+        application = self._presentation_application(context_run)
+        stage = self._normalized_workflow_stage(context_run.workflow_stage)
+        display_stage = context_run.workflow_stage or stage
+        schema = self._file_schema_for_application(application)
+
+        if display_run.run_mode == "workflow":
+            subtitle = f"Workflow/{self._workflow_stage_label(display_stage)}"
+            active_stage_id = display_stage
+        elif display_run.run_mode == "utility":
+            subtitle = f"Utilities/{application}"
+            active_stage_id = application
+        elif display_run.module_application:
+            subtitle = f"Modules/{application}"
+            active_stage_id = application
+        else:
+            subtitle = "Modules/EPOLYSCAT_DMAT"
+            active_stage_id = "epolyscat-dmat"
+
+        return {
+            **schema,
+            "subtitle": subtitle,
+            "active_stage_id": active_stage_id,
+        }
+
+    def _presentation_application(self, run_instance):
+        stage = self._normalized_workflow_stage(run_instance.workflow_stage)
+        if run_instance.run_mode == "utility":
+            return run_instance.utility_application or "CnvMath"
+        if run_instance.run_mode == "workflow":
+            if stage == "Data_Gen":
+                return run_instance.workflow_application or "OpenMolcas"
+            if stage == "Analysis":
+                return run_instance.utility_application or "CnvMath"
+            return run_instance.module_application or "ePolyScat"
+        return run_instance.module_application or "ePolyScat"
+
+    def _normalized_workflow_stage(self, stage):
+        aliases = {
+            "data-generation": "Data_Gen",
+            "Data_Generation": "Data_Gen",
+            "bound": "ePolyScat_Run",
+            "epolyscat-dmat": "ePolyScat_Run",
+            "analysis": "Analysis",
+        }
+        return aliases.get(stage, stage or "ePolyScat_Run")
+
+    def _file_schema_for_application(self, application):
+        epolyscat_inputs = [
+            ["ns_001.c", "target", "ns_001.bsw"],
+            ["nd_001.c", "knot.dat", "nd_001.bsw"],
+            ["bound.nnn", "target.bsw", "mult_bnk", "pert_nnn.bsw"],
+        ]
+        schemas = {
+            "Gaussian16": {
+                "input_columns": [["Gaussian_Input"]],
+                "input_files": ["Gaussian_Input"],
+                "output_files": ["gaussian.log", "molden.dat"],
+                "output_extras": [],
+                "plot_file": "molden.dat",
+            },
+            "OpenMolcas": {
+                "input_columns": [["Molcas_Input"]],
+                "input_files": ["Molcas_Input"],
+                "output_files": ["molcas.log", "molden.dat"],
+                "output_extras": [],
+                "plot_file": "molden.dat",
+            },
+            "ePolyScat": {
+                "input_columns": epolyscat_inputs,
+                "input_files": ["ePolyScat_Input_Data", "ePolyscat_Input_File"],
+                "output_files": ["d.nnn", "zf_res", "ePolyScat_dmat.log"],
+                "output_extras": ["Parameters", "bound_tab", "logs"],
+                "plot_file": "cross_sections",
+            },
+            "MoldenMerge": {
+                "input_columns": [["molden.dat"]],
+                "input_files": ["molden.dat"],
+                "output_files": ["merged_molden.dat"],
+                "output_extras": [],
+                "plot_file": "merged_molden.dat",
+            },
+        }
+        utility_outputs = {
+            "CnvMath": "mathematica_output.dat",
+            "CnvMatLab": "matlab_output.dat",
+            "CnvLinFull": "differential_cross_section.dat",
+            "NRFPAD": "nrfpad.dat",
+            "Cube2igor": "igor_plot.itx",
+        }
+        if application in utility_outputs:
+            return {
+                "input_columns": [],
+                "input_files": [],
+                "output_files": [utility_outputs[application]],
+                "output_extras": [],
+                "plot_file": utility_outputs[application],
+            }
+        return schemas.get(application, schemas["ePolyScat"])
+
+    def _workflow_stage_label(self, stage):
+        labels = {
+            "Data_Gen": "Data Generation",
+            "Data_Generation": "Data Generation",
+            "data-generation": "Data Generation",
+            "bound": "Bound",
+            "ePolyScat_Run": "ePolyScat Run",
+            "stgf": "STGF",
+            "Analysis": "Visualization & Analysis",
+            "analysis": "Visualization & Analysis",
+            "epolyscat-dmat": "EPOLYSCAT_DMAT",
+        }
+        return labels.get(stage, stage.replace("-", " ").title())
+
+    def _workflow_applications(self, selected_application):
+        selected = selected_application or "OpenMolcas"
+        return [
+            {
+                "id": "Gaussian16",
+                "label": "Gaussian16",
+                "selected": selected == "Gaussian16",
+                "parameters": [
+                    {"label": "Input file", "name": "gaussian_input"},
+                    {"label": "GPU_Version?", "name": "gpu_version", "value": "Yes"},
+                ],
+            },
+            {
+                "id": "OpenMolcas",
+                "label": "OpenMolcas",
+                "selected": selected == "OpenMolcas",
+                "parameters": [
+                    {"label": "Input file", "name": "openmolcas_input"},
+                    {"label": "Optional files", "name": "openmolcas_optional"},
+                    {"label": "Printing of orbitals", "name": "printing_orbitals", "value": "Yes"},
+                ],
+            },
+        ]
+
+    def _workflow_stages(self, active_stage_id):
+        stage_aliases = {
+            "data-generation": "Data_Gen",
+            "Data_Generation": "Data_Gen",
+            "bound": "ePolyScat_Run",
+            "analysis": "Analysis",
+        }
+        active_stage_id = stage_aliases.get(active_stage_id, active_stage_id)
+        stages = [
+            {"id": "Data_Gen", "label": "Data Generation"},
+            {"id": "ePolyScat_Run", "label": "ePolyScat Run"},
+            {"id": "Analysis", "label": "Visualization & Analysis", "disabled": True},
+        ]
+        active_index = next(
+            (index for index, stage in enumerate(stages) if stage["id"] == active_stage_id),
+            1,
+        )
+        for index, stage in enumerate(stages):
+            if index < active_index:
+                stage["state"] = "complete"
+            elif index == active_index:
+                stage["state"] = "active"
+            else:
+                stage["state"] = "pending"
+        return stages
+
+    def _workflow_child_stages(self, run_instance):
+        if run_instance.parent_run_id is not None:
+            return []
+
+        child_runs = list(run_instance.workflow_steps.order_by("workflow_step_order", "id"))
+        if not child_runs:
+            return []
+
+        return [
+            {
+                "id": child.workflow_stage or f"step-{child.workflow_step_order}",
+                "label": self._workflow_stage_label(child.workflow_stage or ""),
+                "state": self._workflow_child_state(child),
+                "child_run_id": child.id,
+                "application": self._workflow_child_application(child),
+                "status": self._workflow_child_status(child),
+            }
+            for child in child_runs
+        ]
+
+    def _workflow_child_state(self, child_run):
+        if child_run.workflow_step_status == "complete" or self._workflow_child_has_finished_execution(child_run):
+            return "complete"
+        if child_run.workflow_step_status in ("submitted", "running"):
+            return "active"
+        if child_run.executions.exists():
+            return "active"
+        return "pending"
+
+    def _workflow_child_status(self, child_run):
+        if child_run.workflow_step_status == "complete" or self._workflow_child_has_finished_execution(child_run):
+            return "complete"
+        return child_run.workflow_step_status or "pending"
+
+    def _workflow_child_has_finished_execution(self, child_run):
+        request = self.context.get("request")
+        return bool(
+            request
+            and child_run.executions.exists()
+            and child_run.are_all_executions_finished(request)
+        )
+
+    def _workflow_child_application(self, child_run):
+        return (
+            child_run.workflow_application
+            or child_run.module_application
+            or child_run.utility_application
+            or ""
+        )
+
+    def _workflow_progress(self, run_instance, stages):
+        metadata = run_instance.workflow_metadata or {}
+        workflow_state = metadata.get("workflow_state") or "not_started"
+        active_child_run_id = metadata.get("active_child_run_id")
+        active_stage = next(
+            (
+                stage for stage in stages
+                if active_child_run_id and stage.get("child_run_id") == active_child_run_id
+            ),
+            None,
+        )
+        if active_stage is None:
+            active_stage = next(
+                (stage for stage in stages if stage.get("state") == "active"),
+                None,
+            )
+        if active_stage and workflow_state == "not_started":
+            workflow_state = "running"
+
+        return {
+            "workflow_state": workflow_state,
+            "active_child_run_id": active_stage.get("child_run_id") if active_stage else active_child_run_id,
+            "active_child_label": active_stage.get("label") if active_stage else "",
+            "active_child_status": active_stage.get("status") if active_stage else "",
+        }
+
+    def _default_code(self, run_instance):
+        return "\n".join(
+            [
+                f"# {run_instance.name}",
+                "Calculation_Type = MODULE",
+                "EPOLYSCAT_Application_Module = EPOLYSCAT_DMAT",
+                "Input_File = target",
+            ]
+        )
 
     def get_is_tutorial(self, run_instance: models.Run):
         request = self.context["request"]

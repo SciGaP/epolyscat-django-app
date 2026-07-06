@@ -203,6 +203,28 @@ class Run(models.Model):
     walltime_limit = models.IntegerField(null=True)
     total_physical_memory = models.IntegerField(null=True)  # in megabytes
     input_table = models.TextField(null=True)
+    RUN_MODE_CHOICES = (
+        ("module", "Module"),
+        ("workflow", "Workflow"),
+        ("utility", "Utility"),
+    )
+    run_mode = models.CharField(
+        max_length=20, choices=RUN_MODE_CHOICES, default="module"
+    )
+    module_application = models.CharField(max_length=64, blank=True, default="")
+    workflow_stage = models.CharField(max_length=64, blank=True, default="")
+    workflow_application = models.CharField(max_length=64, blank=True, default="")
+    utility_application = models.CharField(max_length=64, blank=True, default="")
+    workflow_metadata = models.JSONField(default=dict, blank=True)
+    parent_run = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="workflow_steps",
+        null=True,
+        blank=True,
+    )
+    workflow_step_order = models.PositiveSmallIntegerField(null=True, blank=True)
+    workflow_step_status = models.CharField(max_length=32, blank=True, default="")
 
 #    class Meta:
 #        #name = models.CharField(max_length=100)

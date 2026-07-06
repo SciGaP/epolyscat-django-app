@@ -228,7 +228,7 @@ class epolyscatDjangoAppConfig(AppConfig):
                     ]
                 },
             ],
-            "MASTER_LINP": os.path.join(BASE_DIR, "data", "eployscat", "linp"),
+            "MASTER_LINP": os.path.join(BASE_DIR, "data", "epolyscat", "linp"),
             "FILE_PLOTABLE": {
                 "spec_total": "energy-differential spectrum",
                 "spec_partial": "partial-wave spectrum",

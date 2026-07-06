@@ -7,7 +7,7 @@ SECRET_KEY = "abc123"
 INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
-    "epolyscat_django_app.apps.TrecxDjangoAppConfig",
+    "epolyscat_django_app.apps.epolyscatDjangoAppConfig",
 ]
 DATABASES = {
     'default': {

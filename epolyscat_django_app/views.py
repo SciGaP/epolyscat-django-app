@@ -12,11 +12,11 @@ from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 
-from airavata.model.application.io.ttypes import DataType
-from airavata.model.experiment.ttypes import ExperimentModel, UserConfigurationDataModel
-from airavata.model.scheduling.ttypes import ComputationalResourceSchedulingModel
-from airavata.model.status.ttypes import ExperimentState
-from airavata_django_portal_sdk import experiment_util, remoteapi, user_storage
+from .airavata_grpc import DataType
+from .airavata_grpc import ExperimentModel, UserConfigurationDataModel
+from .airavata_grpc import ComputationalResourceSchedulingModel
+from .airavata_grpc import ExperimentState
+from .airavata_grpc import experiment_util, remoteapi, user_storage
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required

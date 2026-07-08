@@ -3,10 +3,9 @@ import re
 from typing import Union
 
 from django.db import models
-from airavata.model.workspace.ttypes import Project as AiravataProject
-from airavata.model.experiment.ttypes import ExperimentModel
-from airavata.model.status.ttypes import ExperimentState
-from airavata_django_portal_sdk import experiment_util, user_storage
+from .airavata_grpc import Project as AiravataProject
+from .airavata_grpc import ExperimentModel, ExperimentState
+from .airavata_grpc import experiment_util, user_storage
 from django.conf import settings
 from django.db.models import Q
 

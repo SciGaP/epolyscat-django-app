@@ -4,8 +4,7 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from airavata_django_portal_sdk import experiment_util, user_storage
-from airavata.model.workspace.ttypes import Project
+from .airavata_grpc import Project, experiment_util, user_storage
 from django.apps import apps
 from django.db import transaction
 from django.db.models import Q

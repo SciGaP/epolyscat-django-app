@@ -39,7 +39,24 @@ except ModuleNotFoundError:
     from airavata_django_portal_sdk import experiment_util, remoteapi, user_storage
 
     def django_user(request):
-        return request.user
+        from django.contrib.auth import get_user_model
+
+        user = getattr(request, "user", None)
+        username = getattr(user, "username", None)
+        if not username:
+            return user
+        User = get_user_model()
+        if isinstance(user, User):
+            return user
+        obj, _ = User.objects.get_or_create(
+            username=username,
+            defaults={
+                "email": getattr(user, "email", "") or "",
+                "first_name": getattr(user, "first_name", "") or "",
+                "last_name": getattr(user, "last_name", "") or "",
+            },
+        )
+        return obj
 
 else:
     ExperimentModel = _exp_pb2.ExperimentModel
@@ -111,6 +128,8 @@ else:
         if not username:
             return user
         User = get_user_model()
+        if isinstance(user, User):
+            return user
         obj, _ = User.objects.get_or_create(
             username=username,
             defaults={

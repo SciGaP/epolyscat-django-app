@@ -127,6 +127,46 @@ class RunViewSetBackendTests(TestCase):
         self.assertIn(workflow_parent, result)
         self.assertNotIn(tutorial_like_run, result)
 
+    def test_run_and_view_lists_accept_gateway_user_objects(self):
+        user = get_user_model().objects.create_user(
+            username="gateway-user@example.com",
+            password="password",
+        )
+        gateway_user = SimpleNamespace(
+            username=user.username,
+            email=user.email,
+            first_name="",
+            last_name="",
+        )
+        run = models.Run.objects.create(
+            name="gateway run",
+            owner=user,
+            run_mode="module",
+            module_application="ePolyScat",
+        )
+        view = models.View.objects.create(
+            name="Gateway View",
+            owner=user,
+            type="default",
+        )
+
+        runs_request = RequestFactory().get("/epolyscat_django_app/api/runs/")
+        runs_request.user = gateway_user
+        runs_request.query_params = runs_request.GET
+        runs_viewset = views.RunViewSet()
+        runs_viewset.request = runs_request
+        runs_viewset.action = "list"
+
+        views_request = RequestFactory().get("/epolyscat_django_app/api/views/")
+        views_request.user = gateway_user
+        views_request.query_params = views_request.GET
+        views_viewset = views.ViewsViewSet()
+        views_viewset.request = views_request
+        views_viewset.action = "list"
+
+        self.assertIn(run, runs_viewset.get_queryset())
+        self.assertIn(view, views_viewset.get_queryset())
+
     def test_show_viewable_route_allows_dotted_file_names(self):
         action = next(
             action

@@ -5,7 +5,7 @@ from typing import Union
 from django.db import models
 from .airavata_grpc import Project as AiravataProject
 from .airavata_grpc import ExperimentModel, ExperimentState
-from .airavata_grpc import experiment_util, user_storage
+from .airavata_grpc import django_user, experiment_util, user_storage
 from django.conf import settings
 from django.db.models import Q
 
@@ -141,6 +141,24 @@ class View(models.Model):
             return None
         else:
             return tutorial_views[0]
+
+    @staticmethod
+    def filter_by_user(request):
+        return View.objects.filter(Q(owner=django_user(request)) | Q(owner=None))
+
+    def populate_unsubmitted_runs(self, request):
+        executions = RemoteExecution.objects.filter(run=models.OuterRef("pk"))
+        self.runs.set(Run.filter_by_user(request).filter(~models.Exists(executions)))
+
+    @staticmethod
+    def create_default_views(request):
+        owner = django_user(request)
+        if not View.objects.filter(owner=owner, type="unsubmitted").exists():
+            View.objects.create(
+                type="unsubmitted", name="Unsubmitted", owner=owner, order=20
+            )
+        if not View.objects.filter(owner=owner, type="default").exists():
+            View.objects.create(type="default", name="Selected", owner=owner, order=10)
 '''
     class Meta:
         unique_together = ["name", "owner"]
@@ -287,7 +305,7 @@ class Run(models.Model):
         # project_ids = list(map(lambda p: p.projectID, user_projects))
         # Returns Runs where user is Experiment owner or Experiment is shared via project
         return Run.objects.filter(
-            Q(owner=request.user)
+            Q(owner=django_user(request))
             # Tutorial runs have no owner
             | Q(owner=None)
             # | models.Q(experiment__airavata_project_id__in=project_ids)
@@ -480,7 +498,7 @@ class PlotParameters(models.Model):
 
     @staticmethod
     def filter_by_user(request):
-        return PlotParameters.objects.filter(owner=request.user)
+        return PlotParameters.objects.filter(owner=django_user(request))
 
     def __str__(self) -> str:
         return f"x={self.xaxis} y={self.yaxes} {self.flags}"

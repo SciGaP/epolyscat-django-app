@@ -16,7 +16,7 @@ from .airavata_grpc import DataType
 from .airavata_grpc import ExperimentModel, UserConfigurationDataModel
 from .airavata_grpc import ComputationalResourceSchedulingModel
 from .airavata_grpc import ExperimentState
-from .airavata_grpc import experiment_util, remoteapi, user_storage
+from .airavata_grpc import django_user, experiment_util, remoteapi, user_storage
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -251,14 +251,14 @@ def home(request):
 class IsOwner(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         # Only the owner has write access
-        return request.user == obj.owner
+        return django_user(request) == obj.owner
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
         # Only the owner has write access
-        return request.user == obj.owner
+        return django_user(request) == obj.owner
 
 
 
@@ -282,7 +282,7 @@ class ExperimentViewSet(viewsets.ModelViewSet):
             # Returns Experiments where user is Experiment owner or Experiment is shared via project
             models.Experiment.objects.filter(
                 Q(deleted=False)
-                & Q(owner=request.user)
+                & Q(owner=django_user(request))
                 # & (Q(owner=request.user) | Q(airavata_project_id__in=project_ids))
             )
             .annotate(recent_activity_date=Coalesce(Max("runs__updated"), "updated"))
@@ -408,7 +408,7 @@ class RunViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        run = serializer.save(owner=request.user)
+        run = serializer.save(owner=django_user(request))
 
         _create_run_user_dir(request, run)
 
@@ -440,7 +440,7 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only update a run that you own")
 
         for updated_input in request.data["inputs_data"]:
@@ -565,7 +565,7 @@ class RunViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         delete_associated = False if request.GET["deleteAssociated"] == "false" else True
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only delete a run that you own")
 
         if delete_associated and user_storage.dir_exists(request, run.directory):
@@ -605,7 +605,7 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only submit a run that you own")
 
         if self._is_workflow_parent_run(run):
@@ -1399,7 +1399,7 @@ def plot(request):
                 xaxis=plot_parameters["xaxis"],
                 yaxes=plot_parameters["yaxes"],
                 flags=plot_parameters["flags"],
-                owner=request.user,
+                owner=django_user(request),
             )
             plot_parameters = obj
             if not created:
@@ -1552,7 +1552,7 @@ def user_run_file_exists(request, run, filename):
     """Return data product uri for run file if it exists, else None."""
 
     # check to see if the file is already in the run directory, for backwards compatibility
-    if run.owner == request.user:
+    if run.owner == django_user(request):
         data_product_uri = user_storage.user_file_exists(
             request, os.path.join(run.directory, filename)
         )
@@ -1666,7 +1666,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         return (
             # Returns Runs owned by the user
             models.View.objects.filter(
-                Q(owner=self.request.user)
+                Q(owner=django_user(self.request))
             )
         )
 
@@ -1692,7 +1692,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        view = serializer.save(owner=request.user)
+        view = serializer.save(owner=django_user(request))
 
         for run in models.Run.objects.all():
             if run.id in request.data["runIds"]:
@@ -1828,7 +1828,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only update a run that you own")
 
         for updated_input in request.data["inputs_data"]:
@@ -1947,7 +1947,7 @@ class ViewsViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         delete_associated = False if request.GET["deleteAssociated"] == "false" else True
 
-        if run.owner != request.user:
+        if run.owner != django_user(request):
             raise Exception("You can only delete a run that you own")
 
         if delete_associated and user_storage.dir_exists(request, run.directory):
@@ -2069,7 +2069,7 @@ def plot(request):
                 xaxis=plot_parameters["xaxis"],
                 yaxes=plot_parameters["yaxes"],
                 flags=plot_parameters["flags"],
-                owner=request.user,
+                owner=django_user(request),
             )
             plot_parameters = obj
             if not created:
@@ -2319,7 +2319,7 @@ def user_run_file_exists(request, run, filename):
     """Return data product uri for run file if it exists, else None."""
 
     # check to see if the file is already in the run directory, for backwards compatibility
-    if run.owner == request.user:
+    if run.owner == django_user(request):
         data_product_uri = user_storage.user_file_exists(
             request, os.path.join(run.directory, filename)
         )

@@ -53,3 +53,17 @@ def test_workflow_child_step_fields_have_followup_migration():
         "workflow_step_order",
         "workflow_step_status",
     ]
+
+
+def test_workflow_continuation_source_has_followup_migration():
+    migration_module = importlib.import_module(
+        "epolyscat_django_app.migrations.0027_run_workflow_source_run"
+    )
+    field_names = _added_field_names(
+        "epolyscat_django_app.migrations.0027_run_workflow_source_run"
+    )
+
+    assert migration_module.Migration.dependencies == [
+        ("epolyscat_django_app", "0026_run_workflow_child_steps")
+    ]
+    assert field_names == ["workflow_source_run"]

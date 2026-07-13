@@ -95,7 +95,7 @@ class RunSerializer(serializers.ModelSerializer):
             "queue_name", "core_count", "node_count", "walltime_limit", "total_physical_memory",
             "run_mode", "module_application", "workflow_stage", "workflow_application",
             "utility_application", "workflow_metadata",
-            "parent_run", "workflow_step_order", "workflow_step_status",
+            "parent_run", "workflow_source_run", "workflow_step_order", "workflow_step_status",
             "inputs", "executions", "status", "job_status", "is_tutorial", "job_id",
             "resource", "presentation", "experiment",
             #"directedit", "inpc_download_url", "cancelable","can_resubmit", "input_table", "root",

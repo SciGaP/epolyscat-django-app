@@ -240,6 +240,13 @@ class Run(models.Model):
         null=True,
         blank=True,
     )
+    workflow_source_run = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="workflow_continuations",
+        null=True,
+        blank=True,
+    )
     workflow_step_order = models.PositiveSmallIntegerField(null=True, blank=True)
     workflow_step_status = models.CharField(max_length=32, blank=True, default="")
 

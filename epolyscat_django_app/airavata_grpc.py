@@ -9,6 +9,42 @@ the old small surface: enum objects with ``.name``/``.value``, ``user_storage``,
 from types import SimpleNamespace
 
 
+class _EnumMember:
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def __int__(self):
+        return self.value
+
+
+def _thrift_enum_compat(enum_cls):
+    values_to_names = dict(getattr(enum_cls, "_VALUES_TO_NAMES", {}))
+    names_to_values = dict(getattr(enum_cls, "_NAMES_TO_VALUES", {}))
+
+    class CompatEnum:
+        _VALUES_TO_NAMES = values_to_names
+        _NAMES_TO_VALUES = names_to_values
+
+        def __new__(cls, value):
+            return _EnumMember(values_to_names.get(value, str(value)), value)
+
+        def __class_getitem__(cls, name):
+            return _EnumMember(name, names_to_values[name])
+
+        @staticmethod
+        def Name(value):
+            return values_to_names[value]
+
+        @staticmethod
+        def Value(name):
+            return names_to_values[name]
+
+    for name, value in names_to_values.items():
+        setattr(CompatEnum, name, value)
+    return CompatEnum
+
+
 try:
     from airavata_sdk.generated.org.apache.airavata.model.application.io import (
         application_io_pb2 as _io_pb2,
@@ -34,9 +70,11 @@ except ModuleNotFoundError:
     from airavata.model.scheduling.ttypes import (
         ComputationalResourceSchedulingModel,
     )
-    from airavata.model.status.ttypes import ExperimentState
+    from airavata.model.status.ttypes import ExperimentState as _ExperimentState
     from airavata.model.workspace.ttypes import Project
     from airavata_django_portal_sdk import experiment_util, remoteapi, user_storage
+
+    ExperimentState = _thrift_enum_compat(_ExperimentState)
 
     def django_user(request):
         from django.contrib.auth import get_user_model
@@ -65,14 +103,6 @@ else:
         _sched_pb2.ComputationalResourceSchedulingModel
     )
     Project = _ws_pb2.Project
-
-    class _EnumMember:
-        def __init__(self, name, value):
-            self.name = name
-            self.value = value
-
-        def __int__(self):
-            return self.value
 
     def _enum_compat(enum_wrapper, module, *, strip_prefix=""):
         values_to_names = {}

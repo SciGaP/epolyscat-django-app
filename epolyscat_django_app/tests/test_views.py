@@ -25,6 +25,162 @@ class RunViewSetBackendTests(TestCase):
             experiment=experiment,
         )
 
+    def test_run_viewset_exposes_workflow_continuation_action(self):
+        action_names = {
+            action.__name__ for action in views.RunViewSet.get_extra_actions()
+        }
+
+        self.assertIn("workflow_continuation", action_names)
+
+    def test_workflow_continuation_get_returns_backend_eligibility(self):
+        user = get_user_model().objects.create_user(username="continue-get")
+        source = self.create_run(user)
+        source.module_application = "Gaussian16"
+        source.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=source,
+            airavata_experiment_id="completed-gaussian",
+            airavata_experiment_status="COMPLETED",
+        )
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/"
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=source)
+
+        response = viewset.workflow_continuation(request, pk=source.id)
+
+        self.assertIn("eligible", response.data)
+        self.assertTrue(response.data["eligible"])
+        self.assertEqual(response.data["source_stage"], "Data_Gen")
+        self.assertEqual(response.data["next_stage"], "ePolyScat_Run")
+
+    def test_workflow_continuation_post_creates_parent_after_imported_source(self):
+        user = get_user_model().objects.create_user(username="continue-post")
+        source = self.create_run(user)
+        source.module_application = "ePolyScat"
+        source.group_resource_profile_id = "group"
+        source.compute_resource_id = "resource"
+        source.queue_name = "shared"
+        source.core_count = 24
+        source.node_count = 1
+        source.walltime_limit = 30
+        source.total_physical_memory = 1024
+        source.save()
+        models.RemoteExecution.objects.create(
+            run=source,
+            airavata_experiment_id="completed-epolyscat",
+            airavata_experiment_status="COMPLETED",
+        )
+        request = RequestFactory().post(
+            f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/",
+            data={},
+            content_type="application/json",
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=source)
+
+        response = viewset.workflow_continuation(request, pk=source.id)
+
+        self.assertIn("workflow_parent_run_id", response.data)
+        parent = models.Run.objects.get(pk=response.data["workflow_parent_run_id"])
+        child_runs = list(parent.workflow_steps.order_by("workflow_step_order"))
+        self.assertEqual(parent.workflow_source_run, source)
+        self.assertEqual(parent.run_mode, "workflow")
+        self.assertTrue(parent.workflow_metadata["continuation"])
+        self.assertEqual(
+            parent.workflow_metadata["importedSource"],
+            {
+                "runId": source.id,
+                "stage": "ePolyScat_Run",
+                "application": "ePolyScat",
+            },
+        )
+        self.assertEqual(
+            [(child.workflow_step_order, child.workflow_stage) for child in child_runs],
+            [(3, "Analysis")],
+        )
+        self.assertEqual(response.data["next_child_run_id"], child_runs[0].id)
+        self.assertEqual(response.data["source_run_id"], source.id)
+        self.assertIsNone(source.parent_run_id)
+
+    def test_workflow_continuation_post_rejects_incomplete_run(self):
+        user = get_user_model().objects.create_user(username="continue-incomplete")
+        source = self.create_run(user)
+        source.module_application = "ePolyScat"
+        source.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=source,
+            airavata_experiment_id="failed-epolyscat",
+            airavata_experiment_status="FAILED",
+        )
+        request = RequestFactory().post(
+            f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/",
+            data={},
+            content_type="application/json",
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=source)
+
+        with self.assertRaises(exceptions.ValidationError):
+            viewset.workflow_continuation(request, pk=source.id)
+
+        self.assertFalse(models.Run.objects.filter(workflow_source_run=source).exists())
+
+    def test_workflow_continuation_presentation_includes_imported_source_stage(self):
+        user = get_user_model().objects.create_user(username="continue-presentation")
+        source = self.create_run(user)
+        source.module_application = "ePolyScat"
+        source.save(update_fields=["module_application"])
+        parent = models.Run.objects.create(
+            name="Continuation of source",
+            owner=user,
+            run_mode="workflow",
+            workflow_source_run=source,
+            workflow_metadata={
+                "isWorkflowPlan": True,
+                "continuation": True,
+                "importedSource": {
+                    "runId": source.id,
+                    "stage": "ePolyScat_Run",
+                    "application": "ePolyScat",
+                },
+            },
+        )
+        models.Run.objects.create(
+            name="Analysis child",
+            owner=user,
+            run_mode="workflow",
+            workflow_stage="Analysis",
+            utility_application="CnvMath",
+            parent_run=parent,
+            workflow_step_order=3,
+            workflow_step_status="pending",
+        )
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{parent.id}/"
+        )
+        request.user = user
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+        stages = data["presentation"]["stages"]
+
+        self.assertEqual(
+            [(stage["id"], stage["state"], stage["status"]) for stage in stages],
+            [
+                ("Data_Gen", "not_included", "not_included"),
+                ("ePolyScat_Run", "complete", "imported"),
+                ("Analysis", "pending", "pending"),
+            ],
+        )
+        self.assertEqual(stages[1]["child_run_id"], source.id)
+
     @override_settings(GATEWAY_DATA_STORE_REMOTE_API="https://amos-gateway.org/")
     @mock.patch("epolyscat_django_app.views.remoteapi.call")
     def test_create_run_user_dir_uses_remote_api_without_null_experiment_id(self, mock_call):

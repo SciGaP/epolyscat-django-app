@@ -38,7 +38,7 @@ from rest_framework import (
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from epolyscat_django_app import models, serializers
+from epolyscat_django_app import models, serializers, workflow_continuation as workflow_continuation_domain
 from epolyscat_django_app.epolyscat_utils import Linp, is_empty
 
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -794,6 +794,11 @@ class RunViewSet(viewsets.ModelViewSet):
                     "utility_application": application,
                 }
             )
+        imported_source = metadata.get("importedSource") or {}
+        imported_stage = imported_source.get("stage")
+        if run.workflow_source_run_id and imported_stage in workflow_continuation_domain.WORKFLOW_STAGES:
+            imported_order = workflow_continuation_domain.WORKFLOW_STAGES.index(imported_stage) + 1
+            specs = [spec for spec in specs if spec["order"] > imported_order]
         return specs
 
     def _create_workflow_child_run(self, parent_run, spec):
@@ -945,6 +950,73 @@ class RunViewSet(viewsets.ModelViewSet):
         run: models.Run = self.get_object()
         serializer = self.get_serializer(run)
         return Response(serializer.data["presentation"])
+
+    @action(detail=True, methods=["get", "post"])
+    @transaction.atomic
+    def workflow_continuation(self, request, pk=None):
+        source_run: models.Run = self.get_object()
+        eligibility = workflow_continuation_domain.continuation_eligibility(
+            source_run,
+            request,
+        )
+        if request.method.lower() == "get":
+            return Response(eligibility)
+        if not eligibility["eligible"]:
+            raise exceptions.ValidationError(
+                {
+                    "detail": eligibility["message"],
+                    "reason": eligibility["reason"],
+                }
+            )
+
+        workflow_metadata = {
+            "isWorkflowPlan": True,
+            "continuation": True,
+            "importedSource": {
+                "runId": source_run.id,
+                "stage": eligibility["source_stage"],
+                "application": eligibility["source_application"],
+            },
+            "dataGenerationApplication": (
+                eligibility["source_application"]
+                if eligibility["source_stage"] == "Data_Gen"
+                else "OpenMolcas"
+            ),
+            "analysisApplications": ["CnvMath"],
+            "plannedStageIds": list(workflow_continuation_domain.WORKFLOW_STAGES),
+            "workflow_state": "not_started",
+        }
+        parent_run = models.Run.objects.create(
+            name=f"Continuation of {source_run.name}"[:100],
+            owner=source_run.owner,
+            description=source_run.description,
+            airavata_project_id=source_run.airavata_project_id,
+            root=source_run.root,
+            experiment=source_run.experiment,
+            run_mode="workflow",
+            workflow_source_run=source_run,
+            workflow_metadata=workflow_metadata,
+            group_resource_profile_id=source_run.group_resource_profile_id,
+            compute_resource_id=source_run.compute_resource_id,
+            queue_name=source_run.queue_name,
+            core_count=source_run.core_count,
+            node_count=source_run.node_count,
+            walltime_limit=source_run.walltime_limit,
+            total_physical_memory=source_run.total_physical_memory,
+        )
+        parent_run.views.set(source_run.views.all())
+        child_runs = self._ensure_workflow_child_runs(parent_run)
+        next_child = child_runs[0]
+
+        return Response(
+            {
+                **eligibility,
+                "workflow_parent_run_id": parent_run.id,
+                "next_child_run_id": next_child.id,
+                "source_run_id": source_run.id,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     def _create_remote_execution(
         self,

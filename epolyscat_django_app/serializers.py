@@ -557,6 +557,49 @@ class RunSerializer(serializers.ModelSerializer):
         if not child_runs:
             return []
 
+        metadata = run_instance.workflow_metadata or {}
+        imported_source = metadata.get("importedSource") or {}
+        imported_stage = imported_source.get("stage")
+        if run_instance.workflow_source_run_id and imported_stage:
+            canonical_stages = ["Data_Gen", "ePolyScat_Run", "Analysis"]
+            try:
+                imported_index = canonical_stages.index(imported_stage)
+            except ValueError:
+                imported_index = -1
+            if imported_index >= 0:
+                stages = [
+                    {
+                        "id": stage,
+                        "label": self._workflow_stage_label(stage),
+                        "state": "not_included",
+                        "status": "not_included",
+                    }
+                    for stage in canonical_stages[:imported_index]
+                ]
+                stages.append(
+                    {
+                        "id": imported_stage,
+                        "label": self._workflow_stage_label(imported_stage),
+                        "state": "complete",
+                        "status": "imported",
+                        "child_run_id": run_instance.workflow_source_run_id,
+                        "application": imported_source.get("application") or "",
+                        "imported": True,
+                    }
+                )
+                stages.extend(
+                    {
+                        "id": child.workflow_stage or f"step-{child.workflow_step_order}",
+                        "label": self._workflow_stage_label(child.workflow_stage or ""),
+                        "state": self._workflow_child_state(child),
+                        "child_run_id": child.id,
+                        "application": self._workflow_child_application(child),
+                        "status": self._workflow_child_status(child),
+                    }
+                    for child in child_runs
+                )
+                return stages
+
         return [
             {
                 "id": child.workflow_stage or f"step-{child.workflow_step_order}",

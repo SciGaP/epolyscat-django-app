@@ -1,12 +1,17 @@
 import importlib
 import importlib.util
 
+from django.contrib.auth import get_user_model
 from django.db import models as django_models
+from django.test import RequestFactory
 from django.test import SimpleTestCase
 from django.test import TestCase
 
 from epolyscat_django_app import models, serializers
-from epolyscat_django_app.workflow_continuation import classify_run
+from epolyscat_django_app.workflow_continuation import (
+    classify_run,
+    continuation_eligibility,
+)
 
 
 class WorkflowContinuationModelTests(SimpleTestCase):
@@ -31,6 +36,14 @@ class WorkflowContinuationDomainTests(SimpleTestCase):
         self.assertIsNotNone(importlib.util.find_spec(module_name))
         module = importlib.import_module(module_name)
         self.assertTrue(callable(module.classify_run))
+
+    def test_workflow_continuation_domain_exposes_eligibility_check(self):
+        module = importlib.import_module(
+            "epolyscat_django_app.workflow_continuation"
+        )
+
+        self.assertTrue(hasattr(module, "continuation_eligibility"))
+        self.assertTrue(callable(module.continuation_eligibility))
 
     def test_classifies_data_generation_modules(self):
         for application in ("Gaussian16", "OpenMolcas"):
@@ -124,3 +137,80 @@ class WorkflowContinuationLegacyRunTests(TestCase):
                 "next_stage": None,
             },
         )
+
+
+class WorkflowContinuationEligibilityTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="workflow-user")
+        self.request = RequestFactory().get("/api/runs/1/workflow_continuation/")
+        self.request.user = self.user
+
+    def create_run(self, application="ePolyScat", status=None, **overrides):
+        values = {
+            "name": "source run",
+            "owner": self.user,
+            "run_mode": "module",
+            "module_application": application,
+        }
+        values.update(overrides)
+        run = models.Run.objects.create(**values)
+        if status:
+            models.RemoteExecution.objects.create(
+                run=run,
+                airavata_experiment_id=f"experiment-{run.id}",
+                airavata_experiment_status=status,
+            )
+        return run
+
+    def test_completed_supported_run_is_eligible(self):
+        run = self.create_run(status="COMPLETED")
+
+        result = continuation_eligibility(run, self.request)
+
+        self.assertIn("eligible", result)
+        self.assertTrue(result["eligible"])
+        self.assertEqual(result["reason"], "")
+        self.assertEqual(result["source_stage"], "ePolyScat_Run")
+        self.assertEqual(result["source_application"], "ePolyScat")
+        self.assertEqual(result["next_stage"], "Analysis")
+
+    def test_run_without_execution_is_not_eligible(self):
+        run = self.create_run()
+
+        result = continuation_eligibility(run, self.request)
+
+        self.assertIn("eligible", result)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason"], "no_execution")
+
+    def test_failed_run_is_not_eligible(self):
+        run = self.create_run(status="FAILED")
+
+        result = continuation_eligibility(run, self.request)
+
+        self.assertIn("eligible", result)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason"], "run_not_completed")
+
+    def test_unknown_run_type_is_not_eligible(self):
+        run = self.create_run(application="Unknown", status="COMPLETED")
+
+        result = continuation_eligibility(run, self.request)
+
+        self.assertIn("eligible", result)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason"], "unsupported_run_type")
+
+    def test_analysis_utility_is_terminal(self):
+        run = self.create_run(
+            application="",
+            status="COMPLETED",
+            run_mode="utility",
+            utility_application="CnvMath",
+        )
+
+        result = continuation_eligibility(run, self.request)
+
+        self.assertIn("eligible", result)
+        self.assertFalse(result["eligible"])
+        self.assertEqual(result["reason"], "terminal_stage")

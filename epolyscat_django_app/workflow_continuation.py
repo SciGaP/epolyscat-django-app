@@ -124,3 +124,55 @@ def classify_run(run):
         "source_application": canonical_application,
         "next_stage": _next_stage(stage),
     }
+
+
+def continuation_eligibility(run, request):
+    classification = classify_run(run)
+
+    def unavailable(reason, message):
+        return {
+            "eligible": False,
+            "reason": reason,
+            "message": message,
+            **(classification or {}),
+        }
+
+    if getattr(run, "deleted", False):
+        return unavailable("deleted_run", "Deleted runs cannot start a workflow.")
+    if classification is None:
+        return unavailable(
+            "unsupported_run_type",
+            "This run type is not part of the ePolyScat workflow.",
+        )
+    if classification["next_stage"] is None:
+        return unavailable(
+            "terminal_stage",
+            "This run is already at the final implemented workflow stage.",
+        )
+
+    latest_execution = getattr(run, "latest_execution", None)
+    if latest_execution is None:
+        return unavailable(
+            "no_execution",
+            "Submit and complete this run before continuing it in a workflow.",
+        )
+
+    try:
+        status = latest_execution.get_airavata_experiment_status(request)
+    except Exception:
+        return unavailable(
+            "status_unavailable",
+            "The source run status could not be confirmed.",
+        )
+    if str(status).upper() != "COMPLETED":
+        return unavailable(
+            "run_not_completed",
+            "Only completed runs can continue into the next workflow stage.",
+        )
+
+    return {
+        "eligible": True,
+        "reason": "",
+        "message": "",
+        **classification,
+    }

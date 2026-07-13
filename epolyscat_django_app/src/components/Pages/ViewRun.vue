@@ -14,11 +14,21 @@
             <span v-else>Modules/EPOLYSCAT_DMAT</span>
           </div>
         </div>
-        <div class="view-run-status" v-if="statusBadges.length">
-          <span v-for="badge in statusBadges" :key="badge.label">
-            <strong>{{ badge.label }}</strong>
-            {{ badge.value }}
-          </span>
+        <div class="view-run-heading-actions">
+          <div class="view-run-status" v-if="statusBadges.length">
+            <span v-for="badge in statusBadges" :key="badge.label">
+              <strong>{{ badge.label }}</strong>
+              {{ badge.value }}
+            </span>
+          </div>
+          <b-button
+              v-if="workflowContinuation.eligible"
+              variant="primary"
+              :disabled="workflowContinuationLoading"
+              v-on:click="continueInWorkflow"
+          >
+            {{ workflowContinuationLoading ? "Creating Workflow..." : "Continue in Workflow" }}
+          </b-button>
         </div>
       </header>
 
@@ -34,17 +44,22 @@
             :class="stage.state"
         >
           <span class="workflow-step-index">{{ index + 1 }}</span>
-          <router-link
-              v-if="workflowStageRoute(stage, index)"
-              class="workflow-step-label workflow-step-link"
-              :class="{ 'workflow-step-configure-link': workflowStageIsConfigurable(stage, index) }"
-              :to="workflowStageRoute(stage, index)"
-          >
-            {{ stage.label }}
-          </router-link>
-          <span v-else class="workflow-step-label">{{ stage.label }}</span>
-          <span v-if="stage.application" class="workflow-step-application">
-            {{ stage.application }}
+          <span class="workflow-step-copy">
+            <router-link
+                v-if="workflowStageRoute(stage, index)"
+                class="workflow-step-label workflow-step-link"
+                :class="{ 'workflow-step-configure-link': workflowStageIsConfigurable(stage, index) }"
+                :to="workflowStageRoute(stage, index)"
+            >
+              {{ stage.label }}
+            </router-link>
+            <span v-else class="workflow-step-label">{{ stage.label }}</span>
+            <span v-if="workflowStageStatusText(stage)" class="workflow-step-state">
+              {{ workflowStageStatusText(stage) }}
+            </span>
+            <span v-if="stage.application" class="workflow-step-application">
+              {{ stage.application }}
+            </span>
           </span>
         </span>
       </nav>
@@ -229,6 +244,12 @@ export default {
       plotError: "",
       plotOutput: "",
       plotUserGuidance: "",
+      workflowContinuation: {
+        eligible: false,
+        reason: "",
+        message: "",
+      },
+      workflowContinuationLoading: false,
       plotForm: {
         file: "cross_sections",
         x_axis: "energy",
@@ -512,7 +533,10 @@ export default {
         ]);
         this.run = run;
         this.presentation = this.normalizePresentation(presentation);
-        await this.loadRunFileCatalog();
+        await Promise.all([
+          this.loadRunFileCatalog(),
+          this.loadWorkflowContinuation(),
+        ]);
         this.initializePlotForm();
 
         const nextSelectedFile = this.presentation.selected_file
@@ -558,6 +582,47 @@ export default {
       normalized.plottable_file_names = normalized.plottable_file_names || [];
 
       return normalized;
+    },
+    async loadWorkflowContinuation() {
+      this.workflowContinuation = {
+        eligible: false,
+        reason: "",
+        message: "",
+      };
+      try {
+        this.workflowContinuation = await RunService.fetchWorkflowContinuation({
+          runId: this.runId,
+        });
+      } catch (error) {
+        this.workflowContinuation = {
+          eligible: false,
+          reason: "status_unavailable",
+          message: "Workflow continuation is unavailable.",
+        };
+      }
+    },
+    async continueInWorkflow() {
+      if (!this.workflowContinuation.eligible || this.workflowContinuationLoading) {
+        return;
+      }
+
+      this.workflowContinuationLoading = true;
+      try {
+        const continuation = await RunService.continueWorkflow({ runId: this.runId });
+        await this.$router.push(
+            `/runs/new?workflowChildRunId=${continuation.nextChildRunId}`
+            + `&workflowParentRunId=${continuation.workflowParentRunId}`
+            + `&withOutputsFrom=${continuation.sourceRunId}`
+        );
+      } catch (error) {
+        eventBus.$emit("error", {
+          name: "Error while trying to continue this run in a workflow",
+          error,
+        });
+        await this.loadWorkflowContinuation();
+      } finally {
+        this.workflowContinuationLoading = false;
+      }
     },
     async loadRunFileCatalog() {
       const [viewables, inputFiles, outputFiles] = await Promise.all([
@@ -747,7 +812,10 @@ export default {
       }
 
       return this.presentation.stages.slice(0, index).every(previousStage =>
-        previousStage.state === "complete" || previousStage.status === "complete"
+        previousStage.state === "complete"
+        || previousStage.status === "complete"
+        || previousStage.status === "imported"
+        || previousStage.status === "not_included"
       );
     },
     workflowStageRoute(stage, index) {
@@ -774,6 +842,18 @@ export default {
       }
 
       return `/runs/new?${query.join("&")}`;
+    },
+    workflowStageStatusText(stage) {
+      if (!stage) {
+        return "";
+      }
+      if (stage.status === "imported") {
+        return "Imported";
+      }
+      if (stage.status === "not_included") {
+        return "Not included";
+      }
+      return "";
     },
     formatStatusLabel(status) {
       if (!status) {
@@ -833,6 +913,13 @@ export default {
 .view-run-status {
   display: flex;
   gap: 8px;
+}
+
+.view-run-heading-actions {
+  align-items: flex-end;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .view-run-status span {
@@ -915,6 +1002,18 @@ export default {
   color: #666666;
   font-size: 12px;
   font-weight: 500;
+}
+
+.workflow-step-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.workflow-step-state {
+  color: #666666;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .workflow-status-panel {

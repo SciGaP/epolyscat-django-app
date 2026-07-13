@@ -736,6 +736,40 @@ def test_view_run_pending_workflow_step_links_to_configure_page():
         assert hook in source
 
 
+def test_view_run_can_continue_an_eligible_completed_run_into_workflow():
+    source = _view_run_source()
+    service_source = _epolyscat_service_source()
+
+    expected_view_hooks = [
+        "Continue in Workflow",
+        "workflowContinuation",
+        "workflowContinuationLoading",
+        "loadWorkflowContinuation",
+        "continueInWorkflow",
+        "RunService.fetchWorkflowContinuation",
+        "RunService.continueWorkflow",
+        "workflowChildRunId=${continuation.nextChildRunId}",
+        "workflowParentRunId=${continuation.workflowParentRunId}",
+        "withOutputsFrom=${continuation.sourceRunId}",
+        "workflowStageStatusText(stage)",
+        'previousStage.status === "imported"',
+        'previousStage.status === "not_included"',
+    ]
+    expected_service_hooks = [
+        "fetchWorkflowContinuation",
+        "continueWorkflow",
+        "workflow_continuation/",
+        "workflow_parent_run_id",
+        "next_child_run_id",
+        "source_run_id",
+    ]
+
+    for hook in expected_view_hooks:
+        assert hook in source
+    for hook in expected_service_hooks:
+        assert hook in service_source
+
+
 def test_create_run_can_edit_existing_workflow_child_step():
     source = _source()
 

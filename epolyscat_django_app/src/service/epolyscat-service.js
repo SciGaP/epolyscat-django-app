@@ -982,6 +982,29 @@ export const RunService = {
         const {data} = await axiosInstance.get(`/epolyscat_django_app/api/runs/${runId}/presentation/`);
         return data;
     },
+    async fetchWorkflowContinuation({runId = null} = {}) {
+        const {data} = await axiosInstance.get(
+            `/epolyscat_django_app/api/runs/${runId}/workflow_continuation/`
+        );
+        return {
+            ...data,
+            sourceStage: data.source_stage || "",
+            sourceApplication: data.source_application || "",
+            nextStage: data.next_stage || "",
+        };
+    },
+    async continueWorkflow({runId = null} = {}) {
+        const {data} = await axiosInstance.post(
+            `/epolyscat_django_app/api/runs/${runId}/workflow_continuation/`,
+            {}
+        );
+        return {
+            ...data,
+            workflowParentRunId: data.workflow_parent_run_id,
+            nextChildRunId: data.next_child_run_id,
+            sourceRunId: data.source_run_id,
+        };
+    },
     //async cloneRun({runId = null} = {}) {
     //    const {data} = await axiosInstance.post(`/epolyscat_django_app/api/runs/${runId}/new/`);
 

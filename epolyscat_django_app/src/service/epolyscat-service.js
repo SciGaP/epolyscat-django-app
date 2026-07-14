@@ -643,6 +643,36 @@ export const InputService = {
 
         return data;
     },
+    async fetchWorkflowOutputBinding({
+        runId,
+        targetStageId,
+        targetApplicationId = "",
+        requiredFileName = "",
+    }) {
+        const { data } = await axiosInstance.get(
+            appBaseUrl + `runs/${runId}/workflow_output_binding/`,
+            {
+                params: {
+                    targetStageId,
+                    targetApplicationId,
+                    requiredFileName,
+                },
+            }
+        );
+        const outputFile = data.selected ? {...data.selected} : null;
+        if (outputFile) {
+            const dataProductURI = outputFile.dataProductURI || outputFile["data-product-uri"];
+            if (dataProductURI && !outputFile.downloadURL) {
+                outputFile.downloadURL = `sdk/download/?data-product-uri=${encodeURIComponent(dataProductURI)}`;
+            }
+        }
+        return {
+            ...data,
+            inputFileName: data.input_file_name,
+            outputFile: outputFile,
+            dataEntryValues: data.data_entry_values,
+        };
+    },
     async fetchFileContents(file) {
         if (file == null)
             return null;

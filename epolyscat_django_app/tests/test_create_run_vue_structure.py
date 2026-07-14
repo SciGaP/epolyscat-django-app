@@ -789,6 +789,12 @@ def test_create_run_can_edit_existing_workflow_child_step():
         'this.$store.commit("input/SET_PATH", { path: this.selectedRunPath })',
         "addWorkflowOutputToInput(inputFileName, outputFile)",
         "loadWorkflowPreviousOutputsIntoActiveInputs(outputsRunId, sourceRun = null)",
+        "InputService.fetchWorkflowOutputBinding({",
+        "targetStageId: this.selectedApplicationId",
+        "targetApplicationId: this.activeWorkflowApplicationId",
+        "requiredFileName",
+        'if (backendBinding.status === "ready")',
+        "backendBinding.outputFile",
         "InputService.fetchOutputs(outputsRunId)",
         "buildWorkflowOutputInputBinding",
         "workflowApplicationIdFromRun(sourceRun)",
@@ -804,6 +810,20 @@ def test_create_run_can_edit_existing_workflow_child_step():
 
     for hook in expected_hooks:
         assert hook in source
+
+    service_source = _epolyscat_service_source()
+    expected_service_hooks = [
+        "fetchWorkflowOutputBinding",
+        "workflow_output_binding/",
+        "targetStageId",
+        "targetApplicationId",
+        "requiredFileName",
+        "inputFileName: data.input_file_name",
+        "const outputFile = data.selected",
+        "dataEntryValues: data.data_entry_values",
+    ]
+    for hook in expected_service_hooks:
+        assert hook in service_source
 
 
 def test_view_run_plot_panel_uses_plot_service_not_static_svg():

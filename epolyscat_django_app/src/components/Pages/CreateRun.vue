@@ -521,6 +521,7 @@ export default {
       showWorkflowStepGuardModal: false,
       workflowStepGuardPendingScroll: false,
       workflowStepGuardMessage: "",
+      workflowOutputBindingError: null,
       selectedRunType: "module",
       selectedApplicationId: "ePolyScat",
       selectedWorkflowApplicationId: "OpenMolcas",
@@ -1592,6 +1593,45 @@ export default {
       this.patchInpcContentFromTableValues(Object.keys(dataEntryValues));
     },
     async loadWorkflowPreviousOutputsIntoActiveInputs(outputsRunId, sourceRun = null) {
+      try {
+        if (this.selectedApplicationId === "ePolyScat_Run") {
+          const backendBinding = await InputService.fetchWorkflowOutputBinding({
+            runId: outputsRunId,
+            targetStageId: this.selectedApplicationId,
+            targetApplicationId: this.activeWorkflowApplicationId,
+            requiredFileName: "ePolyScat_Input_Data",
+          });
+          if (backendBinding.status === "ready") {
+            this.addWorkflowOutputToInput(
+                backendBinding.inputFileName,
+                backendBinding.outputFile,
+            );
+            this.applyWorkflowDataEntryValues(backendBinding.dataEntryValues);
+          }
+          return;
+        }
+
+        for (const requiredFile of this.activeRequiredFiles) {
+          const requiredFileName = requiredFile.name;
+          const backendBinding = await InputService.fetchWorkflowOutputBinding({
+            runId: outputsRunId,
+            targetStageId: this.selectedApplicationId,
+            targetApplicationId: this.activeWorkflowApplicationId,
+            requiredFileName,
+          });
+          if (backendBinding.status === "ready") {
+            this.addWorkflowOutputToInput(
+                backendBinding.inputFileName,
+                backendBinding.outputFile,
+            );
+            this.applyWorkflowDataEntryValues(backendBinding.dataEntryValues);
+          }
+        }
+        return;
+      } catch (error) {
+        this.workflowOutputBindingError = error;
+      }
+
       const outputFiles = await InputService.fetchOutputs(outputsRunId);
       const byName = outputFiles.reduce((filesByName, file) => ({
         ...filesByName,

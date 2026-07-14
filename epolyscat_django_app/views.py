@@ -38,7 +38,13 @@ from rest_framework import (
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from epolyscat_django_app import models, serializers, workflow_continuation as workflow_continuation_domain
+from epolyscat_django_app import (
+    models,
+    runtime_audit as runtime_audit_domain,
+    serializers,
+    workflow_continuation as workflow_continuation_domain,
+    workflow_output_contracts,
+)
 from epolyscat_django_app.epolyscat_utils import Linp, is_empty
 
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
@@ -79,6 +85,17 @@ INPUT_NAME_COMPATIBILITY_ALIASES = (
     ("Molcas_Input", "Molcas_Inputs"),
     ("ePolyscat_Input_Data", "ePolyScat_Input_Data"),
 )
+UTILITY_FILE_INPUT_NAMES = {
+    "CnvMath": "BendOrient_Output",
+    "CnvMatLab": "BendOrient_Output",
+    "CnvLinFull": "DumpOut",
+    "NRFPAD": "Cross_Section_Input_File",
+    "Cube2igor": "Cube_Output",
+}
+GENERIC_POSTPROCESSING_INPUT_NAMES = (
+    "ePolyscat_Input_Data",
+    "ePolyScat_Input_Data",
+)
 
 
 def _first_nonblank(*values):
@@ -104,6 +121,22 @@ def _add_input_name_compatibility_aliases(input_values):
             input_values[second_name] = first_value
         elif second_value and not first_value:
             input_values[first_name] = second_value
+
+
+def _add_utility_file_input_compatibility(input_values, utility_application):
+    source_input_name = UTILITY_FILE_INPUT_NAMES.get(utility_application)
+    if not source_input_name or not input_values.get(source_input_name):
+        return
+
+    data_product_uris = []
+    for input_name in (*GENERIC_POSTPROCESSING_INPUT_NAMES, source_input_name):
+        for data_product_uri in str(input_values.get(input_name) or "").split(","):
+            if data_product_uri and data_product_uri not in data_product_uris:
+                data_product_uris.append(data_product_uri)
+
+    collection_value = ",".join(data_product_uris)
+    for input_name in GENERIC_POSTPROCESSING_INPUT_NAMES:
+        input_values[input_name] = collection_value
 
 
 def build_airavata_input_values(run, input_values):
@@ -149,10 +182,15 @@ def build_airavata_input_values(run, input_values):
             normalized_inputs.pop("Application_Utility", None)
         elif workflow_stage == "Analysis":
             normalized_inputs.pop("Data_Gen", None)
-            normalized_inputs["Application_Utility"] = _first_nonblank(
+            utility_application = _first_nonblank(
                 getattr(run, "utility_application", ""),
                 normalized_inputs.get("Application_Utility"),
                 "CnvMath",
+            )
+            normalized_inputs["Application_Utility"] = utility_application
+            _add_utility_file_input_compatibility(
+                normalized_inputs,
+                utility_application,
             )
         else:
             normalized_inputs.pop("Data_Gen", None)
@@ -164,10 +202,15 @@ def build_airavata_input_values(run, input_values):
     normalized_inputs.pop("Workflow_Application", None)
 
     if mode == "UTILITY":
-        normalized_inputs["Application_Utility"] = _first_nonblank(
+        utility_application = _first_nonblank(
             getattr(run, "utility_application", ""),
             normalized_inputs.get("Application_Utility"),
             "CnvMath",
+        )
+        normalized_inputs["Application_Utility"] = utility_application
+        _add_utility_file_input_compatibility(
+            normalized_inputs,
+            utility_application,
         )
 
     return normalized_inputs
@@ -354,6 +397,79 @@ class RunViewSet(viewsets.ModelViewSet):
             _queryset = _queryset.exclude(owner=None)
 
         return _queryset
+
+    def _output_files_for_run(self, request, run):
+        output_files = []
+        seen_file_names = set()
+        seen_directories = set()
+
+        def append_output_files(files):
+            for file_data in files:
+                if isinstance(file_data, dict):
+                    filename = (
+                        file_data.get("name")
+                        or file_data.get("filename")
+                        or file_data.get("fileName")
+                    )
+                else:
+                    filename = str(file_data)
+                if filename and filename not in seen_file_names:
+                    output_files.append(file_data)
+                    seen_file_names.add(filename)
+
+        def child_directory_path(parent_path, directory_data):
+            if not isinstance(directory_data, dict):
+                return ""
+            directory_path = directory_data.get("path")
+            if directory_path:
+                return directory_path.strip("/")
+            directory_name = (
+                directory_data.get("name")
+                or directory_data.get("filename")
+                or directory_data.get("fileName")
+            )
+            if not directory_name and directory_data.get("resource_path"):
+                directory_name = os.path.basename(
+                    directory_data["resource_path"].rstrip("/")
+                )
+            if not directory_name:
+                return ""
+            return "/".join(
+                part.strip("/")
+                for part in (parent_path, directory_name)
+                if part and part.strip("/")
+            )
+
+        def append_experiment_directory_files(experiment_id, path="", depth=0):
+            if depth > 4 or path in seen_directories:
+                return
+            seen_directories.add(path)
+            try:
+                directories, files = user_storage.list_experiment_dir(
+                    request,
+                    experiment_id,
+                    path=path,
+                )
+            except Exception:
+                return
+
+            append_output_files(files)
+            for directory_data in directories:
+                child_path = child_directory_path(path, directory_data)
+                if child_path:
+                    append_experiment_directory_files(
+                        experiment_id,
+                        path=child_path,
+                        depth=depth + 1,
+                    )
+
+        if len(run.executions.all()) > 0:
+            most_recent_execution = run.executions.order_by("-created")[0]
+            experiment_id = most_recent_execution.airavata_experiment_id
+            append_experiment_directory_files(experiment_id)
+            append_experiment_directory_files(experiment_id, path="ARCHIVE")
+
+        return output_files
 
         '''
         tutorial_view_id = models.View.tutorial_view().id
@@ -1018,6 +1134,36 @@ class RunViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED,
         )
 
+    @action(detail=False, methods=["get"])
+    def runtime_audit(self, request):
+        app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+            "EPOLYSCAT_APPLICATION_ID",
+            "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442",
+        )
+        errors = []
+
+        def fetch_runtime_data(label, method_name):
+            try:
+                method = getattr(request.airavata_client, method_name)
+                return method(request.authz_token, settings.GATEWAY_ID)
+            except Exception as error:
+                logger.exception("Failed to audit ePolyScat %s", label)
+                errors.append({"section": label, "message": str(error)})
+                return []
+
+        audit = runtime_audit_domain.audit_runtime_configuration(
+            application_module_id=app_module_id,
+            modules=fetch_runtime_data("modules", "getAllAppModules"),
+            interfaces=fetch_runtime_data(
+                "interfaces", "getAllApplicationInterfaces"
+            ),
+            deployments=fetch_runtime_data(
+                "deployments", "getAllApplicationDeployments"
+            ),
+            errors=errors,
+        )
+        return Response(audit)
+
     def _create_remote_execution(
         self,
         request,
@@ -1354,81 +1500,42 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["GET"])
     def get_output_files(self, request, pk=None):
         run = self.get_object()
-        output_files = []
-        seen_file_names = set()
-        seen_directories = set()
+        return Response(self._output_files_for_run(request, run))
 
-        def append_output_files(files):
-            for file_data in files:
-                if isinstance(file_data, dict):
-                    filename = (
-                        file_data.get("name")
-                        or file_data.get("filename")
-                        or file_data.get("fileName")
-                    )
-                else:
-                    filename = str(file_data)
-                if filename and filename not in seen_file_names:
-                    output_files.append(file_data)
-                    seen_file_names.add(filename)
-
-        def child_directory_path(parent_path, directory_data):
-            if not isinstance(directory_data, dict):
-                return ""
-            directory_path = directory_data.get("path")
-            if directory_path:
-                return directory_path.strip("/")
-            directory_name = (
-                directory_data.get("name")
-                or directory_data.get("filename")
-                or directory_data.get("fileName")
-            )
-            if not directory_name and directory_data.get("resource_path"):
-                directory_name = os.path.basename(
-                    directory_data["resource_path"].rstrip("/")
-                )
-            if not directory_name:
-                return ""
-            return "/".join(
-                part.strip("/")
-                for part in (parent_path, directory_name)
-                if part and part.strip("/")
+    @action(detail=True, methods=["GET"])
+    def workflow_output_binding(self, request, pk=None):
+        run = self.get_object()
+        query_params = getattr(request, "query_params", request.GET)
+        target_stage = query_params.get("targetStageId", "")
+        if not target_stage:
+            raise exceptions.ValidationError(
+                {"targetStageId": "This query parameter is required."}
             )
 
-        def append_experiment_directory_files(experiment_id, path="", depth=0):
-            if depth > 4 or path in seen_directories:
-                return
-            seen_directories.add(path)
-            try:
-                directories, files = user_storage.list_experiment_dir(
-                    request,
-                    experiment_id,
-                    path=path,
-                )
-            except Exception:
-                return
-
-            append_output_files(files)
-            for directory_data in directories:
-                child_path = child_directory_path(path, directory_data)
-                if child_path:
-                    append_experiment_directory_files(
-                        experiment_id,
-                        path=child_path,
-                        depth=depth + 1,
-                    )
-
-        if len(run.executions.all()) > 0:
-            most_recent_execution = run.executions.order_by("-created")[0]
-            append_experiment_directory_files(
-                most_recent_execution.airavata_experiment_id
-            )
-            append_experiment_directory_files(
-                most_recent_execution.airavata_experiment_id,
-                path="ARCHIVE",
-            )
-
-        return Response(output_files)
+        classification = workflow_continuation_domain.classify_run(run) or {}
+        source_application = classification.get("source_application") or (
+            run.workflow_application
+            or run.module_application
+            or run.utility_application
+        )
+        result = workflow_output_contracts.resolve_workflow_output_binding(
+            output_files=self._output_files_for_run(request, run),
+            source_application=source_application,
+            target_stage=target_stage,
+            target_application=query_params.get("targetApplicationId", ""),
+            required_file_name=query_params.get("requiredFileName", ""),
+        )
+        return Response(
+            {
+                **result,
+                "source_stage": classification.get("source_stage", ""),
+                "source_application": source_application,
+                "target_stage": target_stage,
+                "target_application": query_params.get(
+                    "targetApplicationId", ""
+                ),
+            }
+        )
 
 
 class PlotParametersViewSet(viewsets.ModelViewSet):

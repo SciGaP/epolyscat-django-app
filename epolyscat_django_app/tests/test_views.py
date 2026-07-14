@@ -566,6 +566,75 @@ class RunViewSetBackendTests(TestCase):
             ],
         )
 
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_output_binding_returns_backend_selected_file(self, mock_list_experiment_dir):
+        user = get_user_model().objects.create_user(username="binding-user")
+        run = self.create_run(user)
+        run.module_application = "Gaussian16"
+        run.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="gaussian-experiment",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {"name": "job.slurm", "data-product-uri": "airavata-dp://job"},
+                {"name": "gaussian.log", "data-product-uri": "airavata-dp://log"},
+            ],
+        )
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{run.id}/workflow_output_binding/",
+            {"targetStageId": "ePolyScat_Run"},
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.workflow_output_binding(request, pk=run.id)
+
+        self.assertEqual(response.data["status"], "ready")
+        self.assertEqual(response.data["source_application"], "Gaussian16")
+        self.assertEqual(response.data["selected"]["name"], "gaussian.log")
+        self.assertEqual(response.data["input_file_name"], "ePolyScat_Input_Data")
+
+    @override_settings(
+        GATEWAY_ID="gateway",
+        EPOLYSCAT={"EPOLYSCAT_APPLICATION_ID": "epolyscat-module"},
+    )
+    def test_runtime_audit_action_uses_airavata_runtime_configuration(self):
+        request = RequestFactory().get(
+            "/epolyscat_django_app/api/runs/runtime_audit/"
+        )
+        request.user = get_user_model().objects.create_user(username="audit-user")
+        request.authz_token = "token"
+        request.airavata_client = SimpleNamespace(
+            getAllAppModules=mock.Mock(return_value=[]),
+            getAllApplicationInterfaces=mock.Mock(return_value=[]),
+            getAllApplicationDeployments=mock.Mock(return_value=[]),
+        )
+        viewset = views.RunViewSet()
+        viewset.request = request
+
+        response = viewset.runtime_audit(request)
+
+        self.assertFalse(response.data["ready"])
+        self.assertEqual(
+            [utility["id"] for utility in response.data["utilities"]],
+            [
+                "CnvMath",
+                "CnvMatLab",
+                "CnvLinFull",
+                "MoldenMerge",
+                "NRFPAD",
+                "Cube2igor",
+            ],
+        )
+        request.airavata_client.getAllAppModules.assert_called_once_with(
+            "token", "gateway"
+        )
+
     def test_submit_normalizes_workflow_data_generation_inputs_for_airavata(self):
         user = get_user_model().objects.create_user(
             username="user@example.com",
@@ -672,6 +741,35 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(utility_inputs["Calculation_Type"], "UTILITY")
         self.assertEqual(utility_inputs["Application_Utility"], "MoldenMerge")
         self.assertEqual(utility_inputs["molden.dat"], "airavata-dp://molden")
+
+        run.utility_application = "CnvLinFull"
+        utility_inputs = views.build_airavata_input_values(
+            run,
+            {
+                "DumpOut": "airavata-dp://dump",
+                "ePolyscat_Input_Data": "airavata-dp://existing",
+            },
+        )
+        self.assertEqual(utility_inputs["Application_Utility"], "CnvLinFull")
+        self.assertEqual(
+            utility_inputs["ePolyscat_Input_Data"],
+            "airavata-dp://existing,airavata-dp://dump",
+        )
+
+        run.run_mode = "workflow"
+        run.workflow_stage = "Analysis"
+        run.utility_application = "NRFPAD"
+        workflow_analysis_inputs = views.build_airavata_input_values(
+            run,
+            {"Cross_Section_Input_File": "airavata-dp://orient"},
+        )
+        self.assertEqual(workflow_analysis_inputs["Calculation_Type"], "WORKFLOW")
+        self.assertEqual(workflow_analysis_inputs["Application_Workflow"], "Analysis")
+        self.assertEqual(workflow_analysis_inputs["Application_Utility"], "NRFPAD")
+        self.assertEqual(
+            workflow_analysis_inputs["ePolyscat_Input_Data"],
+            "airavata-dp://orient",
+        )
 
     def test_run_serializer_exposes_workflow_presentation_metadata(self):
         user = get_user_model().objects.create_user(

@@ -278,6 +278,10 @@ export default {
       type: Object,
       default: () => ({}),
     },
+    applicationModuleId: {
+      type: String,
+      default: null,
+    },
     disabled: {
       type: Boolean,
       default: false,
@@ -387,7 +391,8 @@ export default {
       };
     },
     epolyscatApplicationModuleId() {
-      return this.$store.getters["settings/epolyscatApplicationModuleId"];
+      return this.applicationModuleId
+          || this.$store.getters["settings/epolyscatApplicationModuleId"];
     },
     filteredSaveTargetOptions() {
       const query = this.saveTargetSearch.trim().toLowerCase();

@@ -51,6 +51,13 @@ EPOLYSCAT_SERVICE = (
     / "service"
     / "epolyscat-service.js"
 )
+SETTINGS_STORE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "store"
+    / "modules"
+    / "settings.store.js"
+)
 
 
 def _source():
@@ -582,6 +589,23 @@ def test_create_run_preserves_resource_and_submission_controls():
     assert "ApplicationDeploymentService.list" in resource_source
     assert "adpf-queue-settings-editor" in resource_source
     assert 'v-on:click="onSave(false)"' in source
+
+
+def test_create_run_filters_resources_for_the_selected_application_module():
+    create_source = _source()
+    resource_source = _resource_settings_source()
+    settings_source = SETTINGS_STORE.read_text()
+
+    assert ':application-module-id="resourceApplicationModuleId"' in create_source
+    assert "resourceApplicationModuleId()" in create_source
+    assert "gaussian16ApplicationModuleId" in create_source
+    assert "openmolcasApplicationModuleId" in create_source
+    assert "applicationModuleId" in resource_source
+    assert "this.applicationModuleId" in resource_source
+    assert "GAUSSIAN16_APPLICATION_ID" in settings_source
+    assert "OPENMOLCAS_APPLICATION_ID" in settings_source
+    assert "gaussian16ApplicationModuleId" in settings_source
+    assert "openmolcasApplicationModuleId" in settings_source
 
 
 def test_create_run_and_workflow_reuse_same_resource_settings_component():

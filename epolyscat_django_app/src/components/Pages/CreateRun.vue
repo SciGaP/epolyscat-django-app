@@ -410,6 +410,7 @@
           ref="runResourceSettings"
           :run="run"
           :input-state="inputState"
+          :application-module-id="resourceApplicationModuleId"
           v-on:updateResources="updateResources"
       />
 
@@ -945,6 +946,20 @@ export default {
       return this.activeWorkflowApplications.find(
           application => application.id === this.activeWorkflowApplicationId
       ) || this.activeWorkflowApplications[0] || this.activeRunApplication;
+    },
+    resourceApplicationModuleId() {
+      const epolyscatApplicationModuleId = this.$store.getters[
+          "settings/epolyscatApplicationModuleId"
+      ];
+      if (this.activeExecutionApplication && this.activeExecutionApplication.id === "Gaussian16") {
+        return this.$store.getters["settings/gaussian16ApplicationModuleId"]
+            || epolyscatApplicationModuleId;
+      }
+      if (this.activeExecutionApplication && this.activeExecutionApplication.id === "OpenMolcas") {
+        return this.$store.getters["settings/openmolcasApplicationModuleId"]
+            || epolyscatApplicationModuleId;
+      }
+      return epolyscatApplicationModuleId;
     },
     activeWorkflowApplicationId() {
       if (this.selectedRunType !== "workflow") {

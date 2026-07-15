@@ -419,6 +419,486 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(scheduling.totalPhysicalMemory, 4096)
         mock_launch.assert_called_once_with(request, "experiment-id")
 
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_gaussian_module_adds_staged_input_to_command_line(self, mock_launch):
+        user = get_user_model().objects.create_user(username="gaussian-module")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        application_inputs = [
+            SimpleNamespace(
+                name="Calculation_Type",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="EPOLYSCAT_Application_Module",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="Gaussian_Inputs",
+                type=4,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=False,
+            ),
+        ]
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=application_inputs,
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="experiment-id"),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName="cluster")
+            ),
+        )
+        run = self.create_run(user)
+        run.run_mode = "module"
+        run.module_application = "Gaussian16"
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "compute-id"
+
+        views.RunViewSet()._create_remote_execution(
+            request,
+            run,
+            {},
+            "app-id",
+            {
+                "Calculation_Type": "MODULE",
+                "EPOLYSCAT_Application_Module": "Gaussian16",
+                "Gaussian_Inputs": "airavata-dp://gaussian-input",
+            },
+            is_tutorial=False,
+        )
+
+        experiment = request.airavata_client.createExperiment.call_args.args[2]
+        gaussian_input = next(
+            inp for inp in experiment.experimentInputs
+            if inp.name == "Gaussian_Inputs"
+        )
+        self.assertTrue(gaussian_input.requiredToAddedToCommandLine)
+        mock_launch.assert_called_once_with(request, "experiment-id")
+
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_gaussian_workflow_adds_application_and_input_to_command_line(
+        self, mock_launch
+    ):
+        user = get_user_model().objects.create_user(username="gaussian-workflow")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        application_inputs = [
+            SimpleNamespace(
+                name="Calculation_Type",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="Application_Workflow",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="Data_Gen",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=False,
+            ),
+            SimpleNamespace(
+                name="Gaussian_Inputs",
+                type=4,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=False,
+            ),
+        ]
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=application_inputs,
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="experiment-id"),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName="cluster")
+            ),
+        )
+        run = self.create_run(user)
+        run.run_mode = "workflow"
+        run.workflow_stage = "Data_Gen"
+        run.workflow_application = "Gaussian16"
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "compute-id"
+
+        views.RunViewSet()._create_remote_execution(
+            request,
+            run,
+            {},
+            "app-id",
+            {
+                "Calculation_Type": "WORKFLOW",
+                "Application_Workflow": "Data_Gen",
+                "Data_Gen": "Gaussian16",
+                "Gaussian_Inputs": "airavata-dp://gaussian-input",
+            },
+            is_tutorial=False,
+        )
+
+        experiment = request.airavata_client.createExperiment.call_args.args[2]
+        command_line_flags = {
+            inp.name: inp.requiredToAddedToCommandLine
+            for inp in experiment.experimentInputs
+        }
+        self.assertTrue(command_line_flags["Data_Gen"])
+        self.assertTrue(command_line_flags["Gaussian_Inputs"])
+        mock_launch.assert_called_once_with(request, "experiment-id")
+
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_direct_epolyscat_deployment_only_passes_command_input_file(
+        self, mock_launch
+    ):
+        user = get_user_model().objects.create_user(username="direct-epolyscat")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        application_inputs = [
+            SimpleNamespace(
+                name="Calculation_Type",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="EPOLYSCAT_Application_Module",
+                type=0,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="ePolyScat_Input_Data",
+                type=4,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+            SimpleNamespace(
+                name="ePolyscat_Input_File",
+                type=3,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+        ]
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=application_inputs,
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="experiment-id"),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName="frontera")
+            ),
+        )
+        run = self.create_run(user)
+        run.run_mode = "module"
+        run.module_application = "ePolyScat"
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "frontera"
+
+        input_values = {
+            "Calculation_Type": "MODULE",
+            "EPOLYSCAT_Application_Module": "ePolyScat",
+            "ePolyScat_Input_Data": "airavata-dp://molden",
+            "ePolyscat_Input_File": "airavata-dp://commands",
+        }
+        views.RunViewSet()._create_remote_execution(
+            request,
+            run,
+            input_values,
+            "app-id",
+            input_values,
+            is_tutorial=False,
+            deployment_executable_path="/opt/epolyscat/bin/ePolyScat",
+        )
+
+        experiment = request.airavata_client.createExperiment.call_args.args[2]
+        command_line_flags = {
+            inp.name: inp.requiredToAddedToCommandLine
+            for inp in experiment.experimentInputs
+        }
+        self.assertEqual(
+            command_line_flags,
+            {
+                "Calculation_Type": False,
+                "EPOLYSCAT_Application_Module": False,
+                "ePolyScat_Input_Data": False,
+                "ePolyscat_Input_File": True,
+            },
+        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
+
+    @override_settings(
+        GATEWAY_ID="test-gateway",
+        EPOLYSCAT={
+            "EPOLYSCAT_APPLICATION_ID": "epolyscat-module",
+            "GAUSSIAN16_APPLICATION_ID": "gaussian-module",
+        },
+    )
+    @mock.patch("epolyscat_django_app.views.user_storage.save_input_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    def test_gaussian_module_uses_dedicated_interface_and_input_name(
+        self,
+        mock_open_file,
+        mock_save_input_file,
+    ):
+        user = get_user_model().objects.create_user(username="gaussian-route")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        request.airavata_client = SimpleNamespace(
+            getAllApplicationInterfaces=mock.Mock(
+                return_value=[
+                    SimpleNamespace(
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
+                    ),
+                    SimpleNamespace(
+                        applicationInterfaceId="gaussian-interface",
+                        applicationModules=["gaussian-module"],
+                    ),
+                ]
+            )
+        )
+        mock_open_file.return_value = StringIO("gaussian input")
+        mock_save_input_file.return_value = SimpleNamespace(
+            productUri="airavata-dp://staged-gaussian"
+        )
+        run = self.create_run(user)
+        run.run_mode = "module"
+        run.module_application = "Gaussian16"
+        run.save()
+        input_model = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="Gaussian_Input",
+        )
+        models.File.objects.create(
+            input=input_model,
+            name="gaussian.in",
+            data_product_uri="airavata-dp://source-gaussian",
+        )
+        viewset = views.RunViewSet()
+        viewset._create_remote_execution = mock.Mock()
+
+        viewset._submit_single_run(request, run, is_tutorial=False)
+
+        expected_inputs = {"Input_File": "airavata-dp://staged-gaussian"}
+        viewset._create_remote_execution.assert_called_once_with(
+            request,
+            run,
+            expected_inputs,
+            "gaussian-interface",
+            expected_inputs,
+            False,
+        )
+
+    @override_settings(
+        EPOLYSCAT={
+            "EPOLYSCAT_APPLICATION_ID": "epolyscat-module",
+            "GAUSSIAN16_APPLICATION_ID": "gaussian-module",
+            "OPENMOLCAS_APPLICATION_ID": "openmolcas-module",
+        }
+    )
+    def test_api_settings_exposes_gaussian_application_module(self):
+        user = get_user_model().objects.create_user(username="api-settings")
+        request = RequestFactory().get("/api/settings/")
+        request.user = user
+
+        response = views.api_settings(request)
+
+        self.assertEqual(
+            response.data["EPOLYSCAT"],
+            {
+                "EPOLYSCAT_APPLICATION_ID": "epolyscat-module",
+                "GAUSSIAN16_APPLICATION_ID": "gaussian-module",
+                "OPENMOLCAS_APPLICATION_ID": "openmolcas-module",
+            },
+        )
+
+    @override_settings(
+        GATEWAY_ID="test-gateway",
+        EPOLYSCAT={
+            "EPOLYSCAT_APPLICATION_ID": "epolyscat-module",
+            "OPENMOLCAS_APPLICATION_ID": "openmolcas-module",
+        },
+    )
+    @mock.patch("epolyscat_django_app.views.user_storage.save_input_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    def test_openmolcas_module_uses_dedicated_interface_and_input_name(
+        self,
+        mock_open_file,
+        mock_save_input_file,
+    ):
+        user = get_user_model().objects.create_user(username="openmolcas-route")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        request.airavata_client = SimpleNamespace(
+            getAllApplicationInterfaces=mock.Mock(
+                return_value=[
+                    SimpleNamespace(
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
+                    ),
+                    SimpleNamespace(
+                        applicationInterfaceId="openmolcas-interface",
+                        applicationModules=["openmolcas-module"],
+                    ),
+                ]
+            )
+        )
+        mock_open_file.return_value = StringIO("openmolcas input")
+        mock_save_input_file.return_value = SimpleNamespace(
+            productUri="airavata-dp://staged-openmolcas"
+        )
+        run = self.create_run(user)
+        run.run_mode = "module"
+        run.module_application = "OpenMolcas"
+        run.save()
+        input_model = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="Molcas_Input",
+        )
+        models.File.objects.create(
+            input=input_model,
+            name="molcas.input",
+            data_product_uri="airavata-dp://source-openmolcas",
+        )
+        viewset = views.RunViewSet()
+        viewset._create_remote_execution = mock.Mock()
+
+        viewset._submit_single_run(request, run, is_tutorial=False)
+
+        expected_inputs = {
+            "OpenMolcas input file": "airavata-dp://staged-openmolcas"
+        }
+        viewset._create_remote_execution.assert_called_once_with(
+            request,
+            run,
+            expected_inputs,
+            "openmolcas-interface",
+            expected_inputs,
+            False,
+        )
+
+    @override_settings(
+        GATEWAY_ID="test-gateway",
+        EPOLYSCAT={"EPOLYSCAT_APPLICATION_ID": "epolyscat-module"},
+    )
+    @mock.patch("epolyscat_django_app.views.user_storage.save_input_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    def test_epolyscat_module_passes_selected_deployment_entrypoint_to_execution(
+        self,
+        mock_open_file,
+        mock_save_input_file,
+    ):
+        user = get_user_model().objects.create_user(username="epolyscat-route")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        request.airavata_client = SimpleNamespace(
+            getAllApplicationInterfaces=mock.Mock(
+                return_value=[
+                    SimpleNamespace(
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
+                    ),
+                ]
+            ),
+            getAllApplicationDeployments=mock.Mock(
+                return_value=[
+                    SimpleNamespace(
+                        appModuleId="epolyscat-module",
+                        computeHostId="frontera",
+                        executablePath="/opt/epolyscat/bin/ePolyScat",
+                    ),
+                ]
+            ),
+        )
+        mock_open_file.return_value = StringIO("input")
+        mock_save_input_file.side_effect = [
+            SimpleNamespace(productUri="airavata-dp://staged-molden"),
+            SimpleNamespace(productUri="airavata-dp://staged-commands"),
+        ]
+        run = self.create_run(user)
+        run.run_mode = "module"
+        run.module_application = "ePolyScat"
+        run.compute_resource_id = "frontera"
+        run.save()
+        data_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="ePolyScat_Input_Data",
+        )
+        models.File.objects.create(
+            input=data_input,
+            name="water.scf.molden",
+            data_product_uri="airavata-dp://source-molden",
+        )
+        command_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="ePolyscat_Input_File",
+        )
+        models.File.objects.create(
+            input=command_input,
+            name="test03.inp",
+            data_product_uri="airavata-dp://source-commands",
+        )
+        viewset = views.RunViewSet()
+        viewset._create_remote_execution = mock.Mock()
+
+        viewset._submit_single_run(request, run, is_tutorial=False)
+
+        self.assertEqual(
+            viewset._create_remote_execution.call_args.kwargs,
+            {"deployment_executable_path": "/opt/epolyscat/bin/ePolyScat"},
+        )
+        positional = viewset._create_remote_execution.call_args.args
+        self.assertEqual(positional[3], "epolyscat-interface")
+        self.assertEqual(
+            positional[4]["ePolyscat_Input_File"],
+            "airavata-dp://staged-commands",
+        )
+
     @mock.patch("epolyscat_django_app.views.user_storage.save_input_file")
     @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     def test_resubmit_calls_create_remote_execution_with_current_signature(
@@ -666,6 +1146,16 @@ class RunViewSetBackendTests(TestCase):
             name="Workflow_Application",
             value="OpenMolcas",
         )
+        molcas_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="Molcas_Input",
+        )
+        models.File.objects.create(
+            input=molcas_input,
+            name="molcas.input",
+            data_product_uri="airavata-dp://source-openmolcas",
+        )
         serializer = mock.Mock()
         serializer.is_valid.return_value = None
         serializer.save.return_value = run
@@ -675,15 +1165,22 @@ class RunViewSetBackendTests(TestCase):
         viewset = views.RunViewSet()
         viewset.get_object = mock.Mock(return_value=run)
         viewset.get_serializer = mock.Mock(side_effect=[serializer, response_serializer])
-        viewset._get_eployscat_app_interface_id = mock.Mock(return_value="app-id")
+        viewset._get_run_app_interface_id = mock.Mock(return_value="app-id")
         viewset._create_remote_execution = mock.Mock()
 
-        result = viewset.submit(request, pk=run.id)
+        with mock.patch(
+            "epolyscat_django_app.views.user_storage.open_file",
+            return_value=StringIO("openmolcas input"),
+        ), mock.patch(
+            "epolyscat_django_app.views.user_storage.save_input_file",
+            return_value=SimpleNamespace(
+                productUri="airavata-dp://staged-openmolcas"
+            ),
+        ):
+            result = viewset.submit(request, pk=run.id)
 
         expected_inputs = {
-            "Calculation_Type": "WORKFLOW",
-            "Application_Workflow": "Data_Gen",
-            "Data_Gen": "OpenMolcas",
+            "OpenMolcas input file": "airavata-dp://staged-openmolcas",
         }
         viewset._create_remote_execution.assert_called_once_with(
             request,

@@ -40,6 +40,7 @@ from rest_framework.response import Response
 
 from epolyscat_django_app import (
     models,
+    remote_launch_contract,
     runtime_audit as runtime_audit_domain,
     serializers,
     workflow_continuation as workflow_continuation_domain,
@@ -96,6 +97,19 @@ GENERIC_POSTPROCESSING_INPUT_NAMES = (
     "ePolyscat_Input_Data",
     "ePolyScat_Input_Data",
 )
+DATA_GENERATION_FILE_INPUT_NAMES = {
+    "Gaussian16": "Gaussian_Inputs",
+    "OpenMolcas": "Molcas_Inputs",
+}
+DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID = (
+    "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
+)
+DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID = (
+    "Gaussian16_4971a157-cad4-45cd-9aba-a994273c5046"
+)
+DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID = (
+    "OpenMolcas_a47aae08-dca8-45fc-8a43-0b396c8ee2a2"
+)
 
 
 def _first_nonblank(*values):
@@ -137,6 +151,71 @@ def _add_utility_file_input_compatibility(input_values, utility_application):
     collection_value = ",".join(data_product_uris)
     for input_name in GENERIC_POSTPROCESSING_INPUT_NAMES:
         input_values[input_name] = collection_value
+
+
+def _command_line_input_names(input_values):
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    application = ""
+    command_line_input_names = set()
+
+    if mode == "MODULE":
+        application = input_values.get("EPOLYSCAT_Application_Module") or ""
+    elif (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Data_Gen"
+    ):
+        command_line_input_names.add("Data_Gen")
+        application = input_values.get("Data_Gen") or ""
+
+    file_input_name = DATA_GENERATION_FILE_INPUT_NAMES.get(application)
+    if file_input_name and input_values.get(file_input_name):
+        command_line_input_names.add(file_input_name)
+
+    return command_line_input_names
+
+
+def _uses_dedicated_gaussian_interface(run):
+    if getattr(run, "run_mode", "") == "module":
+        return getattr(run, "module_application", "") == "Gaussian16"
+    return (
+        getattr(run, "run_mode", "") == "workflow"
+        and _normalize_workflow_stage(getattr(run, "workflow_stage", ""))
+        == "Data_Gen"
+        and getattr(run, "workflow_application", "") == "Gaussian16"
+    )
+
+
+def _uses_dedicated_openmolcas_interface(run):
+    if getattr(run, "run_mode", "") == "module":
+        return getattr(run, "module_application", "") == "OpenMolcas"
+    return (
+        getattr(run, "run_mode", "") == "workflow"
+        and _normalize_workflow_stage(getattr(run, "workflow_stage", ""))
+        == "Data_Gen"
+        and getattr(run, "workflow_application", "") == "OpenMolcas"
+    )
+
+
+def _application_input_values(run, input_values):
+    if _uses_dedicated_openmolcas_interface(run):
+        openmolcas_input = input_values.get("Molcas_Inputs") or input_values.get(
+            "Molcas_Input"
+        )
+        if not openmolcas_input:
+            return {}
+        return {
+            "OpenMolcas input file": str(openmolcas_input).split(",", 1)[0]
+        }
+
+    if _uses_dedicated_gaussian_interface(run):
+        gaussian_input = input_values.get("Gaussian_Inputs") or input_values.get(
+            "Gaussian_Input"
+        )
+        if not gaussian_input:
+            return {}
+        return {"Input_File": str(gaussian_input).split(",", 1)[0]}
+
+    return input_values
 
 
 def build_airavata_input_values(run, input_values):
@@ -752,9 +831,6 @@ class RunViewSet(viewsets.ModelViewSet):
         )
 
     def _submit_single_run(self, request, run, is_tutorial):
-        # change to api call
-        app_interface_id = self._get_eployscat_app_interface_id(request)
-
         inputs = {};
 
         for input in run.inputs.all():
@@ -775,6 +851,16 @@ class RunViewSet(viewsets.ModelViewSet):
                 inputs[input.name] = input.value
 
         input_values = build_airavata_input_values(run, inputs)
+        input_values = _application_input_values(run, input_values)
+        app_interface_id = self._get_run_app_interface_id(request, run)
+        execution_options = {}
+        if not (
+            _uses_dedicated_gaussian_interface(run)
+            or _uses_dedicated_openmolcas_interface(run)
+        ):
+            execution_options["deployment_executable_path"] = (
+                self._get_run_deployment_executable_path(request, run)
+            )
         self._create_remote_execution(
             request,
             run,
@@ -782,6 +868,7 @@ class RunViewSet(viewsets.ModelViewSet):
             app_interface_id,
             input_values,
             is_tutorial,
+            **execution_options,
         )
 
         return run
@@ -1171,7 +1258,8 @@ class RunViewSet(viewsets.ModelViewSet):
         inputs: typing.Dict[str, str],
         app_interface_id: str,
         input_values: typing.Dict[str, str],
-        is_tutorial: bool
+        is_tutorial: bool,
+        deployment_executable_path: str = "",
     ) -> models.RemoteExecution:
 
         # Make sure that there aren't any currently running executions
@@ -1222,6 +1310,26 @@ class RunViewSet(viewsets.ModelViewSet):
         #crs.queueName = run.queue_name
         #experiment.userConfigurationData.computationalResourceScheduling = crs
 
+        command_line_input_names = _command_line_input_names(input_values)
+        try:
+            command_line_policy = (
+                remote_launch_contract.resolve_command_line_policy(
+                    executable_path=deployment_executable_path,
+                    input_values=input_values,
+                    forced_input_names=command_line_input_names,
+                )
+                if deployment_executable_path
+                else {
+                    "exclusive": False,
+                    "input_names": command_line_input_names,
+                }
+            )
+        except ValueError as error:
+            raise exceptions.ValidationError(str(error)) from error
+        remote_launch_contract.apply_command_line_policy(
+            experiment.experimentInputs,
+            command_line_policy,
+        )
         for inp in experiment.experimentInputs:
             if inp.name in input_values:
                 inp.value = input_values[inp.name]
@@ -1278,10 +1386,7 @@ class RunViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-    def _get_eployscat_app_interface_id(self, request):
-        app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
-            "EPOLYSCAT_APPLICATION_ID", "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
-        )
+    def _get_app_interface_id_for_module(self, request, app_module_id):
         all_app_interfaces = request.airavata_client.getAllApplicationInterfaces(
             request.authz_token, settings.GATEWAY_ID
         )
@@ -1298,6 +1403,44 @@ class RunViewSet(viewsets.ModelViewSet):
                 f"Could not figure out the applicationInterfaceId for app module {app_module_id}"
             )
         return app_interface_id
+
+    def _get_eployscat_app_interface_id(self, request):
+        app_module_id = self._get_run_application_module_id(None)
+        return self._get_app_interface_id_for_module(request, app_module_id)
+
+    def _get_run_application_module_id(self, run):
+        if run is not None and _uses_dedicated_gaussian_interface(run):
+            return getattr(settings, "EPOLYSCAT", {}).get(
+                "GAUSSIAN16_APPLICATION_ID",
+                DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID,
+            )
+        if run is not None and _uses_dedicated_openmolcas_interface(run):
+            return getattr(settings, "EPOLYSCAT", {}).get(
+                "OPENMOLCAS_APPLICATION_ID",
+                DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID,
+            )
+        return getattr(settings, "EPOLYSCAT", {}).get(
+            "EPOLYSCAT_APPLICATION_ID",
+            DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID,
+        )
+
+    def _get_run_app_interface_id(self, request, run):
+        app_module_id = self._get_run_application_module_id(run)
+        return self._get_app_interface_id_for_module(request, app_module_id)
+
+    def _get_run_deployment_executable_path(self, request, run):
+        deployments = request.airavata_client.getAllApplicationDeployments(
+            request.authz_token,
+            settings.GATEWAY_ID,
+        )
+        try:
+            return remote_launch_contract.find_deployment_executable_path(
+                deployments,
+                application_module_id=self._get_run_application_module_id(run),
+                compute_resource_id=run.compute_resource_id,
+            )
+        except ValueError as error:
+            raise exceptions.ValidationError(str(error)) from error
 
     @action(
         detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
@@ -1784,13 +1927,30 @@ def user_run_file_exists(request, run, filename):
 
 @api_view(["GET"])
 def api_settings(request):
-    app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+    epolyscat_settings = getattr(settings, "EPOLYSCAT", {})
+    app_module_id = epolyscat_settings.get(
         "EPOLYSCAT_APPLICATION_ID",
         # "BSR:_B-Spline_atomic_R-matrix_code_9ae142cb-689f-4440-8d2d-e131f2891005"
         #"BSR3_82b15174-04a1-471e-82a3-33c77c8c6281"
-        "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
+        DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID,
     )
-    return response.Response({"EPOLYSCAT": {"EPOLYSCAT_APPLICATION_ID": app_module_id}})
+    gaussian_app_module_id = epolyscat_settings.get(
+        "GAUSSIAN16_APPLICATION_ID",
+        DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID,
+    )
+    openmolcas_app_module_id = epolyscat_settings.get(
+        "OPENMOLCAS_APPLICATION_ID",
+        DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID,
+    )
+    return response.Response(
+        {
+            "EPOLYSCAT": {
+                "EPOLYSCAT_APPLICATION_ID": app_module_id,
+                "GAUSSIAN16_APPLICATION_ID": gaussian_app_module_id,
+                "OPENMOLCAS_APPLICATION_ID": openmolcas_app_module_id,
+            }
+        }
+    )
 
 
 def get_run_output_data_product_uri(request, run: models.Run, data_type: str):

@@ -465,15 +465,15 @@ export function buildEPolyScatInputScript(values, outputDefinitions = []) {
         "DipoleOp",
         "GetPot",
         "PhIon",
-        "GetCro",
-        ...buildOutputFileNameRecords(values, outputDefinitions, ["PlotData"])
+        ...buildOutputFileNameRecords(values, outputDefinitions, ["PlotData"]),
+        "GetCro"
     );
   } else {
     lines.push(
         "GetPot",
         `Scat ${values.scatEng}`,
-        "TotalCrossSection",
-        ...buildOutputFileNameRecords(values, outputDefinitions, ["PlotData"])
+        ...buildOutputFileNameRecords(values, outputDefinitions, ["PlotData"]),
+        "TotalCrossSection"
     );
   }
 

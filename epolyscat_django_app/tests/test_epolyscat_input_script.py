@@ -358,7 +358,7 @@ def test_workflow_output_binding_uses_manual_specific_file_flow():
           sourceApplicationId: "Gaussian16",
         });
         assertEqual("Gaussian input", gaussianBinding.outputFile.name, "gaussian.log");
-        assertEqual("Gaussian convert source", gaussianBinding.dataEntryValues.convertSource, "gaussian.log");
+        assertEqual("Gaussian convert source", gaussianBinding.dataEntryValues.convertSource, "$pt/gaussian.log");
         assertEqual("Gaussian convert format", gaussianBinding.dataEntryValues.convertFormat, "gaussian");
 
         const molcasBinding = buildWorkflowOutputInputBinding({
@@ -367,7 +367,7 @@ def test_workflow_output_binding_uses_manual_specific_file_flow():
           sourceApplicationId: "OpenMolcas",
         });
         assertEqual("OpenMolcas input", molcasBinding.outputFile.name, "molden.dat");
-        assertEqual("OpenMolcas convert source", molcasBinding.dataEntryValues.convertSource, "molden.dat");
+        assertEqual("OpenMolcas convert source", molcasBinding.dataEntryValues.convertSource, "$pt/molden.dat");
         assertEqual("OpenMolcas convert format", molcasBinding.dataEntryValues.convertFormat, "molden");
 
         const noCnvLinFullBinding = buildWorkflowOutputInputBinding({
@@ -394,6 +394,85 @@ def test_workflow_output_binding_uses_manual_specific_file_flow():
         });
         assertEqual("CnvLinFull input", cnvLinFullBinding.outputFile.name, "test15dumpidy.dat");
         assertEqual("CnvLinFull input name", cnvLinFullBinding.inputFileName, "DumpOut");
+        """
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_generated_output_destinations_precede_the_commands_that_write_them():
+    script = textwrap.dedent(
+        """
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const { buildEPolyScatInputScript } = moduleObject.exports;
+        const baseValues = {
+          title: "manual-backed output ordering",
+          lMax: 15,
+          lMaxI: 15,
+          eMax: 50,
+          fegeEng: 13,
+          scatEng: "3.0 4.0",
+          engFormCharge: 0,
+          engFormType: 0,
+          engFormTerms: 0,
+          vCorr: "PZ",
+          asyPolSwitchD: 1,
+          asyPolTerms: 1,
+          asyPolCenter: 1,
+          asyPolValue: 10,
+          scatContSym: "SG",
+          scatSym: "A1",
+          lMaxK: 4,
+          convertSource: "$pt/input.molden",
+          convertFormat: "molden",
+          initSym: "A1",
+          initSpinDeg: 1,
+          orbOccInit: "2 2",
+          orbOcc: "2 1",
+          spinDeg: 1,
+          targSym: "A1",
+          targSpinDeg: 1,
+          iPot: 1,
+          plotDataFile: "cross-sections.dat",
+        };
+        const outputDefinitions = [{
+          fileType: "PlotData",
+          valueKey: "plotDataFile",
+          disposition: "REWIND",
+        }];
+
+        function assertBefore(contents, first, second) {
+          const firstIndex = contents.indexOf(first);
+          const secondIndex = contents.indexOf(second);
+          if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
+            throw new Error(`Expected ${first} before ${second}\n${contents}`);
+          }
+        }
+
+        const scattering = buildEPolyScatInputScript({
+          ...baseValues,
+          calculationKind: "scattering",
+        }, outputDefinitions);
+        assertBefore(scattering, "FileName 'PlotData'", "TotalCrossSection");
+
+        const photoionization = buildEPolyScatInputScript({
+          ...baseValues,
+          calculationKind: "photoionization",
+        }, outputDefinitions);
+        assertBefore(photoionization, "FileName 'PlotData'", "GetCro");
         """
     )
 

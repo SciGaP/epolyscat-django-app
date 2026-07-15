@@ -31,7 +31,7 @@ def test_gaussian_output_binds_to_epolyscat_convert_input():
     assert result["input_file_name"] == "ePolyScat_Input_Data"
     assert result["selected"]["name"] == "gaussian.log"
     assert result["data_entry_values"] == {
-        "convertSource": "gaussian.log",
+        "convertSource": "$pt/gaussian.log",
         "convertFormat": "gaussian",
     }
 
@@ -48,6 +48,7 @@ def test_openmolcas_output_binds_molden_file_to_epolyscat():
 
     assert result["status"] == "ready"
     assert result["selected"]["name"] == "water.scf.molden"
+    assert result["data_entry_values"]["convertSource"] == "$pt/water.scf.molden"
     assert result["data_entry_values"]["convertFormat"] == "molden"
 
 

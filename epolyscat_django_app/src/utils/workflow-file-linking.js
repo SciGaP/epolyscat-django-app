@@ -6,6 +6,12 @@ function normalizedFileType(file) {
   return String(file && (file.fileType || file.file_type || file.type) ? (file.fileType || file.file_type || file.type) : "").toLowerCase();
 }
 
+function stagedInputReference(file) {
+  const fileName = String(file && file.name ? file.name : "");
+  const baseName = fileName.split(/[\\/]/).pop();
+  return baseName ? `$pt/${baseName}` : "";
+}
+
 function findPreferredFile(outputFiles, predicates) {
   const files = Array.isArray(outputFiles) ? outputFiles : [];
 
@@ -97,7 +103,7 @@ function buildEPolyScatInputDataBinding(outputFiles, sourceApplicationId) {
   }
 
   return buildInputBinding("ePolyScat_Input_Data", outputFile, {
-    convertSource: outputFile.name,
+    convertSource: stagedInputReference(outputFile),
     convertFormat: sourceIsGaussian ? "gaussian" : "molden",
   });
 }

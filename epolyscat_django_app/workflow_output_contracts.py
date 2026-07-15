@@ -33,6 +33,11 @@ def _filename(file_data):
     return str(_value(file_data, "name", "filename", "fileName") or "")
 
 
+def _staged_input_reference(file_data):
+    filename = os.path.basename(_filename(file_data))
+    return f"$pt/{filename}" if filename else ""
+
+
 def _serialized_file(file_data):
     if isinstance(file_data, dict):
         return file_data
@@ -133,7 +138,6 @@ def resolve_workflow_output_binding(
             if not candidates:
                 continue
             selected = candidates[0]
-            filename = _filename(selected)
             return {
                 "status": "ready",
                 "input_file_name": input_file_name,
@@ -141,7 +145,7 @@ def resolve_workflow_output_binding(
                 "selected": _serialized_file(selected),
                 "candidates": [_serialized_file(file_data) for file_data in candidates],
                 "data_entry_values": {
-                    "convertSource": filename,
+                    "convertSource": _staged_input_reference(selected),
                     "convertFormat": (
                         "gaussian" if expected_role == "gaussian_output" else "molden"
                     ),

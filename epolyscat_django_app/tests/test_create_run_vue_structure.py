@@ -1310,6 +1310,33 @@ def test_data_entry_file_view_is_editable_and_syncs_to_table_values():
         assert hook in source
 
 
+def test_data_entry_table_exposes_lossless_ordered_record_and_command_editor():
+    source = _source() + _input_script_source()
+
+    expected_hooks = [
+        "Ordered Sequence",
+        'activeDataEntrySection.type === \'sequence\'',
+        'class="ordered-sequence-toolbar"',
+        'class="ordered-sequence-list"',
+        "dataEntrySequenceNodes",
+        "sequenceNodeType",
+        "sequenceNodeLabel",
+        "sequenceNodeLabelOptions",
+        "appendDataEntrySequenceNode",
+        "replaceDataEntrySequenceNode",
+        "removeDataEntrySequenceNode",
+        "moveDataEntrySequenceNode",
+        "listEPolyScatSequenceNodes",
+        "appendEPolyScatSequenceNode",
+        "replaceEPolyScatSequenceNode",
+        "removeEPolyScatSequenceNode",
+        "moveEPolyScatSequenceNode",
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+
 def test_uploaded_file_table_uses_blank_missing_values_with_default_placeholders():
     source = _source()
 

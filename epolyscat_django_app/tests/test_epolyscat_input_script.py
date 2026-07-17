@@ -434,6 +434,98 @@ def test_lossless_patch_changes_only_last_effective_repeated_record():
     assert result.returncode == 0, result.stderr
 
 
+def test_ordered_sequence_editor_mutations_preserve_nonsemantic_source_and_order():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const {
+          appendEPolyScatSequenceNode,
+          listEPolyScatSequenceNodes,
+          moveEPolyScatSequenceNode,
+          removeEPolyScatSequenceNode,
+          replaceEPolyScatSequenceNode,
+        } = moduleObject.exports;
+        const original = [
+          "# ordered calculation\r\n",
+          "ScatContSym 'SG'  # first symmetry\r\n",
+          "Scat\r\n",
+          "# keep this separator exactly\r\n",
+          "FutureRecord   keep spacing\r\n",
+          "ScatContSym 'SU'\r\n",
+          "Scat",
+        ].join("");
+
+        const sequence = listEPolyScatSequenceNodes(original);
+        const labels = sequence.map(item => `${item.type}:${item.label}:${item.occurrence}`);
+        const expectedLabels = [
+          "DataRecord:ScatContSym:1",
+          "Command:Scat:1",
+          "Unknown:FutureRecord:1",
+          "DataRecord:ScatContSym:2",
+          "Command:Scat:2",
+        ];
+        if (JSON.stringify(labels) !== JSON.stringify(expectedLabels)) {
+          throw new Error(`Unexpected ordered projection: ${JSON.stringify(sequence, null, 2)}`);
+        }
+
+        const secondSymmetry = sequence[3];
+        const replaced = replaceEPolyScatSequenceNode(
+          original,
+          secondSymmetry.nodeIndex,
+          "ScatContSym 'B2U'  # replacement",
+        );
+        if (!replaced.includes("ScatContSym 'SG'  # first symmetry\r\n")) {
+          throw new Error(`Earlier repeated record changed:\n${replaced}`);
+        }
+        if (!replaced.includes("ScatContSym 'B2U'  # replacement\r\n")) {
+          throw new Error(`Replacement did not retain CRLF position:\n${replaced}`);
+        }
+
+        const moved = moveEPolyScatSequenceNode(original, sequence[4].nodeIndex, "up");
+        const expectedMovedFragment = [
+          "# keep this separator exactly\r\n",
+          "FutureRecord   keep spacing\r\n",
+          "Scat\r\n",
+          "ScatContSym 'SU'",
+        ].join("");
+        if (!moved.includes(expectedMovedFragment)) {
+          throw new Error(`Move changed separators or terminal line endings:\n${moved}`);
+        }
+
+        const removed = removeEPolyScatSequenceNode(original, sequence[2].nodeIndex);
+        if (removed.includes("FutureRecord")) {
+          throw new Error(`Unknown record was not removed:\n${removed}`);
+        }
+        if (!removed.includes("# keep this separator exactly\r\nScatContSym 'SU'")) {
+          throw new Error(`Comments around removed record changed:\n${removed}`);
+        }
+
+        const appended = appendEPolyScatSequenceNode(original, {
+          type: "Command",
+          label: "TotalCrossSection",
+        });
+        if (!appended.endsWith("Scat\r\nTotalCrossSection")) {
+          throw new Error(`Append did not follow the document newline convention:\n${appended}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_canonical_schema_covers_all_manual_sample_data_records():
     script = textwrap.dedent(
         r'''

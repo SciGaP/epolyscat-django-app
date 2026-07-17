@@ -395,6 +395,91 @@
                     </div>
                   </div>
 
+                  <div
+                      v-else-if="activeDataEntrySection.type === 'sequence'"
+                      class="ordered-sequence-editor"
+                  >
+                    <div class="ordered-sequence-toolbar">
+                      <b-form-select
+                          id="sequence-node-type"
+                          v-model="sequenceNodeType"
+                          :options="sequenceNodeTypeOptions"
+                          aria-label="Record or command type"
+                          class="ordered-sequence-select"
+                          v-on:input="onSequenceNodeTypeInput"
+                      />
+                      <b-form-select
+                          id="sequence-node-label"
+                          v-model="sequenceNodeLabel"
+                          :options="sequenceNodeLabelOptions"
+                          aria-label="Record or command name"
+                          class="ordered-sequence-select ordered-sequence-label-select"
+                      />
+                      <b-button
+                          type="button"
+                          variant="primary"
+                          class="ordered-sequence-add"
+                          v-on:click="appendDataEntrySequenceNode"
+                      >
+                        <b-icon icon="plus" aria-hidden="true" />
+                        Add
+                      </b-button>
+                    </div>
+
+                    <div class="ordered-sequence-list">
+                      <div
+                          v-for="(item, sequenceIndex) in dataEntrySequenceNodes"
+                          :key="`${item.nodeIndex}-${item.type}-${item.label}-${item.occurrence}`"
+                          class="ordered-sequence-row"
+                      >
+                        <div class="ordered-sequence-row-header">
+                          <span class="ordered-sequence-index">{{ sequenceIndex + 1 }}</span>
+                          <div class="ordered-sequence-identity">
+                            <strong>{{ item.label }}</strong>
+                            <span>{{ sequenceNodeTypeText(item.type) }} - occurrence {{ item.occurrence }}</span>
+                          </div>
+                          <div class="ordered-sequence-actions">
+                            <button
+                                type="button"
+                                class="ordered-sequence-action"
+                                :disabled="sequenceIndex === 0"
+                                title="Move up"
+                                aria-label="Move up"
+                                v-on:click="moveDataEntrySequenceNode(item.nodeIndex, 'up')"
+                            >
+                              <b-icon icon="chevron-up" aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                class="ordered-sequence-action"
+                                :disabled="sequenceIndex === dataEntrySequenceNodes.length - 1"
+                                title="Move down"
+                                aria-label="Move down"
+                                v-on:click="moveDataEntrySequenceNode(item.nodeIndex, 'down')"
+                            >
+                              <b-icon icon="chevron-down" aria-hidden="true" />
+                            </button>
+                            <button
+                                type="button"
+                                class="ordered-sequence-action ordered-sequence-remove"
+                                title="Remove"
+                                aria-label="Remove"
+                                v-on:click="removeDataEntrySequenceNode(item.nodeIndex)"
+                            >
+                              <b-icon icon="x" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                        <b-form-textarea
+                            :value="item.raw"
+                            :rows="item.multiline ? 5 : 2"
+                            class="ordered-sequence-source"
+                            v-on:change="replaceDataEntrySequenceNode(item.nodeIndex, $event)"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                 </section>
               </div>
             </div>
@@ -474,13 +559,19 @@ import UserStorage from "@/components/overlay/UserStorage";
 import { descriptions } from "@/fileData";
 import { InputService } from "@/service/epolyscat-service";
 import {
+  appendEPolyScatSequenceNode,
   buildEPolyScatInputScript as buildEPolyScatInputScriptFromValues,
   EPOLYSCAT_DATA_ENTRY_SECTIONS,
+  EPOLYSCAT_INPUT_SCHEMA,
   EPOLYSCAT_OUTPUT_DEFINITIONS,
   EPOLYSCAT_RECOMMENDED_VALUES as DEFAULT_DATA_ENTRY_VALUES,
+  listEPolyScatSequenceNodes,
+  moveEPolyScatSequenceNode,
   normalizeEPolyScatInputContents,
   parseEPolyScatInputScript as parseEPolyScatInputScriptFromContents,
   patchEPolyScatInputScript,
+  removeEPolyScatSequenceNode,
+  replaceEPolyScatSequenceNode,
 } from "@/utils/epolyscat-input-script";
 import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
 
@@ -709,6 +800,12 @@ export default {
       selectedInputFile: "ePolyscat_Input_File",
       selectedDataEntryTab: "grid-expansion",
       dataEntryViewMode: "table",
+      sequenceNodeType: "DataRecord",
+      sequenceNodeLabel: "LMax",
+      sequenceNodeTypeOptions: [
+        { value: "DataRecord", text: "Data record" },
+        { value: "Command", text: "Command" },
+      ],
 
       inpcContent: null,
       inpcContentType: 'text',
@@ -1109,6 +1206,15 @@ export default {
     },
     activeDataEntryTabLabel() {
       return this.activeDataEntrySection ? this.activeDataEntrySection.label : "";
+    },
+    dataEntrySequenceNodes() {
+      return listEPolyScatSequenceNodes(this.inpcContent || "");
+    },
+    sequenceNodeLabelOptions() {
+      const schemaItems = this.sequenceNodeType === "Command"
+          ? EPOLYSCAT_INPUT_SCHEMA.commands
+          : EPOLYSCAT_INPUT_SCHEMA.dataRecords;
+      return schemaItems.map(item => ({ value: item.label, text: item.label }));
     },
     ePolyScatInputScript() {
       return this.buildEPolyScatInputScript();
@@ -1628,6 +1734,41 @@ export default {
     selectDataEntryTab(tabId) {
       this.selectedDataEntryTab = tabId;
     },
+    onSequenceNodeTypeInput(type) {
+      this.sequenceNodeType = type;
+      const firstOption = this.sequenceNodeLabelOptions[0];
+      this.sequenceNodeLabel = firstOption ? firstOption.value : "";
+    },
+    sequenceNodeTypeText(type) {
+      if (type === "DataRecord") return "Data record";
+      if (type === "Command") return "Command";
+      return "Unrecognized input";
+    },
+    applyDataEntrySequenceContents(contents) {
+      this.inpcContentType = "text";
+      this.inpcContent = contents;
+      this.applyInpcContentToDataEntryValues(contents);
+      this.syncInpcContentToActiveInputFile();
+    },
+    appendDataEntrySequenceNode() {
+      const contents = appendEPolyScatSequenceNode(this.inpcContent || "", {
+        type: this.sequenceNodeType,
+        label: this.sequenceNodeLabel,
+      });
+      this.applyDataEntrySequenceContents(contents);
+    },
+    replaceDataEntrySequenceNode(nodeIndex, raw) {
+      const contents = replaceEPolyScatSequenceNode(this.inpcContent || "", nodeIndex, raw);
+      this.applyDataEntrySequenceContents(contents);
+    },
+    removeDataEntrySequenceNode(nodeIndex) {
+      const contents = removeEPolyScatSequenceNode(this.inpcContent || "", nodeIndex);
+      this.applyDataEntrySequenceContents(contents);
+    },
+    moveDataEntrySequenceNode(nodeIndex, direction) {
+      const contents = moveEPolyScatSequenceNode(this.inpcContent || "", nodeIndex, direction);
+      this.applyDataEntrySequenceContents(contents);
+    },
     fieldSelectOptions(field) {
       return [
         {
@@ -1750,7 +1891,7 @@ export default {
           || null;
     },
     applyInpcContentToDataEntryValues(contents, { releaseLock = true } = {}) {
-      if (!contents) {
+      if (contents == null) {
         return;
       }
 
@@ -1806,7 +1947,7 @@ export default {
       });
       const inputFile = inputFiles[this.generatedInputFileName];
 
-      if (!inputFile || !this.inpcContent || !this.isEPolyScatScriptInput) return;
+      if (!inputFile || this.inpcContent == null || !this.isEPolyScatScriptInput) return;
 
       const existingFile = inputFile.files.find(file =>
           !file.deleted &&
@@ -2732,6 +2873,137 @@ export default {
   text-align: right;
 }
 
+.ordered-sequence-editor {
+  min-width: 0;
+}
+
+.ordered-sequence-toolbar {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(132px, 0.45fr) minmax(180px, 1fr) auto;
+  margin-bottom: 16px;
+}
+
+.ordered-sequence-select {
+  border-color: #b7c0c9;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  height: 38px;
+  min-width: 0;
+}
+
+.ordered-sequence-add {
+  align-items: center;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 5px;
+  height: 38px;
+  justify-content: center;
+  min-width: 82px;
+}
+
+.ordered-sequence-list {
+  border-top: 1px solid #d8dde5;
+}
+
+.ordered-sequence-row {
+  border-bottom: 1px solid #e3e7eb;
+  padding: 12px 0;
+}
+
+.ordered-sequence-row-header {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  margin-bottom: 8px;
+}
+
+.ordered-sequence-index {
+  align-items: center;
+  background: #eef3f7;
+  border: 1px solid #d4dde5;
+  border-radius: 50%;
+  color: #314554;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.ordered-sequence-identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ordered-sequence-identity strong {
+  color: #1f2933;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ordered-sequence-identity span {
+  color: #61707c;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ordered-sequence-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.ordered-sequence-action {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #c8d0d7;
+  border-radius: 4px;
+  color: #314554;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+
+.ordered-sequence-action:hover:not(:disabled),
+.ordered-sequence-action:focus:not(:disabled) {
+  border-color: #226597;
+  color: #226597;
+  outline: 0;
+}
+
+.ordered-sequence-action:disabled {
+  color: #a8b0b7;
+  cursor: default;
+  opacity: 0.55;
+}
+
+.ordered-sequence-remove:hover:not(:disabled),
+.ordered-sequence-remove:focus:not(:disabled) {
+  border-color: #a83a3a;
+  color: #a83a3a;
+}
+
+.ordered-sequence-source {
+  border-color: #b7c0c9;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  min-height: 58px;
+  resize: vertical;
+  white-space: pre;
+}
+
 .data-entry-script-preview {
   background: #17212b;
   border-radius: 6px;
@@ -2806,8 +3078,13 @@ export default {
   }
 
   .manual-field-row,
-  .output-record-row {
+  .output-record-row,
+  .ordered-sequence-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .ordered-sequence-add {
+    justify-self: start;
   }
 
   .output-record-extension {

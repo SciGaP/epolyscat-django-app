@@ -289,6 +289,12 @@ export const EPOLYSCAT_DATA_ENTRY_SECTIONS = Object.freeze([
     recordGroup: "FileName records",
     type: "outputs",
   },
+  {
+    id: "ordered-sequence",
+    label: "Ordered Sequence",
+    recordGroup: "All data records and commands in file order",
+    type: "sequence",
+  },
 ]);
 
 export const EPOLYSCAT_OUTPUT_DEFINITIONS = Object.freeze([
@@ -635,6 +641,143 @@ export function serializeEPolyScatDocument(document) {
     return "";
   }
   return document.nodes.map(node => sourceLinesText(node.sourceLines || [])).join("");
+}
+
+const SEQUENCE_NODE_TYPES = new Set(["DataRecord", "Command", "Unknown"]);
+
+function isSequenceNode(node) {
+  return Boolean(node) && SEQUENCE_NODE_TYPES.has(node.type);
+}
+
+function stripOneTerminalLineEnding(value) {
+  return String(value == null ? "" : value).replace(/(?:\r\n|\r|\n)$/, "");
+}
+
+function sequenceNodeLabel(node) {
+  if (node.label) {
+    return node.label;
+  }
+  return node.keyword || "Unknown";
+}
+
+function sequenceNodeAt(document, nodeIndex) {
+  if (!Number.isInteger(nodeIndex) || !isSequenceNode(document.nodes[nodeIndex])) {
+    throw new RangeError(`No editable ePolyScat sequence node exists at index ${nodeIndex}.`);
+  }
+  return document.nodes[nodeIndex];
+}
+
+function nodeTerminalLineEnding(node) {
+  const sourceLines = node && Array.isArray(node.sourceLines) ? node.sourceLines : [];
+  const lastLine = sourceLines[sourceLines.length - 1];
+  return lastLine ? lastLine.eol : "";
+}
+
+function normalizeSequenceNodeText(value, newline, terminalLineEnding) {
+  const normalized = String(value == null ? "" : value).replace(/\r\n|\r|\n/g, newline);
+  return `${stripOneTerminalLineEnding(normalized)}${terminalLineEnding}`;
+}
+
+function sequenceNodeTextForPosition(value, terminalLineEnding) {
+  return `${stripOneTerminalLineEnding(value)}${terminalLineEnding}`;
+}
+
+export function listEPolyScatSequenceNodes(contents) {
+  const document = parseEPolyScatDocument(contents);
+  const occurrences = {};
+
+  return document.nodes.reduce((sequence, node, nodeIndex) => {
+    if (!isSequenceNode(node)) {
+      return sequence;
+    }
+
+    const label = sequenceNodeLabel(node);
+    const occurrenceKey = `${node.type}:${label}`;
+    occurrences[occurrenceKey] = (occurrences[occurrenceKey] || 0) + 1;
+    sequence.push({
+      nodeIndex,
+      type: node.type,
+      label,
+      occurrence: occurrences[occurrenceKey],
+      raw: stripOneTerminalLineEnding(node.raw),
+      multiline: Array.isArray(node.sourceLines) && node.sourceLines.length > 1,
+      sourceSpan: { ...node.sourceSpan },
+    });
+    return sequence;
+  }, []);
+}
+
+export function replaceEPolyScatSequenceNode(contents, nodeIndex, raw) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  const replacement = normalizeSequenceNodeText(
+      raw,
+      document.newline || "\n",
+      nodeTerminalLineEnding(node)
+  );
+  return `${document.source.slice(0, node.sourceSpan.start)}${replacement}${document.source.slice(node.sourceSpan.end)}`;
+}
+
+export function removeEPolyScatSequenceNode(contents, nodeIndex) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  return `${document.source.slice(0, node.sourceSpan.start)}${document.source.slice(node.sourceSpan.end)}`;
+}
+
+export function moveEPolyScatSequenceNode(contents, nodeIndex, direction) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  const sequenceIndexes = document.nodes.reduce((indexes, candidate, candidateIndex) => {
+    if (isSequenceNode(candidate)) {
+      indexes.push(candidateIndex);
+    }
+    return indexes;
+  }, []);
+  const sequenceIndex = sequenceIndexes.indexOf(nodeIndex);
+  const delta = direction === "up" || direction === -1 ? -1 : 1;
+  const targetNodeIndex = sequenceIndexes[sequenceIndex + delta];
+  if (targetNodeIndex === undefined) {
+    return document.source;
+  }
+
+  const targetNode = document.nodes[targetNodeIndex];
+  const firstNode = node.sourceSpan.start < targetNode.sourceSpan.start ? node : targetNode;
+  const secondNode = firstNode === node ? targetNode : node;
+  const firstReplacement = sequenceNodeTextForPosition(
+      stripOneTerminalLineEnding(secondNode.raw),
+      nodeTerminalLineEnding(firstNode)
+  );
+  const secondReplacement = sequenceNodeTextForPosition(
+      stripOneTerminalLineEnding(firstNode.raw),
+      nodeTerminalLineEnding(secondNode)
+  );
+
+  return [
+    document.source.slice(0, firstNode.sourceSpan.start),
+    firstReplacement,
+    document.source.slice(firstNode.sourceSpan.end, secondNode.sourceSpan.start),
+    secondReplacement,
+    document.source.slice(secondNode.sourceSpan.end),
+  ].join("");
+}
+
+export function appendEPolyScatSequenceNode(contents, { type, label } = {}) {
+  const schemaItems = type === "DataRecord"
+      ? EPOLYSCAT_INPUT_SCHEMA.dataRecords
+      : type === "Command"
+        ? EPOLYSCAT_INPUT_SCHEMA.commands
+        : null;
+  const schemaItem = schemaItems && schemaItems.find(item => item.label === label);
+  if (!schemaItem) {
+    throw new TypeError(`Unknown ePolyScat ${type || "sequence node"}: ${label || ""}`);
+  }
+
+  const document = parseEPolyScatDocument(contents);
+  if (!document.source) {
+    return schemaItem.label;
+  }
+  const separator = /(?:\r\n|\r|\n)$/.test(document.source) ? "" : document.newline || "\n";
+  return `${document.source}${separator}${schemaItem.label}`;
 }
 
 const FIELD_RECORDS = {

@@ -79,7 +79,8 @@ WORKFLOW_STAGE_INPUT_VALUES = {
 WORKFLOW_STAGE_LABELS = {
     "Data_Gen": "Data Generation",
     "ePolyScat_Run": "ePolyScat Run",
-    "Analysis": "Visualization & Analysis",
+    "Analysis": "Post-processing",
+    "Visualization": "Visualization",
 }
 INPUT_NAME_COMPATIBILITY_ALIASES = (
     ("Gaussian_Input", "Gaussian_Inputs"),
@@ -1186,7 +1187,9 @@ class RunViewSet(viewsets.ModelViewSet):
                 else "OpenMolcas"
             ),
             "analysisApplications": ["CnvMath"],
-            "plannedStageIds": list(workflow_continuation_domain.WORKFLOW_STAGES),
+            "plannedStageIds": list(
+                workflow_continuation_domain.WORKFLOW_PRESENTATION_STAGES
+            ),
             "workflow_state": "not_started",
         }
         parent_run = models.Run.objects.create(

@@ -171,7 +171,8 @@ export default {
       workflowStages: [
         { id: "Data_Gen", label: "Data Generation", state: "active" },
         { id: "ePolyScat_Run", label: "ePolyScat Run", state: "pending" },
-        { id: "Analysis", label: "Visualization & Analysis", state: "pending", disabled: true },
+        { id: "Analysis", label: "Post-processing", state: "pending", disabled: true },
+        { id: "Visualization", label: "Visualization", state: "pending", disabled: true, localOnly: true },
       ],
       applications: [
         {

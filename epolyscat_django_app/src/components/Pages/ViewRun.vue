@@ -262,7 +262,13 @@ export default {
     runId() {
       return this.$route.params.runId;
     },
+    visualizationMode() {
+      return this.$route.query.visualize === "1";
+    },
     workflowSubtitle() {
+      if (this.visualizationMode) {
+        return "Workflow/Visualization";
+      }
       if (this.presentation.subtitle === "Workflow/STGF") {
         return "Workflow/STGF";
       }
@@ -299,6 +305,17 @@ export default {
       return Boolean(this.run && this.run.parentRunId);
     },
     workflowPanelItems() {
+      if (this.visualizationMode) {
+        const sourceStage = this.presentation.stages.find(stage => stage.id === "Analysis");
+        return [
+          { label: "Current stage", value: "Visualization" },
+          {
+            label: "Source step",
+            value: sourceStage ? sourceStage.label : "Post-processing",
+            detail: sourceStage ? sourceStage.application || "" : "",
+          },
+        ];
+      }
       if (this.isWorkflowChildRun) {
         const items = [
           { label: "Step status", value: this.stepStatusLabel },
@@ -438,7 +455,8 @@ export default {
       ));
     },
     showPlotPanel() {
-      return this.isPlotCapableRun && this.hasPlottableOutputFiles;
+      return this.visualizationMode
+          || (this.isPlotCapableRun && this.hasPlottableOutputFiles);
     },
     resolvedInputFileNames() {
       return this.uniqueFileNames([
@@ -523,6 +541,15 @@ export default {
     runId() {
       this.refreshRun();
     },
+    visualizationMode(enabled) {
+      if (!enabled) {
+        return;
+      }
+      this.initializePlotForm();
+      if (this.plotForm.file) {
+        this.selectedFile = this.plotForm.file;
+      }
+    },
   },
   methods: {
     async refreshRun() {
@@ -539,7 +566,8 @@ export default {
         ]);
         this.initializePlotForm();
 
-        const nextSelectedFile = this.presentation.selected_file
+        const nextSelectedFile = (this.visualizationMode && this.plotForm.file)
+            || this.presentation.selected_file
             || this.firstResolvedFile()
             || this.firstPresentationFile();
         if (this.selectedFile === nextSelectedFile) {
@@ -796,6 +824,14 @@ export default {
       return this.runInputFiles.find(file => this.fileDisplayName(file) === filename);
     },
     workflowStepOrder() {
+      const runId = this.run ? this.run.id : null;
+      const presentationIndex = this.presentation.stages.findIndex(stage => (
+        stage.child_run_id === runId
+        || (stage.child_run_ids || []).indexOf(runId) >= 0
+      ));
+      if (presentationIndex >= 0) {
+        return presentationIndex + 1;
+      }
       if (this.run && this.run.workflowStepOrder) {
         return this.run.workflowStepOrder;
       }
@@ -804,7 +840,7 @@ export default {
       return activeIndex >= 0 ? activeIndex + 1 : 0;
     },
     workflowStageIsConfigurable(stage, index) {
-      if (!stage || !stage.child_run_id || !this.run || this.isWorkflowChildRun) {
+      if (!stage || stage.local_only || !stage.child_run_id || !this.run || this.isWorkflowChildRun) {
         return false;
       }
       if ((stage.status || "pending") !== "pending") {
@@ -819,7 +855,15 @@ export default {
       );
     },
     workflowStageRoute(stage, index) {
-      if (!stage || !stage.child_run_id) {
+      if (!stage) {
+        return null;
+      }
+      if (stage.local_only) {
+        return stage.status === "ready" && stage.source_child_run_id
+          ? { path: `/runs/${stage.source_child_run_id}`, query: { visualize: "1" } }
+          : null;
+      }
+      if (!stage.child_run_id) {
         return null;
       }
       if (this.workflowStageIsConfigurable(stage, index)) {
@@ -852,6 +896,9 @@ export default {
       }
       if (stage.status === "not_included") {
         return "Not included";
+      }
+      if (stage.status === "ready") {
+        return "Ready";
       }
       return "";
     },

@@ -126,7 +126,8 @@
                 :key="application.id"
                 type="button"
                 class="workflow-step"
-                :class="{ active: selectedApplicationId === application.id }"
+                :class="{ active: selectedApplicationId === application.id, disabled: application.localOnly }"
+                :disabled="application.localOnly"
                 :aria-current="selectedApplicationId === application.id ? 'step' : null"
                 v-on:click="selectRunApplication(application.id)"
             >
@@ -465,48 +466,14 @@ import { descriptions } from "@/fileData";
 import { InputService } from "@/service/epolyscat-service";
 import {
   buildEPolyScatInputScript as buildEPolyScatInputScriptFromValues,
+  EPOLYSCAT_DATA_ENTRY_SECTIONS,
+  EPOLYSCAT_OUTPUT_DEFINITIONS,
+  EPOLYSCAT_RECOMMENDED_VALUES as DEFAULT_DATA_ENTRY_VALUES,
   normalizeEPolyScatInputContents,
   parseEPolyScatInputScript as parseEPolyScatInputScriptFromContents,
   patchEPolyScatInputScript,
 } from "@/utils/epolyscat-input-script";
 import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
-
-const DEFAULT_DATA_ENTRY_VALUES = {
-  title: "electron scattering from CH4 in A1 symmetry",
-  calculationKind: "scattering",
-  lMax: 15,
-  lMaxI: 120,
-  eMax: 50.0,
-  lMaxK: 4,
-  initSym: "SG",
-  initSpinDeg: 1,
-  orbOccInit: "2 2 2 2 2 4",
-  orbOcc: "2 2 2 2 1 4",
-  spinDeg: 1,
-  targSym: "SG",
-  targSpinDeg: 2,
-  iPot: 15.581,
-  engFormCharge: 0,
-  engFormType: 1,
-  engFormTerms: 3,
-  vCorr: "PZ",
-  asyPolSwitchD: 0.15,
-  asyPolTerms: 1,
-  asyPolCenter: 1,
-  asyPolValue: 17.50,
-  fegeEng: 13.0,
-  scatContSym: "A1",
-  scatSym: "SU",
-  scatEng: "0.0001 0.01 0.5",
-  convertSource: "$pt/input.molden",
-  convertFormat: "molden",
-  matrixElementsFile: "matrix-elements.idy",
-  plotDataFile: "cross-sections.dat",
-  dumpOutFile: "",
-  orientDataFile: "",
-  viewOrbFile: "",
-  viewOrbGeomFile: "",
-};
 
 export default {
   name: 'CreateRun',
@@ -691,8 +658,8 @@ export default {
             },
             {
               id: "Analysis",
-              label: "Visualization & Analysis",
-              description: "Analysis",
+              label: "Post-processing",
+              description: "Analysis utilities",
               workflowApplicationIds: [
                 "CnvMath",
                 "CnvMatLab",
@@ -701,6 +668,13 @@ export default {
                 "NRFPAD",
                 "Cube2igor",
               ],
+            },
+            {
+              id: "Visualization",
+              label: "Visualization",
+              description: "View and plot completed outputs",
+              workflowApplicationIds: [],
+              localOnly: true,
             },
           ],
         },
@@ -744,127 +718,8 @@ export default {
           generatedFileName: "input_file.inp",
         },
       ],
-      dataEntrySections: [
-        {
-          id: "grid-expansion",
-          label: "Grid / Expansion",
-          recordGroup: "Basic grid records",
-          type: "fields",
-          fields: [
-            {key: "title", label: "Title", record: "#", inputType: "text"},
-            {
-              key: "calculationKind",
-              label: "Calculation kind",
-              record: "Flow",
-              inputType: "select",
-              options: [
-                {value: "scattering", text: "Electron scattering"},
-                {value: "photoionization", text: "Photoionization"},
-              ],
-            },
-            {key: "lMax", label: "LMax", record: "LMax", inputType: "number"},
-            {key: "lMaxI", label: "LMaxI", record: "LMaxI", inputType: "number"},
-            {key: "eMax", label: "EMax", record: "EMax", inputType: "number", step: "0.1"},
-            {key: "lMaxK", label: "LMaxK", record: "LMaxK", inputType: "number"},
-            {key: "convertSource", label: "Convert source", record: "Convert", inputType: "text"},
-            {key: "convertFormat", label: "Convert format", record: "Convert", inputType: "text"},
-          ],
-        },
-        {
-          id: "state-definitions",
-          label: "State Definitions",
-          recordGroup: "Initial and target state records",
-          type: "fields",
-          fields: [
-            {key: "initSym", label: "InitSym", record: "InitSym", inputType: "text"},
-            {key: "initSpinDeg", label: "InitSpinDeg", record: "InitSpinDeg", inputType: "number"},
-            {key: "orbOccInit", label: "OrbOccInit", record: "OrbOccInit", inputType: "text"},
-            {key: "orbOcc", label: "OrbOcc", record: "OrbOcc", inputType: "text"},
-            {key: "spinDeg", label: "SpinDeg", record: "SpinDeg", inputType: "number"},
-            {key: "targSym", label: "TargSym", record: "TargSym", inputType: "text"},
-            {key: "targSpinDeg", label: "TargSpinDeg", record: "TargSpinDeg", inputType: "number"},
-            {key: "iPot", label: "IPot", record: "IPot", inputType: "number", step: "0.001"},
-          ],
-        },
-        {
-          id: "potentials",
-          label: "Potentials",
-          recordGroup: "EngForm, VCorr, AsyPol, FEGE",
-          type: "fields",
-          fields: [
-            {key: "engFormCharge", label: "EngForm charge", record: "EngForm", inputType: "number"},
-            {key: "engFormType", label: "EngForm type", record: "EngForm", inputType: "number"},
-            {key: "engFormTerms", label: "EngForm terms", record: "EngForm", inputType: "number"},
-            {key: "vCorr", label: "VCorr", record: "VCorr", inputType: "text"},
-            {key: "asyPolSwitchD", label: "SwitchD", record: "AsyPol", inputType: "number", step: "0.01"},
-            {key: "asyPolTerms", label: "nterm", record: "AsyPol", inputType: "number"},
-            {key: "asyPolCenter", label: "Center", record: "AsyPol", inputType: "number"},
-            {key: "asyPolValue", label: "Polarizability", record: "AsyPol", inputType: "number", step: "0.01"},
-            {key: "fegeEng", label: "FegeEng", record: "FegeEng", inputType: "number", step: "0.1"},
-          ],
-        },
-        {
-          id: "energies-partial-waves",
-          label: "Energies / Partial Waves",
-          recordGroup: "Scattering symmetry and energy records",
-          type: "fields",
-          fields: [
-            {key: "scatContSym", label: "ScatContSym", record: "ScatContSym", inputType: "text"},
-            {key: "scatSym", label: "ScatSym", record: "ScatSym", inputType: "text"},
-            {key: "scatEng", label: "ScatEng", record: "ScatEng", inputType: "text"},
-          ],
-        },
-        {
-          id: "outputs",
-          label: "Outputs",
-          recordGroup: "FileName records",
-          type: "outputs",
-        },
-      ],
-      outputDefinitions: [
-        {
-          fileType: "MatrixElements",
-          valueKey: "matrixElementsFile",
-          extension: ".idy",
-          description: "Dynamical coefficients",
-          disposition: "REWIND",
-        },
-        {
-          fileType: "PlotData",
-          valueKey: "plotDataFile",
-          extension: ".dat",
-          description: "Cross section plot data",
-          disposition: "REWIND",
-        },
-        {
-          fileType: "DumpOut",
-          valueKey: "dumpOutFile",
-          extension: ".dat",
-          description: "Dumped matrix or diagnostic data",
-          disposition: "REWIND",
-        },
-        {
-          fileType: "OrientData",
-          valueKey: "orientDataFile",
-          extension: ".dat",
-          description: "Oriented molecule analysis",
-          disposition: "REWIND",
-        },
-        {
-          fileType: "ViewOrb",
-          valueKey: "viewOrbFile",
-          extension: ".dat",
-          description: "Orbital or potential values",
-          disposition: "REWIND",
-        },
-        {
-          fileType: "ViewOrbGeom",
-          valueKey: "viewOrbGeomFile",
-          extension: ".dat",
-          description: "Geometry and grid values",
-          disposition: "REWIND",
-        },
-      ],
+      dataEntrySections: EPOLYSCAT_DATA_ENTRY_SECTIONS,
+      outputDefinitions: EPOLYSCAT_OUTPUT_DEFINITIONS,
       dataEntryRecommendedValues: { ...DEFAULT_DATA_ENTRY_VALUES },
       dataEntryValues: { ...DEFAULT_DATA_ENTRY_VALUES },
       inputFieldsList: [
@@ -933,7 +788,7 @@ export default {
       }
 
       if (this.selectedApplicationId === "Analysis") {
-        return "Analysis Utility";
+        return "Post-processing Utility";
       }
 
       return "Application";
@@ -1329,6 +1184,10 @@ export default {
       this.applySelectedRunConfiguration();
     },
     selectRunApplication(applicationId) {
+      const application = this.activeRunTypeApplications.find(item => item.id === applicationId);
+      if (application && application.localOnly) {
+        return;
+      }
       this.rememberWorkflowStageSelection();
       this.selectedApplicationId = applicationId;
       this.selectedWorkflowApplicationId = this.getWorkflowStageSelection(applicationId);
@@ -1976,7 +1835,7 @@ export default {
             requiredFiles: this.activeRequiredFiles.map(file => file.name),
             dataGenerationApplication: this.workflowStageSelections.Data_Gen || "OpenMolcas",
             analysisApplications: [this.workflowStageSelections.Analysis || "CnvMath"],
-            plannedStageIds: ["Data_Gen", "ePolyScat_Run", "Analysis"],
+            plannedStageIds: ["Data_Gen", "ePolyScat_Run", "Analysis", "Visualization"],
           },
           viewIds: this.viewIds
         };

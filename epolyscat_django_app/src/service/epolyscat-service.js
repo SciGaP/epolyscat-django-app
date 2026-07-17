@@ -87,7 +87,7 @@ export const InputService = {
                                 },
                                 {
                                     "value": "Analysis",
-                                    "text": "Analysis"
+                                    "text": "Post-processing"
                                 }
                             ]
                         },

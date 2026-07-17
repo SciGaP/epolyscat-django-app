@@ -58,6 +58,12 @@ SETTINGS_STORE = (
     / "modules"
     / "settings.store.js"
 )
+INPUT_SCRIPT = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "utils"
+    / "epolyscat-input-script.js"
+)
 
 
 def _source():
@@ -76,6 +82,10 @@ def _resource_settings_source():
     if not RESOURCE_SETTINGS.exists():
         return ""
     return RESOURCE_SETTINGS.read_text()
+
+
+def _input_script_source():
+    return INPUT_SCRIPT.read_text()
 
 
 def _view_run_source():
@@ -369,7 +379,7 @@ def test_create_run_save_payload_uses_inline_run_selection():
         "isWorkflowPlan: this.selectedRunType === \"workflow\"",
         "dataGenerationApplication: this.workflowStageSelections.Data_Gen",
         "analysisApplications: [this.workflowStageSelections.Analysis",
-        "plannedStageIds: [\"Data_Gen\", \"ePolyScat_Run\", \"Analysis\"]",
+        "plannedStageIds: [\"Data_Gen\", \"ePolyScat_Run\", \"Analysis\", \"Visualization\"]",
     ]
 
     for token in expected_payload_tokens:
@@ -424,7 +434,8 @@ def test_create_run_workflow_submit_guards_later_steps_until_prior_steps_complet
 
 
 def test_create_run_data_entry_models_epolyscat_input_script_sections():
-    source = _source()
+    create_source = _source()
+    source = create_source + _input_script_source()
 
     expected_tokens = [
         "input_data",
@@ -447,11 +458,11 @@ def test_create_run_data_entry_models_epolyscat_input_script_sections():
     for token in expected_tokens:
         assert token in source
 
-    assert "placeholder-tab-panel" not in source
-    assert "This tab is waiting for the next screenshot." not in source
-    assert "input_data (.inp)" not in source
-    assert "Command Sequence" not in source
-    assert "command-sequence" not in source
+    assert "placeholder-tab-panel" not in create_source
+    assert "This tab is waiting for the next screenshot." not in create_source
+    assert "input_data (.inp)" not in create_source
+    assert "Command Sequence" not in create_source
+    assert "command-sequence" not in create_source
 
 
 def test_create_run_embeds_workflow_stepper_when_workflows_selected():
@@ -468,7 +479,8 @@ def test_create_run_embeds_workflow_stepper_when_workflows_selected():
         "Data_Gen",
         "ePolyScat_Run",
         "Analysis",
-        "Visualization & Analysis",
+        "Post-processing",
+        "Visualization",
     ]
 
     for hook in expected_hooks:
@@ -530,7 +542,7 @@ def test_create_run_and_workflow_pages_offer_run_type_switches():
 
 
 def test_create_run_output_section_tracks_manual_file_outputs():
-    source = _source()
+    source = _source() + _input_script_source()
 
     expected_output_tokens = [
         "outputDefinitions",
@@ -630,7 +642,8 @@ def test_workflow_page_owns_stepper_and_application_selection():
         "Workflow/{{ activeStageLabel }}",
         "Data Generation",
         "ePolyScat Run",
-        "Visualization & Analysis",
+        "Post-processing",
+        "Visualization",
         "Gaussian16",
         "OpenMolcas",
         "Select file from storage",
@@ -1154,7 +1167,8 @@ def test_workflow_run_uses_canonical_airavata_workflow_inputs():
         'activeStageId: "Data_Gen"',
         '{ id: "Data_Gen", label: "Data Generation"',
         '{ id: "ePolyScat_Run", label: "ePolyScat Run"',
-        '{ id: "Analysis", label: "Visualization & Analysis"',
+        '{ id: "Analysis", label: "Post-processing"',
+        '{ id: "Visualization", label: "Visualization"',
         "activeWorkflowInputName()",
         "`Application_Workflow = ${this.activeStageId}`",
         "`Data_Gen = ${this.workflowApplication}`",
@@ -1167,6 +1181,29 @@ def test_workflow_run_uses_canonical_airavata_workflow_inputs():
         assert token in source
 
     assert "Workflow_Application" not in source
+
+
+def test_new_run_workflow_splits_post_processing_from_local_visualization():
+    source = _source()
+
+    assert 'id: "Analysis"' in source
+    assert 'label: "Post-processing"' in source
+    assert 'id: "Visualization"' in source
+    assert 'label: "Visualization"' in source
+    assert 'localOnly: true' in source
+    assert 'plannedStageIds: ["Data_Gen", "ePolyScat_Run", "Analysis", "Visualization"]' in source
+
+
+def test_view_run_opens_ready_visualization_on_post_processing_outputs():
+    source = _view_run_source()
+
+    assert "stage.local_only" in source
+    assert "stage.source_child_run_id" in source
+    assert 'query: { visualize: "1" }' in source
+    assert 'stage.status === "ready"' in source
+    assert 'this.$route.query.visualize === "1"' in source
+    assert "this.visualizationMode" in source
+    assert 'return "Workflow/Visualization"' in source
 
 
 def test_workflow_file_source_handlers_keep_computer_and_storage_paths_separate():
@@ -1312,11 +1349,13 @@ def test_uploaded_input_file_contents_seed_data_entry_table():
         assert hook in source
 
     for hook in [
-        "parseFileNameRecord",
-        "parseConvertRecord",
-        "parseAsyPolBlock",
-        "parseEngFormBlock",
-        "normalizeEPolyScatRecord",
+            "parseFileNameRecord",
+            "parseConvertRecord",
+            "parseAsyPolNode",
+            "parseEngFormNode",
+            "parseEPolyScatDocument",
+            "serializeEPolyScatDocument",
+            "normalizeEPolyScatRecord",
         "tokenizeEPolyScatLine",
         "stripEPolyScatComment",
     ]:

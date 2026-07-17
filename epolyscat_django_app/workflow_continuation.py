@@ -2,6 +2,7 @@
 
 
 WORKFLOW_STAGES = ("Data_Gen", "ePolyScat_Run", "Analysis")
+WORKFLOW_PRESENTATION_STAGES = (*WORKFLOW_STAGES, "Visualization")
 
 MODULE_STAGES = {
     "gaussian16": ("Gaussian16", "Data_Gen"),

@@ -493,8 +493,10 @@ class RunSerializer(serializers.ModelSerializer):
             "bound": "Bound",
             "ePolyScat_Run": "ePolyScat Run",
             "stgf": "STGF",
-            "Analysis": "Visualization & Analysis",
-            "analysis": "Visualization & Analysis",
+            "Analysis": "Post-processing",
+            "analysis": "Post-processing",
+            "Visualization": "Visualization",
+            "visualization": "Visualization",
             "epolyscat-dmat": "EPOLYSCAT_DMAT",
         }
         return labels.get(stage, stage.replace("-", " ").title())
@@ -529,12 +531,18 @@ class RunSerializer(serializers.ModelSerializer):
             "Data_Generation": "Data_Gen",
             "bound": "ePolyScat_Run",
             "analysis": "Analysis",
+            "visualization": "Visualization",
         }
         active_stage_id = stage_aliases.get(active_stage_id, active_stage_id)
         stages = [
             {"id": "Data_Gen", "label": "Data Generation"},
             {"id": "ePolyScat_Run", "label": "ePolyScat Run"},
-            {"id": "Analysis", "label": "Visualization & Analysis", "disabled": True},
+            {"id": "Analysis", "label": "Post-processing"},
+            {
+                "id": "Visualization",
+                "label": "Visualization",
+                "local_only": True,
+            },
         ]
         active_index = next(
             (index for index, stage in enumerate(stages) if stage["id"] == active_stage_id),
@@ -551,7 +559,7 @@ class RunSerializer(serializers.ModelSerializer):
 
     def _workflow_child_stages(self, run_instance):
         if run_instance.parent_run_id is not None:
-            return []
+            return self._workflow_child_stages(run_instance.parent_run)
 
         child_runs = list(run_instance.workflow_steps.order_by("workflow_step_order", "id"))
         if not child_runs:
@@ -587,29 +595,114 @@ class RunSerializer(serializers.ModelSerializer):
                         "imported": True,
                     }
                 )
-                stages.extend(
+                stages.extend(self._workflow_children_to_stages(child_runs))
+                return self._with_visualization_stage(stages)
+
+        stages = self._workflow_children_to_stages(child_runs)
+        return self._with_visualization_stage(stages)
+
+    def _workflow_children_to_stages(self, child_runs):
+        stages = []
+        analysis_children = [
+            child for child in child_runs if child.workflow_stage == "Analysis"
+        ]
+        analysis_added = False
+
+        for child in child_runs:
+            if child.workflow_stage != "Analysis":
+                stages.append(
                     {
-                        "id": child.workflow_stage or f"step-{child.workflow_step_order}",
-                        "label": self._workflow_stage_label(child.workflow_stage or ""),
+                        "id": child.workflow_stage
+                        or f"step-{child.workflow_step_order}",
+                        "label": self._workflow_stage_label(
+                            child.workflow_stage or ""
+                        ),
                         "state": self._workflow_child_state(child),
                         "child_run_id": child.id,
                         "application": self._workflow_child_application(child),
                         "status": self._workflow_child_status(child),
                     }
-                    for child in child_runs
                 )
-                return stages
+                continue
+            if analysis_added:
+                continue
 
+            analysis_added = True
+            child_states = [
+                self._workflow_child_state(analysis_child)
+                for analysis_child in analysis_children
+            ]
+            if child_states and all(state == "complete" for state in child_states):
+                state = "complete"
+                status = "complete"
+            elif "active" in child_states:
+                state = "active"
+                status = "active"
+            else:
+                state = "pending"
+                status = "pending"
+            selected_child = next(
+                (
+                    analysis_child
+                    for analysis_child, child_state in zip(
+                        analysis_children, child_states
+                    )
+                    if child_state != "complete"
+                ),
+                analysis_children[-1],
+            )
+            stages.append(
+                {
+                    "id": "Analysis",
+                    "label": self._workflow_stage_label("Analysis"),
+                    "state": state,
+                    "status": status,
+                    "child_run_id": selected_child.id,
+                    "child_run_ids": [
+                        analysis_child.id
+                        for analysis_child in analysis_children
+                    ],
+                    "application": self._workflow_child_application(
+                        selected_child
+                    ),
+                    "applications": [
+                        self._workflow_child_application(analysis_child)
+                        for analysis_child in analysis_children
+                    ],
+                }
+            )
+        return stages
+
+    def _with_visualization_stage(self, stages):
+        if any(stage.get("id") == "Visualization" for stage in stages):
+            return stages
+
+        analysis_stages = [stage for stage in stages if stage.get("id") == "Analysis"]
+        analysis_complete = bool(analysis_stages) and all(
+            stage.get("state") == "complete"
+            or stage.get("status") in ("complete", "imported")
+            for stage in analysis_stages
+        )
+        source_stage = next(
+            (
+                stage
+                for stage in reversed(analysis_stages)
+                if stage.get("child_run_id")
+            ),
+            None,
+        )
         return [
+            *stages,
             {
-                "id": child.workflow_stage or f"step-{child.workflow_step_order}",
-                "label": self._workflow_stage_label(child.workflow_stage or ""),
-                "state": self._workflow_child_state(child),
-                "child_run_id": child.id,
-                "application": self._workflow_child_application(child),
-                "status": self._workflow_child_status(child),
-            }
-            for child in child_runs
+                "id": "Visualization",
+                "label": "Visualization",
+                "state": "active" if analysis_complete else "pending",
+                "status": "ready" if analysis_complete else "pending",
+                "local_only": True,
+                "source_child_run_id": (
+                    source_stage.get("child_run_id") if source_stage else None
+                ),
+            },
         ]
 
     def _workflow_child_state(self, child_run):

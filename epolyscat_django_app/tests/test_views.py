@@ -177,9 +177,28 @@ class RunViewSetBackendTests(TestCase):
                 ("Data_Gen", "not_included", "not_included"),
                 ("ePolyScat_Run", "complete", "imported"),
                 ("Analysis", "pending", "pending"),
+                ("Visualization", "pending", "pending"),
             ],
         )
         self.assertEqual(stages[1]["child_run_id"], source.id)
+
+    def test_workflow_presentation_splits_post_processing_and_visualization(self):
+        serializer = serializers.RunSerializer()
+
+        stages = serializer._workflow_stages("Analysis")
+
+        self.assertEqual(
+            [(stage["id"], stage["label"]) for stage in stages],
+            [
+                ("Data_Gen", "Data Generation"),
+                ("ePolyScat_Run", "ePolyScat Run"),
+                ("Analysis", "Post-processing"),
+                ("Visualization", "Visualization"),
+            ],
+        )
+        self.assertEqual(stages[2]["state"], "active")
+        self.assertEqual(stages[3]["state"], "pending")
+        self.assertTrue(stages[3]["local_only"])
 
     @override_settings(GATEWAY_DATA_STORE_REMOTE_API="https://amos-gateway.org/")
     @mock.patch("epolyscat_django_app.views.remoteapi.call")
@@ -1431,6 +1450,42 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(child_runs[0].group_resource_profile_id, "group-id")
         self.assertEqual(child_runs[0].inputs.get().files.get().data_product_uri, "airavata-dp://molcas")
 
+    def test_multiple_analysis_children_render_as_one_post_processing_step(self):
+        user = get_user_model().objects.create_user(
+            username="multi-analysis@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.workflow_metadata = {
+            "analysisApplications": ["CnvMath", "CnvLinFull"],
+        }
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        stages = data["presentation"]["stages"]
+        self.assertEqual(
+            [stage["id"] for stage in stages],
+            ["Data_Gen", "ePolyScat_Run", "Analysis", "Visualization"],
+        )
+        analysis = stages[2]
+        analysis_children = [
+            child for child in child_runs if child.workflow_stage == "Analysis"
+        ]
+        self.assertEqual(
+            analysis["child_run_ids"],
+            [child.id for child in analysis_children],
+        )
+        self.assertEqual(
+            analysis["applications"],
+            ["CnvMath", "CnvLinFull"],
+        )
+
     def test_workflow_submit_delegates_to_first_child_run(self):
         user = get_user_model().objects.create_user(
             username="user@example.com",
@@ -1535,6 +1590,36 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(stages[0]["state"], "complete")
         self.assertEqual(stages[0]["status"], "complete")
         self.assertEqual(stages[1]["state"], "pending")
+
+    def test_workflow_visualization_becomes_ready_after_post_processing_completes(self):
+        user = get_user_model().objects.create_user(
+            username="visualization-ready@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+        analysis_child = next(
+            child for child in child_runs if child.workflow_stage == "Analysis"
+        )
+        analysis_child.workflow_step_status = "complete"
+        analysis_child.save(update_fields=["workflow_step_status"])
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        visualization = data["presentation"]["stages"][-1]
+        self.assertEqual(visualization["id"], "Visualization")
+        self.assertEqual(visualization["state"], "active")
+        self.assertEqual(visualization["status"], "ready")
+        self.assertTrue(visualization["local_only"])
+        self.assertEqual(
+            visualization["source_child_run_id"],
+            analysis_child.id,
+        )
 
     def test_workflow_presentation_exposes_parent_progress_status(self):
         user = get_user_model().objects.create_user(

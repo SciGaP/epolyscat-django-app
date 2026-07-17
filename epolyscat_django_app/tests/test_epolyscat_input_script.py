@@ -3,6 +3,8 @@ import textwrap
 
 from pathlib import Path
 
+import pytest
+
 
 APP_DIR = Path(__file__).resolve().parents[1]
 
@@ -316,6 +318,530 @@ def test_parser_removes_rtf_escape_backslashes_from_title_and_scateng():
           throw new Error(`Expected normalized content not to retain RTF escape slashes\\n${normalized}`);
         }
         """
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_lossless_document_round_trip_preserves_order_comments_unknown_records_and_line_endings():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const {
+          parseEPolyScatDocument,
+          serializeEPolyScatDocument,
+        } = moduleObject.exports;
+        const original = [
+          "# repeated records are executable state\r\n",
+          "ScatContSym 'SG'  # first calculation\r\n",
+          "Scat\r\n",
+          "CustomFutureRecord keep this exactly\r\n",
+          "EngForm\r\n",
+          " 0 2\r\n",
+          " 2\r\n",
+          " 2.0 -1.0 0\r\n",
+          " 1.0  0.5 1\r\n",
+          "ScatContSym 'SU'\r\n",
+          "Scat\r\n",
+        ].join("");
+
+        const document = parseEPolyScatDocument(original);
+        const serialized = serializeEPolyScatDocument(document);
+        if (serialized !== original) {
+          throw new Error(`Lossless round trip changed the source:\n${JSON.stringify(serialized)}`);
+        }
+
+        const types = document.nodes.map(node => node.type);
+        if (!types.includes("Comment") || !types.includes("DataRecord")
+            || !types.includes("Command") || !types.includes("Unknown")) {
+          throw new Error(`Expected typed ordered AST nodes, got ${JSON.stringify(types)}`);
+        }
+        const engForm = document.nodes.find(node => node.type === "DataRecord" && node.label === "EngForm");
+        if (!engForm || engForm.continuationRows.length !== 4) {
+          throw new Error(`Expected the EngForm block to own four continuation rows: ${JSON.stringify(engForm)}`);
+        }
+        if (!engForm.sourceSpan || engForm.sourceSpan.end <= engForm.sourceSpan.start) {
+          throw new Error(`Expected a source span on EngForm: ${JSON.stringify(engForm)}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_lossless_patch_changes_only_last_effective_repeated_record():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const { patchEPolyScatInputScript } = moduleObject.exports;
+        const original = [
+          "ScatContSym 'SG'  # consumed by the first Scat\r\n",
+          "Scat\r\n",
+          "UnknownRecord   keep spacing\r\n",
+          "ScatContSym 'SU'  # effective table value\r\n",
+          "Scat\r\n",
+        ].join("");
+        const patched = patchEPolyScatInputScript(
+          original,
+          { scatContSym: "B2U" },
+          [],
+          { changedKeys: ["scatContSym"] },
+        );
+
+        if (!patched.includes("ScatContSym 'SG'  # consumed by the first Scat\r\n")) {
+          throw new Error(`The earlier occurrence changed:\n${patched}`);
+        }
+        if (!patched.includes("ScatContSym 'B2U'")) {
+          throw new Error(`The last occurrence was not updated:\n${patched}`);
+        }
+        if (patched.includes("ScatContSym 'SU'")) {
+          throw new Error(`The old effective value remains:\n${patched}`);
+        }
+        if (!patched.includes("UnknownRecord   keep spacing\r\n")) {
+          throw new Error(`Unknown source text changed:\n${patched}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_canonical_schema_covers_all_manual_sample_data_records():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const { EPOLYSCAT_INPUT_SCHEMA } = moduleObject.exports;
+        const expected = `AsyPol CnvOrbSel DPotEng EMax EngForm EpsAsym FegeEng FixCharge GrnType
+          IPot InitSpinDeg InitSym IterMax JMax JPPMax LFTimeDelayAngles LMax LMaxA
+          LMaxI LMaxK Label MFTimeDelayAngles NECenter OrbOcc OrbOccInit PCutRd
+          PlaneWvCharge PosFile PosFitL PosGridTol PosPlot PrintBlm ResSearchEng
+          RotConstants ScatContSym ScatEng ScatEngN ScatSym SpinDeg TargSpinDeg
+          TargSym TestOut VCorr VibAveNInp ViewOrbGrid`.split(/\s+/);
+        const labels = new Set(EPOLYSCAT_INPUT_SCHEMA.dataRecords.map(record => record.label));
+        const missing = expected.filter(label => !labels.has(label));
+        if (missing.length) {
+          throw new Error(`Missing manual data records: ${missing.join(", ")}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_legacy_table_adapter_reads_and_writes_through_lossless_document_model():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const { createLegacyEPolyScatTableObject } = moduleObject.exports;
+        let contents = [
+          "ScatContSym 'SG' # first state",
+          "Scat",
+          "ScatContSym 'SU' # table projects the effective state",
+          "Scat",
+          "FutureRecord untouched",
+        ].join("\n");
+        const tableObject = createLegacyEPolyScatTableObject({
+          getContents: async () => contents,
+          setContents: async value => { contents = value; },
+        });
+        const statePage = tableObject.pages.find(page => page.name === "State Definitions");
+        const symmetry = statePage.data.find(field => field.name === "ScatContSym");
+
+        (async () => {
+          const before = await symmetry.get();
+          if (before !== "SU") {
+            throw new Error(`Expected the effective value SU, got ${before}`);
+          }
+          await symmetry.set("B2U");
+          if (!contents.includes("ScatContSym 'SG' # first state")) {
+            throw new Error(`Earlier state was changed:\n${contents}`);
+          }
+          if (!contents.includes("ScatContSym 'B2U'")) {
+            throw new Error(`Effective state was not changed:\n${contents}`);
+          }
+          if (!contents.includes("FutureRecord untouched")) {
+            throw new Error(`Unknown source was not preserved:\n${contents}`);
+          }
+        })().catch(error => {
+          console.error(error);
+          process.exitCode = 1;
+        });
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_lossless_round_trip_for_all_cached_official_sample_inputs():
+    manual_text_dir = (
+        APP_DIR.parent.parent
+        / "docs"
+        / "rrlucchese-epolyscat-manual"
+        / "text"
+    )
+    sample_files = sorted(manual_text_dir.glob("Tests_test??_inp-*.txt"))
+    if not sample_files:
+        pytest.skip("The local ePolyScat manual cache is not available.")
+    assert len(sample_files) == 38
+
+    script = textwrap.dedent(
+        f'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {{
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }}).code;
+        const moduleObject = {{ exports: {{}} }};
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+        const {{ parseEPolyScatDocument, serializeEPolyScatDocument }} = moduleObject.exports;
+        const files = {repr([str(path) for path in sample_files])};
+
+        files.forEach(filename => {{
+          const original = fs.readFileSync(filename, "utf8");
+          const document = parseEPolyScatDocument(original);
+          const serialized = serializeEPolyScatDocument(document);
+          if (serialized !== original) {{
+            throw new Error(`Round trip changed ${{path.basename(filename)}}`);
+          }}
+          if (!document.nodes.some(node => node.type === "Command")) {{
+            throw new Error(`No commands were recognized in ${{path.basename(filename)}}`);
+          }}
+          const unknown = document.nodes.filter(node => (
+            node.type === "Unknown"
+            && !/^test\\d+\\.inp$/i.test(node.sourceLines[0].raw.trim())
+          ));
+          if (unknown.length) {{
+            throw new Error(
+              `Unclassified statements in ${{path.basename(filename)}}: `
+              + unknown.map(node => node.sourceLines[0].raw).join(" | ")
+            );
+          }}
+        }});
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_generated_type_zero_engform_and_output_order_follow_manual_semantics():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+        const { buildEngFormBlock, buildEPolyScatInputScript } = moduleObject.exports;
+
+        const engForm = buildEngFormBlock({
+          engFormCharge: 0,
+          engFormType: 0,
+          engFormTerms: 3,
+        });
+        if (engForm !== "EngForm\n 0 0") {
+          throw new Error(`Type 0 EngForm must not contain a term count:\n${engForm}`);
+        }
+
+        const generated = buildEPolyScatInputScript({
+          title: "test",
+          calculationKind: "scattering",
+          lMax: 15,
+          eMax: 50,
+          fegeEng: 13,
+          scatEng: "3.0 4.0",
+          engFormCharge: 0,
+          engFormType: 0,
+          engFormTerms: 0,
+          vCorr: "PZ",
+          asyPolSwitchD: 0.15,
+          asyPolTerms: 1,
+          asyPolCenter: 1,
+          asyPolValue: 17.5,
+          scatContSym: "SG",
+          lMaxK: 4,
+          convertSource: "$pt/input.molden",
+          convertFormat: "molden",
+          plotDataFile: "cross-sections.dat",
+        }, [{
+          fileType: "PlotData",
+          valueKey: "plotDataFile",
+          disposition: "REWIND",
+        }]);
+        const fileNameIndex = generated.indexOf("FileName 'PlotData'");
+        const producerIndex = generated.indexOf("TotalCrossSection");
+        if (fileNameIndex < 0 || producerIndex < 0 || fileNameIndex > producerIndex) {
+          throw new Error(`PlotData must be declared before TotalCrossSection:\n${generated}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_engform_term_count_edit_preserves_retained_rows_and_removes_only_excess_rows():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+        const { patchEPolyScatInputScript } = moduleObject.exports;
+        const original = [
+          "EngForm",
+          " 0 1 # charge and type",
+          " 3 # term count",
+          " 2.0 -1.0 # first custom term",
+          " 1.5 0.25 # second custom term",
+          " 0.5 0.75 # remove this term",
+          "FutureRecord remains",
+        ].join("\n");
+        const patched = patchEPolyScatInputScript(
+          original,
+          { engFormTerms: 2 },
+          [],
+          { changedKeys: ["engFormTerms"] },
+        );
+
+        if (!patched.includes("2 # term count")) {
+          throw new Error(`Term count was not updated:\n${patched}`);
+        }
+        if (!patched.includes("2.0 -1.0 # first custom term")
+            || !patched.includes("1.5 0.25 # second custom term")) {
+          throw new Error(`Retained custom terms changed:\n${patched}`);
+        }
+        if (patched.includes("remove this term")) {
+          throw new Error(`Excess term was not removed:\n${patched}`);
+        }
+        if (!patched.includes("FutureRecord remains")) {
+          throw new Error(`Following unknown source changed:\n${patched}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_asypol_edit_targets_semantic_value_row_without_overwriting_comments():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+        const { patchEPolyScatInputScript, parseEPolyScatInputScript } = moduleObject.exports;
+        const original = [
+          "AsyPol",
+          " 0.15 # switching distance",
+          " 1 # number of terms",
+          " 1 # center",
+          " 1 # spherical term",
+          " # type 2 would read the full tensor",
+          " 17.50 # polarizability",
+          " 3 # crossing rule",
+          " # nearest approach",
+          " 0 # matching line",
+          " # l = 0 radial function",
+          "FegeEng 13.0",
+        ].join("\n");
+        const patched = patchEPolyScatInputScript(
+          original,
+          { asyPolValue: 30.4 },
+          [],
+          { changedKeys: ["asyPolValue"] },
+        );
+        const parsed = parseEPolyScatInputScript(patched);
+
+        if (parsed.asyPolValue !== 30.4) {
+          throw new Error(`The semantic polarizability row was not updated:\n${patched}`);
+        }
+        if (!patched.includes("# type 2 would read the full tensor")
+            || !patched.includes("# nearest approach")
+            || !patched.includes("# l = 0 radial function")) {
+          throw new Error(`An AsyPol comment was overwritten:\n${patched}`);
+        }
+        if (!patched.includes("30.4 # polarizability")) {
+          throw new Error(`The existing value-row comment was not retained:\n${patched}`);
+        }
+
+        const tensorOriginal = [
+          "AsyPol",
+          " 0.15 # switching distance",
+          " 1 # number of terms",
+          " 0 # molecular center",
+          " 0.0 0.0 0.0 # center coordinates",
+          " 2 # tensor term",
+          " 8.664 8.664 17.904 0.0 0.0 0.0 # full tensor",
+          " 3",
+          " 0",
+          "FegeEng 13.0",
+        ].join("\n");
+        const tensorPatched = patchEPolyScatInputScript(
+          tensorOriginal,
+          {
+            asyPolSwitchD: 0.2,
+            asyPolTerms: 1,
+            asyPolCenter: 0,
+            asyPolValue: 8.664,
+          },
+          [],
+          { changedKeys: ["asyPolSwitchD"] },
+        );
+        if (!tensorPatched.includes("8.664 8.664 17.904 0.0 0.0 0.0 # full tensor")) {
+          throw new Error(`Changing SwitchD damaged the tensor row:\n${tensorPatched}`);
+        }
+        if (parseEPolyScatInputScript(tensorPatched).asyPolValue !== 8.664) {
+          throw new Error(`The tensor-form value row was not recognized:\n${tensorPatched}`);
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_engform_type_transition_removes_and_recreates_term_rows_without_touching_following_records():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+        const { patchEPolyScatInputScript, parseEPolyScatInputScript } = moduleObject.exports;
+        const original = [
+          "EngForm # energy formulas",
+          " 0 1 # charge and type",
+          " 2 # term count",
+          " 2.0 -1.0 # custom first term",
+          " 1.5 0.25 # custom second term",
+          "FegeEng 13.0 # following record",
+        ].join("\n");
+        const typeZero = patchEPolyScatInputScript(
+          original,
+          { engFormCharge: 0, engFormType: 0, engFormTerms: 2 },
+          [],
+          { changedKeys: ["engFormType"] },
+        );
+        const parsedZero = parseEPolyScatInputScript(typeZero);
+        if (parsedZero.engFormType !== 0 || parsedZero.engFormTerms !== undefined) {
+          throw new Error(`Type 0 retained formula terms:\n${typeZero}`);
+        }
+        if (typeZero.includes("custom first term") || typeZero.includes("custom second term")) {
+          throw new Error(`Type 0 retained obsolete term rows:\n${typeZero}`);
+        }
+        if (!typeZero.includes("FegeEng 13.0 # following record")) {
+          throw new Error(`The following record changed:\n${typeZero}`);
+        }
+
+        const typeTwo = patchEPolyScatInputScript(
+          typeZero,
+          { engFormCharge: 0, engFormType: 2, engFormTerms: 2 },
+          [],
+          { changedKeys: ["engFormType"] },
+        );
+        const parsedTwo = parseEPolyScatInputScript(typeTwo);
+        if (parsedTwo.engFormType !== 2 || parsedTwo.engFormTerms !== 2) {
+          throw new Error(`Type 2 did not recreate its term block:\n${typeTwo}`);
+        }
+        const defaultTerms = typeTwo.match(/2\.0 -1\.0 0/g) || [];
+        if (defaultTerms.length !== 2) {
+          throw new Error(`Type 2 expected two default term rows:\n${typeTwo}`);
+        }
+        if (!typeTwo.includes("FegeEng 13.0 # following record")) {
+          throw new Error(`The following record changed after recreation:\n${typeTwo}`);
+        }
+        '''
     )
 
     result = _run_node_script(script)

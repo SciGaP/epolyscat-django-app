@@ -40,6 +40,9 @@ def _staged_input_reference(file_data):
 
 def _serialized_file(file_data):
     if isinstance(file_data, dict):
+        descriptor = file_data.get("descriptor")
+        if isinstance(descriptor, dict):
+            return descriptor
         return file_data
     try:
         return {
@@ -89,6 +92,36 @@ def classify_output_file(file_data):
         (".cube", ".cub")
     ):
         roles.append("cube")
+    if file_type in {
+        "mfdcs",
+        "mfdcsfull",
+        "mfdcsgeom",
+        "plotdata",
+        "plotdata2d",
+    } or any(
+        token in name
+        for token in ("cross-section", "cross_section", "crosssection", "mfdcs")
+    ):
+        roles.append("cross_section")
+    if file_type in {"matrixelements", "vibaveidy"}:
+        roles.append("matrix_elements")
+    if file_type in {"awavefun", "swavefun"}:
+        roles.append("wavefunction")
+    if file_type in {
+        "dumporbbasis",
+        "vieworb",
+        "vieworbflux",
+        "vieworbgeom",
+    }:
+        roles.append("orbital_grid")
+    if file_type in {
+        "orientasymdata",
+        "orientasymeig",
+        "orientasymgeom",
+        "orientdata",
+        "orientgeom",
+    }:
+        roles.append("orientation_data")
     return roles
 
 
@@ -96,7 +129,12 @@ def _files_for_role(output_files, role):
     return [
         file_data
         for file_data in output_files or []
-        if role in classify_output_file(file_data)
+        if role
+        in (
+            file_data.get("roles", [])
+            if isinstance(file_data, dict) and "roles" in file_data
+            else classify_output_file(file_data)
+        )
     ]
 
 
@@ -112,7 +150,8 @@ def _missing_result(input_file_name, expected_role):
 
 def resolve_workflow_output_binding(
     *,
-    output_files,
+    output_files=None,
+    output_manifest=None,
     source_application,
     target_stage,
     target_application="",
@@ -120,7 +159,7 @@ def resolve_workflow_output_binding(
 ):
     """Choose the source output that satisfies one target workflow input."""
 
-    files = list(output_files or [])
+    files = list(output_manifest if output_manifest is not None else output_files or [])
     source_application = str(source_application or "")
     target_stage = str(target_stage or "")
 

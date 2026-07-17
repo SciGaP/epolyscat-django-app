@@ -42,6 +42,7 @@ from epolyscat_django_app import (
     models,
     remote_launch_contract,
     runtime_audit as runtime_audit_domain,
+    scientific_output_contracts,
     serializers,
     workflow_continuation as workflow_continuation_domain,
     workflow_output_contracts,
@@ -444,6 +445,8 @@ class RunViewSet(viewsets.ModelViewSet):
         "STDOUT": "stdout",
         "STDERR": "stderr",
     }
+    SCIENTIFIC_LOG_HEAD_BYTES = 256 * 1024
+    SCIENTIFIC_LOG_TAIL_BYTES = 768 * 1024
 
     def get_queryset(self):
         request = self.request
@@ -550,6 +553,138 @@ class RunViewSet(viewsets.ModelViewSet):
             append_experiment_directory_files(experiment_id, path="ARCHIVE")
 
         return output_files
+
+    @staticmethod
+    def _chunk_bytes(value):
+        if isinstance(value, bytes):
+            return value
+        return str(value or "").encode("utf-8", errors="replace")
+
+    def _bounded_log_contents(self, file_object):
+        head = self._chunk_bytes(
+            file_object.read(self.SCIENTIFIC_LOG_HEAD_BYTES)
+        )
+        tail = bytearray()
+        while True:
+            chunk = file_object.read(64 * 1024)
+            if not chunk:
+                break
+            tail.extend(self._chunk_bytes(chunk))
+            if len(tail) > self.SCIENTIFIC_LOG_TAIL_BYTES:
+                del tail[: len(tail) - self.SCIENTIFIC_LOG_TAIL_BYTES]
+        if not tail:
+            contents = head
+        else:
+            contents = head + b"\n... [middle omitted] ...\n" + bytes(tail)
+        return contents.decode("utf-8", errors="replace")
+
+    def _read_manifest_entry_text(self, request, entry):
+        data_product_uri = entry.get("data_product_uri", "")
+        descriptor = entry.get("descriptor", {})
+        path = ""
+        if isinstance(descriptor, dict):
+            path = descriptor.get("resource_path") or descriptor.get("path") or ""
+        if not data_product_uri and not path:
+            return None
+
+        file_object = None
+        try:
+            if data_product_uri:
+                file_object = user_storage.open_file(
+                    request,
+                    data_product_uri=data_product_uri,
+                )
+            else:
+                file_object = user_storage.open_file(request, path=path)
+            return self._bounded_log_contents(file_object)
+        except Exception:
+            return None
+        finally:
+            close = getattr(file_object, "close", None)
+            if callable(close):
+                close()
+
+    def _scientific_output_report(self, request, run, output_files=None):
+        output_files = (
+            self._output_files_for_run(request, run)
+            if output_files is None
+            else list(output_files)
+        )
+        manifest = scientific_output_contracts.build_output_manifest(output_files)
+        classification = workflow_continuation_domain.classify_run(run) or {}
+        source_application = classification.get("source_application") or (
+            run.workflow_application
+            or run.module_application
+            or run.utility_application
+        )
+        content_cache = {}
+
+        def read_text(entry):
+            cache_key = entry.get("data_product_uri") or entry.get("name")
+            if cache_key not in content_cache:
+                content_cache[cache_key] = self._read_manifest_entry_text(
+                    request,
+                    entry,
+                )
+            return content_cache[cache_key]
+
+        verification = scientific_output_contracts.verify_scientific_outputs(
+            source_application,
+            manifest,
+            read_text=read_text,
+        )
+        latest_execution = getattr(run, "latest_execution", None)
+        scheduler_status = ""
+        if latest_execution is not None:
+            try:
+                scheduler_status = str(
+                    latest_execution.get_airavata_experiment_status(request)
+                ).upper()
+            except Exception:
+                scheduler_status = str(
+                    getattr(latest_execution, "airavata_experiment_status", "")
+                    or ""
+                ).upper()
+        return {
+            "run_id": run.id,
+            "source_stage": classification.get("source_stage", ""),
+            "source_application": source_application,
+            "scheduler_status": scheduler_status,
+            "scheduler_complete": scheduler_status == "COMPLETED",
+            "files": manifest,
+            "scientific_verification": verification,
+        }
+
+    def _continuation_eligibility(self, request, run):
+        eligibility = workflow_continuation_domain.continuation_eligibility(
+            run,
+            request,
+        )
+        if not eligibility.get("source_application"):
+            return eligibility
+
+        report = self._scientific_output_report(request, run)
+        verification = report["scientific_verification"]
+        eligibility["scientific_verification"] = verification
+        if not eligibility["eligible"] or verification["status"] == "verified":
+            return eligibility
+
+        reason_by_status = {
+            "failed": "scientific_verification_failed",
+            "incomplete": "scientific_output_incomplete",
+            "unverified": "scientific_verification_unavailable",
+        }
+        eligibility.update(
+            {
+                "eligible": False,
+                "reason": reason_by_status.get(
+                    verification["status"],
+                    "scientific_verification_unavailable",
+                ),
+                "message": verification["message"],
+            }
+        )
+        return eligibility
 
         '''
         tutorial_view_id = models.View.tutorial_view().id
@@ -1159,10 +1294,7 @@ class RunViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def workflow_continuation(self, request, pk=None):
         source_run: models.Run = self.get_object()
-        eligibility = workflow_continuation_domain.continuation_eligibility(
-            source_run,
-            request,
-        )
+        eligibility = self._continuation_eligibility(request, source_run)
         if request.method.lower() == "get":
             return Response(eligibility)
         if not eligibility["eligible"]:
@@ -1180,6 +1312,9 @@ class RunViewSet(viewsets.ModelViewSet):
                 "runId": source_run.id,
                 "stage": eligibility["source_stage"],
                 "application": eligibility["source_application"],
+                "scientificVerification": eligibility.get(
+                    "scientific_verification", {}
+                ),
             },
             "dataGenerationApplication": (
                 eligibility["source_application"]
@@ -1649,6 +1784,24 @@ class RunViewSet(viewsets.ModelViewSet):
         return Response(self._output_files_for_run(request, run))
 
     @action(detail=True, methods=["GET"])
+    def output_manifest(self, request, pk=None):
+        run = self.get_object()
+        report = self._scientific_output_report(request, run)
+        return Response(
+            {
+                **report,
+                "files": [
+                    {
+                        key: value
+                        for key, value in entry.items()
+                        if key != "descriptor"
+                    }
+                    for entry in report["files"]
+                ],
+            }
+        )
+
+    @action(detail=True, methods=["GET"])
     def workflow_output_binding(self, request, pk=None):
         run = self.get_object()
         query_params = getattr(request, "query_params", request.GET)
@@ -1664,8 +1817,68 @@ class RunViewSet(viewsets.ModelViewSet):
             or run.module_application
             or run.utility_application
         )
+        report = self._scientific_output_report(request, run)
+        verification = report["scientific_verification"]
+        provenance = {
+            "source_run_id": run.id,
+            "source_stage": classification.get("source_stage", ""),
+            "source_application": source_application,
+            "scheduler_status": report["scheduler_status"],
+            "verification_status": verification["status"],
+        }
+        if not report["scheduler_complete"]:
+            return Response(
+                {
+                    "status": "blocked",
+                    "reason": "source_run_not_completed",
+                    "message": (
+                        "The source run must complete before its outputs can be "
+                        "inherited."
+                    ),
+                    "scheduler_status": report["scheduler_status"],
+                    "input_file_name": query_params.get(
+                        "requiredFileName", ""
+                    ),
+                    "expected_role": "",
+                    "selected": None,
+                    "candidates": [],
+                    "data_entry_values": None,
+                    "source_stage": classification.get("source_stage", ""),
+                    "source_application": source_application,
+                    "target_stage": target_stage,
+                    "target_application": query_params.get(
+                        "targetApplicationId", ""
+                    ),
+                    "scientific_verification": verification,
+                    "provenance": provenance,
+                }
+            )
+        if verification["status"] != "verified":
+            return Response(
+                {
+                    "status": "blocked",
+                    "reason": verification["reason"],
+                    "message": verification["message"],
+                    "scheduler_status": report["scheduler_status"],
+                    "input_file_name": query_params.get(
+                        "requiredFileName", ""
+                    ),
+                    "expected_role": "",
+                    "selected": None,
+                    "candidates": [],
+                    "data_entry_values": None,
+                    "source_stage": classification.get("source_stage", ""),
+                    "source_application": source_application,
+                    "target_stage": target_stage,
+                    "target_application": query_params.get(
+                        "targetApplicationId", ""
+                    ),
+                    "scientific_verification": verification,
+                    "provenance": provenance,
+                }
+            )
         result = workflow_output_contracts.resolve_workflow_output_binding(
-            output_files=self._output_files_for_run(request, run),
+            output_manifest=report["files"],
             source_application=source_application,
             target_stage=target_stage,
             target_application=query_params.get("targetApplicationId", ""),
@@ -1680,6 +1893,9 @@ class RunViewSet(viewsets.ModelViewSet):
                 "target_application": query_params.get(
                     "targetApplicationId", ""
                 ),
+                "scheduler_status": report["scheduler_status"],
+                "scientific_verification": verification,
+                "provenance": provenance,
             }
         )
 

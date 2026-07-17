@@ -16,7 +16,11 @@
         </div>
         <div class="view-run-heading-actions">
           <div class="view-run-status" v-if="statusBadges.length">
-            <span v-for="badge in statusBadges" :key="badge.label">
+            <span
+                v-for="badge in statusBadges"
+                :key="badge.label"
+                :title="badge.title || null"
+            >
               <strong>{{ badge.label }}</strong>
               {{ badge.value }}
             </span>
@@ -248,6 +252,7 @@ export default {
         eligible: false,
         reason: "",
         message: "",
+        scientificVerification: null,
       },
       workflowContinuationLoading: false,
       plotForm: {
@@ -381,6 +386,14 @@ export default {
       }
       if (jobStatus && jobStatus !== runStatus) {
         badges.push({ label: "Job", value: jobStatus });
+      }
+      const verification = this.workflowContinuation.scientificVerification;
+      if (verification && verification.status) {
+        badges.push({
+          label: "Science",
+          value: this.formatStatusLabel(verification.status),
+          title: verification.message || "",
+        });
       }
 
       return badges;
@@ -616,6 +629,7 @@ export default {
         eligible: false,
         reason: "",
         message: "",
+        scientificVerification: null,
       };
       try {
         this.workflowContinuation = await RunService.fetchWorkflowContinuation({
@@ -626,6 +640,7 @@ export default {
           eligible: false,
           reason: "status_unavailable",
           message: "Workflow continuation is unavailable.",
+          scientificVerification: null,
         };
       }
     },

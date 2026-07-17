@@ -102,3 +102,44 @@ def test_output_classifier_accepts_object_descriptors_and_airavata_file_types():
     output = SimpleNamespace(name="result.dat", fileType="DumpOut")
 
     assert workflow_output_contracts.classify_output_file(output) == ["dump_out"]
+
+
+def test_binding_accepts_standard_manifest_and_returns_original_descriptor():
+    result = workflow_output_contracts.resolve_workflow_output_binding(
+        output_manifest=[
+            {
+                "name": "gaussian.log",
+                "roles": ["gaussian_output"],
+                "descriptor": {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://gaussian",
+                },
+            }
+        ],
+        source_application="Gaussian16",
+        target_stage="ePolyScat_Run",
+    )
+
+    assert result["status"] == "ready"
+    assert result["selected"] == {
+        "name": "gaussian.log",
+        "data-product-uri": "airavata-dp://gaussian",
+    }
+    assert result["candidates"] == [result["selected"]]
+
+
+def test_classifier_covers_manual_epolyscat_output_families():
+    expectations = {
+        "PlotData": "cross_section",
+        "MFDCSFull": "cross_section",
+        "MatrixElements": "matrix_elements",
+        "VibAveIdy": "matrix_elements",
+        "AWaveFun": "wavefunction",
+        "ViewOrbFlux": "orbital_grid",
+    }
+
+    for file_type, expected_role in expectations.items():
+        roles = workflow_output_contracts.classify_output_file(
+            {"name": f"{file_type}.dat", "fileType": file_type}
+        )
+        assert expected_role in roles

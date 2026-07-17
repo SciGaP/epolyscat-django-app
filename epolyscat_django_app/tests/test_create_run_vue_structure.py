@@ -807,6 +807,33 @@ def test_view_run_can_continue_an_eligible_completed_run_into_workflow():
         assert hook in service_source
 
 
+def test_scientific_verification_is_visible_and_blocks_silent_output_inheritance():
+    create_run_source = _source()
+    view_run_source = _view_run_source()
+    service_source = _epolyscat_service_source()
+
+    for hook in [
+        "workflowOutputBindingMessage",
+        'variant="warning"',
+        'backendBinding.status === "blocked"',
+        "backendBinding.message",
+    ]:
+        assert hook in create_run_source
+
+    for hook in [
+        'label: "Science"',
+        "workflowContinuation.scientificVerification",
+        "verification.message",
+    ]:
+        assert hook in view_run_source
+
+    for hook in [
+        "scientificVerification: data.scientific_verification",
+        "provenance: data.provenance",
+    ]:
+        assert hook in service_source
+
+
 def test_create_run_can_edit_existing_workflow_child_step():
     source = _source()
 

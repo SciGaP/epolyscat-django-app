@@ -671,6 +671,8 @@ export const InputService = {
             inputFileName: data.input_file_name,
             outputFile: outputFile,
             dataEntryValues: data.data_entry_values,
+            scientificVerification: data.scientific_verification,
+            provenance: data.provenance,
         };
     },
     async fetchFileContents(file) {
@@ -1021,6 +1023,7 @@ export const RunService = {
             sourceStage: data.source_stage || "",
             sourceApplication: data.source_application || "",
             nextStage: data.next_stage || "",
+            scientificVerification: data.scientific_verification,
         };
     },
     async continueWorkflow({runId = null} = {}) {

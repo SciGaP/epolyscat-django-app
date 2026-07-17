@@ -1,4 +1,4 @@
-from io import StringIO
+from io import BytesIO, StringIO
 from types import SimpleNamespace
 from unittest import mock
 
@@ -31,8 +31,107 @@ class RunViewSetBackendTests(TestCase):
         }
 
         self.assertIn("workflow_continuation", action_names)
+        self.assertIn("output_manifest", action_names)
 
-    def test_workflow_continuation_get_returns_backend_eligibility(self):
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_output_manifest_reports_verified_gaussian_result(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="manifest-user")
+        run = self.create_run(user)
+        run.module_application = "Gaussian16"
+        run.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="gaussian-manifest-experiment",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://gaussian-log",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(
+            b"Normal termination of Gaussian 16 at Fri Jul 17"
+        )
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{run.id}/output_manifest/"
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.output_manifest(request, pk=run.id)
+
+        self.assertEqual(response.data["run_id"], run.id)
+        self.assertEqual(response.data["source_application"], "Gaussian16")
+        self.assertEqual(response.data["scheduler_status"], "COMPLETED")
+        self.assertTrue(response.data["scheduler_complete"])
+        self.assertEqual(
+            response.data["scientific_verification"]["status"], "verified"
+        )
+        self.assertEqual(response.data["files"][0]["roles"], ["gaussian_output"])
+        self.assertNotIn("descriptor", response.data["files"][0])
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_completed_scheduler_run_is_not_continuable_when_science_failed(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="false-complete")
+        source = self.create_run(user)
+        source.module_application = "Gaussian16"
+        source.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=source,
+            airavata_experiment_id="false-complete-experiment",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://failed-log",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(
+            b"Error termination via Lnk1e in Gaussian"
+        )
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/"
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=source)
+
+        response = viewset.workflow_continuation(request, pk=source.id)
+
+        self.assertFalse(response.data["eligible"])
+        self.assertEqual(response.data["reason"], "scientific_verification_failed")
+        self.assertEqual(
+            response.data["scientific_verification"]["status"], "failed"
+        )
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_continuation_get_returns_backend_eligibility(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
         user = get_user_model().objects.create_user(username="continue-get")
         source = self.create_run(user)
         source.module_application = "Gaussian16"
@@ -42,6 +141,16 @@ class RunViewSetBackendTests(TestCase):
             airavata_experiment_id="completed-gaussian",
             airavata_experiment_status="COMPLETED",
         )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://completed-log",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Normal termination of Gaussian 16")
         request = RequestFactory().get(
             f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/"
         )
@@ -57,7 +166,13 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(response.data["source_stage"], "Data_Gen")
         self.assertEqual(response.data["next_stage"], "ePolyScat_Run")
 
-    def test_workflow_continuation_post_creates_parent_after_imported_source(self):
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_continuation_post_creates_parent_after_imported_source(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
         user = get_user_model().objects.create_user(username="continue-post")
         source = self.create_run(user)
         source.module_application = "ePolyScat"
@@ -74,6 +189,22 @@ class RunViewSetBackendTests(TestCase):
             airavata_experiment_id="completed-epolyscat",
             airavata_experiment_status="COMPLETED",
         )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "ePolyScat.stdout",
+                    "fileType": "STDOUT",
+                    "data-product-uri": "airavata-dp://epolyscat-log",
+                },
+                {
+                    "name": "test03dumpidy.dat",
+                    "fileType": "DumpOut",
+                    "data-product-uri": "airavata-dp://dump",
+                },
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"End EDCS\nFinalize\n")
         request = RequestFactory().post(
             f"/epolyscat_django_app/api/runs/{source.id}/workflow_continuation/",
             data={},
@@ -93,12 +224,21 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(parent.run_mode, "workflow")
         self.assertTrue(parent.workflow_metadata["continuation"])
         self.assertEqual(
-            parent.workflow_metadata["importedSource"],
-            {
-                "runId": source.id,
-                "stage": "ePolyScat_Run",
-                "application": "ePolyScat",
-            },
+            parent.workflow_metadata["importedSource"]["runId"], source.id
+        )
+        self.assertEqual(
+            parent.workflow_metadata["importedSource"]["stage"],
+            "ePolyScat_Run",
+        )
+        self.assertEqual(
+            parent.workflow_metadata["importedSource"]["application"],
+            "ePolyScat",
+        )
+        self.assertEqual(
+            parent.workflow_metadata["importedSource"]["scientificVerification"][
+                "status"
+            ],
+            "verified",
         )
         self.assertEqual(
             [(child.workflow_step_order, child.workflow_stage) for child in child_runs],
@@ -1065,8 +1205,13 @@ class RunViewSetBackendTests(TestCase):
             ],
         )
 
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
-    def test_workflow_output_binding_returns_backend_selected_file(self, mock_list_experiment_dir):
+    def test_workflow_output_binding_returns_backend_selected_file(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
         user = get_user_model().objects.create_user(username="binding-user")
         run = self.create_run(user)
         run.module_application = "Gaussian16"
@@ -1074,6 +1219,7 @@ class RunViewSetBackendTests(TestCase):
         models.RemoteExecution.objects.create(
             run=run,
             airavata_experiment_id="gaussian-experiment",
+            airavata_experiment_status="COMPLETED",
         )
         mock_list_experiment_dir.return_value = (
             [],
@@ -1082,6 +1228,7 @@ class RunViewSetBackendTests(TestCase):
                 {"name": "gaussian.log", "data-product-uri": "airavata-dp://log"},
             ],
         )
+        mock_open_file.return_value = BytesIO(b"Normal termination of Gaussian 16")
         request = RequestFactory().get(
             f"/epolyscat_django_app/api/runs/{run.id}/workflow_output_binding/",
             {"targetStageId": "ePolyScat_Run"},
@@ -1097,6 +1244,103 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(response.data["source_application"], "Gaussian16")
         self.assertEqual(response.data["selected"]["name"], "gaussian.log")
         self.assertEqual(response.data["input_file_name"], "ePolyScat_Input_Data")
+        self.assertEqual(
+            response.data["provenance"],
+            {
+                "source_run_id": run.id,
+                "source_stage": "Data_Gen",
+                "source_application": "Gaussian16",
+                "scheduler_status": "COMPLETED",
+                "verification_status": "verified",
+            },
+        )
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_output_binding_blocks_unverified_source_output(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="blocked-binding")
+        run = self.create_run(user)
+        run.module_application = "Gaussian16"
+        run.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="failed-gaussian-experiment",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://failed-gaussian",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Error termination via Lnk1e")
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{run.id}/workflow_output_binding/",
+            {"targetStageId": "ePolyScat_Run"},
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.workflow_output_binding(request, pk=run.id)
+
+        self.assertEqual(response.data["status"], "blocked")
+        self.assertIsNone(response.data["selected"])
+        self.assertEqual(
+            response.data["scientific_verification"]["status"], "failed"
+        )
+        self.assertEqual(
+            response.data["provenance"]["verification_status"], "failed"
+        )
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_output_binding_waits_for_scheduler_completion(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="running-binding")
+        run = self.create_run(user)
+        run.module_application = "Gaussian16"
+        run.save(update_fields=["module_application"])
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="running-gaussian-experiment",
+            airavata_experiment_status="EXECUTING",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://running-gaussian",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Normal termination of Gaussian 16")
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{run.id}/workflow_output_binding/",
+            {"targetStageId": "ePolyScat_Run"},
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.workflow_output_binding(request, pk=run.id)
+
+        self.assertEqual(response.data["status"], "blocked")
+        self.assertEqual(response.data["reason"], "source_run_not_completed")
+        self.assertEqual(response.data["scheduler_status"], "EXECUTING")
 
     @override_settings(
         GATEWAY_ID="gateway",

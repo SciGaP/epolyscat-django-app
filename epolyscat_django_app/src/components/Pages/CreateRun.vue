@@ -222,6 +222,15 @@
         </b-collapse>
       </section>
 
+      <b-alert
+          v-if="workflowOutputBindingMessage"
+          show
+          variant="warning"
+          class="workflow-output-binding-warning"
+      >
+        {{ workflowOutputBindingMessage }}
+      </b-alert>
+
       <section v-if="hasRequiredFiles" class="input-files-panel" ref="inputFilesPanel">
         <h2>Input Files</h2>
         <div class="input-file-tabs" role="tablist" aria-label="Input files">
@@ -744,6 +753,18 @@ export default {
         return "Workflow Step";
       }
       return this.cloneRunId ? "Clone Run" : "New Run";
+    },
+    workflowOutputBindingMessage() {
+      const error = this.workflowOutputBindingError;
+      if (!error) {
+        return "";
+      }
+      if (typeof error === "string") {
+        return error;
+      }
+      return error.message
+          || (error.response && error.response.data && error.response.data.detail)
+          || "The previous run output could not be inherited.";
     },
     isWorkflowChildEdit() {
       return Boolean(this.workflowChildRunId);
@@ -1467,6 +1488,7 @@ export default {
       this.patchInpcContentFromTableValues(Object.keys(dataEntryValues));
     },
     async loadWorkflowPreviousOutputsIntoActiveInputs(outputsRunId, sourceRun = null) {
+      this.workflowOutputBindingError = null;
       try {
         if (this.selectedApplicationId === "ePolyScat_Run") {
           const backendBinding = await InputService.fetchWorkflowOutputBinding({
@@ -1475,6 +1497,10 @@ export default {
             targetApplicationId: this.activeWorkflowApplicationId,
             requiredFileName: "ePolyScat_Input_Data",
           });
+          if (backendBinding.status === "blocked") {
+            this.workflowOutputBindingError = backendBinding.message;
+            return;
+          }
           if (backendBinding.status === "ready") {
             this.addWorkflowOutputToInput(
                 backendBinding.inputFileName,
@@ -1493,6 +1519,10 @@ export default {
             targetApplicationId: this.activeWorkflowApplicationId,
             requiredFileName,
           });
+          if (backendBinding.status === "blocked") {
+            this.workflowOutputBindingError = backendBinding.message;
+            return;
+          }
           if (backendBinding.status === "ready") {
             this.addWorkflowOutputToInput(
                 backendBinding.inputFileName,
@@ -2335,6 +2365,11 @@ export default {
   margin: 0 0 34px;
   max-width: 1017px;
   padding-top: 14px;
+}
+
+.workflow-output-binding-warning {
+  margin: -12px 0 28px;
+  max-width: 1017px;
 }
 
 .new-run-description-header {

@@ -22,6 +22,20 @@ def _thrift_enum_compat(enum_cls):
     values_to_names = dict(getattr(enum_cls, "_VALUES_TO_NAMES", {}))
     names_to_values = dict(getattr(enum_cls, "_NAMES_TO_VALUES", {}))
 
+    enum_members = getattr(enum_cls, "__members__", {})
+    if enum_members and not names_to_values:
+        names_to_values = {
+            name: int(member.value) for name, member in enum_members.items()
+        }
+    if names_to_values and not values_to_names:
+        values_to_names = {}
+        for name, value in names_to_values.items():
+            values_to_names.setdefault(value, name)
+    if values_to_names and not names_to_values:
+        names_to_values = {
+            name: value for value, name in values_to_names.items()
+        }
+
     class CompatEnum:
         _VALUES_TO_NAMES = values_to_names
         _NAMES_TO_VALUES = names_to_values

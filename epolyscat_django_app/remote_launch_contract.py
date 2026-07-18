@@ -2,6 +2,8 @@
 
 import os
 
+from epolyscat_django_app import utility_runtime_contracts
+
 
 EPOLYSCAT_COMMAND_INPUT_NAMES = (
     "ePolyscat_Input_File",
@@ -22,6 +24,23 @@ def _value(instance, *names):
 
 def _is_controller_entrypoint(executable_path):
     return "controller" in os.path.basename(str(executable_path or "")).lower()
+
+
+def _is_portal_wrapper_entrypoint(executable_path):
+    basename = os.path.basename(str(executable_path or "")).lower()
+    return "epolyscat" in basename and "wrapper" in basename
+
+
+def _utility_run_details(input_values):
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    if mode == "UTILITY":
+        return mode, str(input_values.get("Application_Utility") or "")
+    if (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Analysis"
+    ):
+        return mode, str(input_values.get("Application_Utility") or "")
+    return mode, ""
 
 
 def _is_direct_epolyscat_run(input_values):
@@ -46,7 +65,24 @@ def resolve_command_line_policy(
             "input_names": forced_input_names,
         }
 
-    mode = str(input_values.get("Calculation_Type") or "").upper()
+    mode, utility_id = _utility_run_details(input_values)
+    if utility_id and _is_portal_wrapper_entrypoint(executable_path):
+        utility_runtime_contracts.validate_utility_input_values(
+            utility_id,
+            input_values,
+        )
+        input_names = utility_runtime_contracts.resolve_utility_argument_input_names(
+            utility_id,
+            input_values,
+        )
+        input_names.update({"Calculation_Type", "Application_Utility"})
+        if mode == "WORKFLOW":
+            input_names.add("Application_Workflow")
+        return {
+            "exclusive": True,
+            "input_names": input_names,
+        }
+
     if mode == "UTILITY":
         raise ValueError(
             "A direct ePolyScat deployment does not support utility dispatch"

@@ -85,9 +85,9 @@
                   <span class="required-file-description">{{ file.description }}</span>
                   <span
                       class="required-file-status"
-                      :class="uploadedRequiredFiles(file.name).length > 0 ? 'required-file-status-ready' : 'required-file-status-missing'"
+                      :class="requiredFileIsReady(file) ? 'required-file-status-ready' : 'required-file-status-missing'"
                   >
-                    {{ uploadedRequiredFiles(file.name).length > 0 ? "Ready" : "Missing" }}
+                    {{ requiredFileIsReady(file) ? "Ready" : "Missing" }}
                   </span>
                   <span
                       v-if="uploadedRequiredFiles(file.name).length > 0"
@@ -175,9 +175,9 @@
                   <span class="required-file-description">{{ file.description }}</span>
                   <span
                       class="required-file-status"
-                      :class="uploadedRequiredFiles(file.name).length > 0 ? 'required-file-status-ready' : 'required-file-status-missing'"
+                      :class="requiredFileIsReady(file) ? 'required-file-status-ready' : 'required-file-status-missing'"
                   >
-                    {{ uploadedRequiredFiles(file.name).length > 0 ? "Ready" : "Missing" }}
+                    {{ requiredFileIsReady(file) ? "Ready" : "Missing" }}
                   </span>
                   <span
                       v-if="uploadedRequiredFiles(file.name).length > 0"
@@ -674,6 +674,13 @@ import {
 } from "@/utils/epolyscat-input-script";
 import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
 
+const utilityControlRequiredFile = () => ({
+  name: "ePolyscat_Input_File",
+  label: "Utility control file",
+  description: "Utility parameters and input/output filenames",
+  generatedFileName: "utility-control.in",
+});
+
 export default {
   name: 'CreateRun',
   components: {ButtonOverlay, RunResourceSettings, UserStorage},
@@ -762,6 +769,7 @@ export default {
               label: "CnvMath",
               description: "ConvertToMathematica",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "BendOrient_Output",
                   label: "BendOrient_Output",
@@ -775,6 +783,7 @@ export default {
               label: "CnvMatLab",
               description: "ConvertToMatlab",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "BendOrient_Output",
                   label: "BendOrient_Output",
@@ -788,6 +797,7 @@ export default {
               label: "CnvLinFull",
               description: "Compute Ph.ion.diff.Xsec.",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "DumpOut",
                   label: "DumpOut",
@@ -801,11 +811,14 @@ export default {
               label: "MoldenMerge",
               description: "Merge Molden Data Files",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "molden.dat",
                   label: "molden.dat",
                   description: "Molden data file",
                   generatedFileName: "molden.dat",
+                  minimumFileCount: 2,
+                  allowsMultiple: true,
                 },
               ],
             },
@@ -814,6 +827,7 @@ export default {
               label: "NRFPAD",
               description: "N photon RFPAD",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "Cross_Section_Input_File",
                   label: "Cross_Section_Input_File",
@@ -827,6 +841,7 @@ export default {
               label: "Cube2igor",
               description: "G16CubeToIGOR Plots",
               requiredFiles: [
+                utilityControlRequiredFile(),
                 {
                   name: "Cube_Output",
                   label: "Cube_Output",
@@ -1224,7 +1239,7 @@ export default {
     isValid() {
       return {
         root: !!this.root && this.root.length >= 1,
-        inpcContent: !this.hasRequiredFiles ? true
+        inpcContent: !this.hasRequiredFiles || !this.isEPolyScatScriptInput ? true
             : this.inpcContentType !== "text" ? true
                 : (!!this.inpcContent && this.inpcContent.length >= 1),
         groupResourceProfileId: !!this.groupResourceProfileId,
@@ -1276,11 +1291,20 @@ export default {
       return inputFiles[this.activeInputFile.inputFileName] || null;
     },
     activeInputAllowsMultiple() {
-      return this.activeInputDefinition ? this.activeInputDefinition.isMultiFileInput : false;
+      return Boolean(
+          this.activeInputFile.allowsMultiple
+          || (this.activeInputDefinition && this.activeInputDefinition.isMultiFileInput)
+      );
     },
     isEPolyScatScriptInput() {
-      return this.activeInputFile.id === "input_file"
-          || this.activeInputFile.inputFileName === "ePolyscat_Input_File";
+      return Boolean(
+          this.activeExecutionApplication
+          && this.activeExecutionApplication.id === "ePolyScat"
+          && (
+            this.activeInputFile.id === "input_file"
+            || this.activeInputFile.inputFileName === "ePolyscat_Input_File"
+          )
+      );
     },
     dataEntryCardClasses() {
       return [
@@ -1500,6 +1524,8 @@ export default {
         label: file.label,
         inputFileName: file.name,
         generatedFileName: file.generatedFileName || file.name,
+        minimumFileCount: file.minimumFileCount || 1,
+        allowsMultiple: Boolean(file.allowsMultiple),
       }));
 
       if (!this.inputFiles.some(file => file.id === this.selectedInputFile)) {
@@ -1524,6 +1550,14 @@ export default {
       const inputFile = inputFiles[fileName];
 
       return inputFile ? inputFile.files.filter(file => !file.deleted && !file.generatedByNewRun) : [];
+    },
+    requiredFileIsReady(file) {
+      const minimumFileCount = file.minimumFileCount || 1;
+      return this.uploadedRequiredFiles(file.name).length >= minimumFileCount;
+    },
+    requiredFileIsReadyForStage(stageId, file) {
+      const minimumFileCount = file.minimumFileCount || 1;
+      return this.uploadedWorkflowStageRequiredFiles(stageId, file.name).length >= minimumFileCount;
     },
     workflowStageRunPath(stageId) {
       const applicationId = this.getWorkflowStageSelection(stageId);
@@ -1560,7 +1594,7 @@ export default {
       return this.activeRunTypeApplications.find(stage => {
         const requiredFiles = this.workflowStageRequiredFiles(stage.id);
 
-        return requiredFiles.some(file => this.uploadedWorkflowStageRequiredFiles(stage.id, file.name).length === 0);
+        return requiredFiles.some(file => !this.requiredFileIsReadyForStage(stage.id, file));
       }) || null;
     },
     firstWorkflowSubmitStage() {

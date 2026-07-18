@@ -179,7 +179,7 @@ def test_create_run_hides_file_sections_when_selection_has_no_required_files():
         "hasRequiredFiles()",
         '<section v-if="hasRequiredFiles" class="input-files-panel"',
         '<section v-if="hasRequiredFiles && isEPolyScatScriptInput" class="data-entry-section"',
-        "inpcContent: !this.hasRequiredFiles ? true",
+        "inpcContent: !this.hasRequiredFiles || !this.isEPolyScatScriptInput ? true",
     ]
 
     for hook in expected_hooks:
@@ -266,6 +266,39 @@ def test_analysis_utilities_declare_manual_specific_required_inputs():
         assert token in source
     for token in expected_service_tokens:
         assert token in service_source
+
+
+def test_utilities_require_a_control_file_and_molden_merge_requires_two_inputs():
+    source = _source()
+    service_source = _epolyscat_service_source()
+
+    assert "utilityControlRequiredFile()" in source
+    assert source.count("utilityControlRequiredFile(),") == 6
+    assert 'minimumFileCount: 2' in source
+    assert 'allowsMultiple: true' in source
+    assert "requiredFileIsReady(file)" in source
+    assert "requiredFileIsReadyForStage(stage.id, file)" in source
+    assert 'activeExecutionApplication.id === "ePolyScat"' in source
+    assert "!this.isEPolyScatScriptInput" in source
+    assert '"name": "molden.dat"' in service_source
+    assert '"type": 4' in service_source
+
+
+def test_utility_control_input_is_available_on_all_utility_paths():
+    service_source = _epolyscat_service_source()
+    control_block = service_source.split(
+        '"name": "ePolyscat_Input_File"', 1
+    )[1].split('"name": "molden.dat"', 1)[0]
+
+    for utility_id in (
+        "CnvMath",
+        "CnvMatLab",
+        "CnvLinFull",
+        "MoldenMerge",
+        "NRFPAD",
+        "Cube2igor",
+    ):
+        assert f'"value": "{utility_id}"' in control_block
 
 
 def test_create_run_required_files_are_status_links_to_input_files():

@@ -15,6 +15,8 @@ trap 'rm -rf "$work"' EXIT
 
 fake_executable="$work/fake-ePolyScat.exe"
 fake_launcher="$work/fake-ibrun"
+utility_bin="$work/utility-bin"
+mkdir -p "$utility_bin"
 
 cat > "$fake_executable" <<'EOF'
 #!/bin/sh
@@ -53,6 +55,32 @@ exec "$@"
 EOF
 
 chmod 700 "$fake_executable" "$fake_launcher"
+
+for utility in CnvMath CnvMatLab CnvLinFull MoldenMerge NRFPAD Cube2igor; do
+    cat > "$utility_bin/$utility.exe" <<'EOF'
+#!/bin/sh
+
+utility=$(basename "$0" .exe)
+cat > "$UTILITY_LOG_DIR/$utility.stdin"
+printf '%s\n' "$*" > "$UTILITY_LOG_DIR/$utility.args"
+
+if [ "$utility" = "Cube2igor" ]; then
+    [ -f fort.10 ] || {
+        echo "fake Cube2igor: fort.10 was not staged" >&2
+        exit 93
+    }
+    cmp -s fort.10 "$EXPECTED_CUBE_INPUT" || {
+        echo "fake Cube2igor: fort.10 differs from the cube input" >&2
+        exit 94
+    }
+    printf 'IGOR grid\n' > fort.11
+    printf 'IGOR geometry\n' > fort.12
+fi
+
+printf '%s completed\n' "$utility"
+EOF
+    chmod 700 "$utility_bin/$utility.exe"
+done
 
 expect_status() {
     local expected=$1
@@ -141,12 +169,63 @@ printf 'LMax 4\n' > "$unsupported_dir/ep_input"
     expect_status 64 gaussian-selector env \
         EPOLYSCAT_EXECUTABLE="$fake_executable" \
         bash "$wrapper" MODULE Gaussian16
-    expect_status 64 utility-selector env \
-        EPOLYSCAT_EXECUTABLE="$fake_executable" \
-        bash "$wrapper" UTILITY CnvMath
     expect_status 64 workflow-selector env \
         EPOLYSCAT_EXECUTABLE="$fake_executable" \
         bash "$wrapper" WORKFLOW ePolyScat_Run
+)
+
+utility_dir="$work/utilities"
+utility_logs="$work/utility-logs"
+mkdir -p "$utility_dir" "$utility_logs"
+printf 'control line one\ncontrol line two\n' > "$utility_dir/control.in"
+printf 'bend data\n' > "$utility_dir/bendorient.dat"
+printf 'dump data\n' > "$utility_dir/dumpidy.dat"
+printf 'first molden\n' > "$utility_dir/first.molden"
+printf 'second molden\n' > "$utility_dir/second.molden"
+printf 'orient data\n' > "$utility_dir/orientncro.dat"
+printf 'cube data\n' > "$utility_dir/density.cube"
+
+(
+    cd "$utility_dir"
+    for specification in \
+        "CnvMath bendorient.dat" \
+        "CnvMatLab bendorient.dat" \
+        "CnvLinFull dumpidy.dat" \
+        "NRFPAD orientncro.dat"; do
+        set -- $specification
+        utility=$1
+        data_file=$2
+        UTILITY_LOG_DIR="$utility_logs" \
+        EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+            bash "$wrapper" UTILITY "$utility" control.in "$data_file"
+        cmp -s control.in "$utility_logs/$utility.stdin"
+        grep -q "^$utility completed$" "$utility.out"
+    done
+
+    UTILITY_LOG_DIR="$utility_logs" \
+    EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY MoldenMerge control.in first.molden second.molden
+    cmp -s control.in "$utility_logs/MoldenMerge.stdin"
+
+    EXPECTED_CUBE_INPUT="$utility_dir/density.cube" \
+    UTILITY_LOG_DIR="$utility_logs" \
+    EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY Cube2igor control.in density.cube
+    cmp -s control.in "$utility_logs/Cube2igor.stdin"
+    grep -q '^IGOR grid$' fort.11
+    grep -q '^IGOR geometry$' fort.12
+    [[ ! -e fort.10 ]]
+
+    UTILITY_LOG_DIR="$utility_logs" \
+    EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" WORKFLOW Analysis CnvLinFull control.in dumpidy.dat
+
+    expect_status 64 utility-missing-control env \
+        EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY CnvMath
+    expect_status 64 molden-one-input env \
+        EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY MoldenMerge control.in first.molden
 )
 
 occupied_dir="$work/occupied"

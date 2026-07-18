@@ -423,6 +423,42 @@ export const InputService = {
                                             "comparison": "equals",
                                             "value": "ePolyScat_Run"
                                         }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMath"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMatLab"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvLinFull"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "MoldenMerge"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "NRFPAD"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "Cube2igor"
+                                        }
                                     }
                                 ]
                             },
@@ -443,7 +479,7 @@ export const InputService = {
             {
                 "name": "molden.dat",
                 "value": "",
-                "type": 3,
+                "type": 4,
                 "applicationArgument": null,
                 "standardInput": true,
                 "userFriendlyDescription": "Molden Data file containing wavefunction.",

@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from epolyscat_django_app import runtime_audit
 
 
-def _input(name, options=None):
+def _input(name, options=None, data_type=3):
     metadata = {}
     if options is not None:
         metadata = {"editor": {"options": [{"value": value} for value in options]}}
-    return SimpleNamespace(name=name, metaData=json.dumps(metadata))
+    return SimpleNamespace(name=name, type=data_type, metaData=json.dumps(metadata))
 
 
 def test_runtime_audit_reports_all_remote_utility_contracts_ready():
@@ -19,9 +19,10 @@ def test_runtime_audit_reports_all_remote_utility_contracts_ready():
         applicationInputs=[
             _input("Calculation_Type", ["MODULE", "UTILITY", "WORKFLOW"]),
             _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
+            _input("ePolyscat_Input_File"),
             _input("BendOrient_Output"),
             _input("DumpOut"),
-            _input("molden.dat"),
+            _input("molden.dat", data_type=4),
             _input("Cross_Section_Input_File"),
             _input("Cube_Output"),
         ],
@@ -50,6 +51,9 @@ def test_runtime_audit_reports_all_remote_utility_contracts_ready():
         runtime_audit.EXPECTED_UTILITIES
     )
     assert all(utility["ready"] for utility in result["utilities"])
+    assert all(
+        utility["control_input_configured"] for utility in result["utilities"]
+    )
 
 
 def test_runtime_audit_reports_missing_selector_and_required_input_separately():
@@ -85,8 +89,9 @@ def test_runtime_audit_accepts_generic_postprocessing_input_collection():
         applicationModules=["epolyscat-module"],
         applicationInputs=[
             _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
-            _input("ePolyscat_Input_Data"),
-            _input("molden.dat"),
+            _input("ePolyscat_Input_File"),
+            _input("ePolyscat_Input_Data", data_type=4),
+            _input("molden.dat", data_type=4),
         ],
     )
     deployment = SimpleNamespace(
@@ -116,8 +121,9 @@ def test_runtime_audit_does_not_treat_direct_epolyscat_binary_as_utility_dispatc
         applicationModules=["epolyscat-module"],
         applicationInputs=[
             _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
-            _input("ePolyscat_Input_Data"),
-            _input("molden.dat"),
+            _input("ePolyscat_Input_File"),
+            _input("ePolyscat_Input_Data", data_type=4),
+            _input("molden.dat", data_type=4),
         ],
     )
     deployment = SimpleNamespace(
@@ -138,3 +144,98 @@ def test_runtime_audit_does_not_treat_direct_epolyscat_binary_as_utility_dispatc
     assert result["wrapper"]["deployment_count"] == 1
     assert result["wrapper"]["utility_controller_deployment_count"] == 0
     assert all(utility["deployed"] is False for utility in result["utilities"])
+
+
+def test_runtime_audit_reports_missing_utility_control_input():
+    module = SimpleNamespace(appModuleId="epolyscat-module")
+    interface = SimpleNamespace(
+        applicationInterfaceId="epolyscat-interface",
+        applicationModules=["epolyscat-module"],
+        applicationInputs=[
+            _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
+            _input("ePolyscat_Input_Data", data_type=4),
+            _input("molden.dat", data_type=4),
+        ],
+    )
+    deployment = SimpleNamespace(
+        appDeploymentId="deployment-id",
+        appModuleId="epolyscat-module",
+        computeHostId="frontera",
+        executablePath="/opt/epolyscat/epolyscat_wrapper.sh",
+    )
+
+    result = runtime_audit.audit_runtime_configuration(
+        application_module_id="epolyscat-module",
+        modules=[module],
+        interfaces=[interface],
+        deployments=[deployment],
+    )
+
+    assert result["ready"] is False
+    assert all(
+        utility["control_input_configured"] is False
+        for utility in result["utilities"]
+    )
+
+
+def test_runtime_audit_requires_collection_input_for_molden_merge():
+    module = SimpleNamespace(appModuleId="epolyscat-module")
+    interface = SimpleNamespace(
+        applicationInterfaceId="epolyscat-interface",
+        applicationModules=["epolyscat-module"],
+        applicationInputs=[
+            _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
+            _input("ePolyscat_Input_File"),
+            _input("ePolyscat_Input_Data", data_type=4),
+            _input("molden.dat", data_type=3),
+        ],
+    )
+    deployment = SimpleNamespace(
+        appDeploymentId="deployment-id",
+        appModuleId="epolyscat-module",
+        computeHostId="frontera",
+        executablePath="/opt/epolyscat/epolyscat_wrapper.sh",
+    )
+
+    result = runtime_audit.audit_runtime_configuration(
+        application_module_id="epolyscat-module",
+        modules=[module],
+        interfaces=[interface],
+        deployments=[deployment],
+    )
+    utilities = {utility["id"]: utility for utility in result["utilities"]}
+
+    assert utilities["CnvMath"]["ready"] is True
+    assert utilities["MoldenMerge"]["ready"] is False
+    assert utilities["MoldenMerge"]["supports_required_file_count"] is False
+    assert utilities["MoldenMerge"]["minimum_data_file_count"] == 2
+
+
+def test_runtime_audit_treats_frontera_wrapper_as_utility_dispatcher():
+    module = SimpleNamespace(appModuleId="epolyscat-module")
+    interface = SimpleNamespace(
+        applicationInterfaceId="epolyscat-interface",
+        applicationModules=["epolyscat-module"],
+        applicationInputs=[
+            _input("Application_Utility", runtime_audit.EXPECTED_UTILITIES),
+            _input("ePolyscat_Input_File"),
+            _input("ePolyscat_Input_Data", data_type=4),
+            _input("molden.dat", data_type=4),
+        ],
+    )
+    deployment = SimpleNamespace(
+        appDeploymentId="deployment-id",
+        appModuleId="epolyscat-module",
+        computeHostId="frontera",
+        executablePath="/opt/epolyscat/epolyscat_wrapper.sh",
+    )
+
+    result = runtime_audit.audit_runtime_configuration(
+        application_module_id="epolyscat-module",
+        modules=[module],
+        interfaces=[interface],
+        deployments=[deployment],
+    )
+
+    assert result["wrapper"]["utility_controller_deployment_count"] == 1
+    assert result["ready"] is True

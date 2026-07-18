@@ -45,6 +45,7 @@ from epolyscat_django_app import (
     runtime_audit as runtime_audit_domain,
     scientific_output_contracts,
     serializers,
+    utility_runtime_contracts,
     workflow_continuation as workflow_continuation_domain,
     workflow_output_contracts,
 )
@@ -161,6 +162,29 @@ def _command_line_input_names(input_values):
     application = ""
     command_line_input_names = set()
 
+    is_workflow_analysis = (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Analysis"
+    )
+    if mode == "UTILITY" or is_workflow_analysis:
+        utility_application = str(
+            input_values.get("Application_Utility") or ""
+        )
+        if not utility_application:
+            return command_line_input_names
+        command_line_input_names.update(
+            utility_runtime_contracts.resolve_utility_argument_input_names(
+                utility_application,
+                input_values,
+            )
+        )
+        command_line_input_names.update(
+            {"Calculation_Type", "Application_Utility"}
+        )
+        if is_workflow_analysis:
+            command_line_input_names.add("Application_Workflow")
+        return command_line_input_names
+
     if mode == "MODULE":
         application = input_values.get("EPOLYSCAT_Application_Module") or ""
     elif (
@@ -175,6 +199,25 @@ def _command_line_input_names(input_values):
         command_line_input_names.add(file_input_name)
 
     return command_line_input_names
+
+
+def _validate_utility_run_inputs(input_values):
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    is_utility_run = mode == "UTILITY" or (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Analysis"
+    )
+    if not is_utility_run:
+        return
+
+    utility_application = str(input_values.get("Application_Utility") or "")
+    try:
+        utility_runtime_contracts.validate_utility_input_values(
+            utility_application,
+            input_values,
+        )
+    except ValueError as error:
+        raise exceptions.ValidationError(str(error)) from error
 
 
 def _uses_dedicated_gaussian_interface(run):
@@ -1039,6 +1082,7 @@ class RunViewSet(viewsets.ModelViewSet):
                 inputs[input.name] = input.value
 
         input_values = build_airavata_input_values(run, inputs)
+        _validate_utility_run_inputs(input_values)
         input_values = _application_input_values(run, input_values)
         app_interface_id = self._get_run_app_interface_id(request, run)
         execution_options = {}

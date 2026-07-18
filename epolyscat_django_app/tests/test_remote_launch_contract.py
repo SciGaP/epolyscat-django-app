@@ -121,6 +121,65 @@ def test_direct_epolyscat_deployment_rejects_utility_dispatch():
         )
 
 
+def test_frontera_wrapper_passes_only_the_selected_utility_contract():
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/opt/epolyscat/bin/epolyscat_wrapper.sh",
+        input_values={
+            "Calculation_Type": "UTILITY",
+            "Application_Utility": "CnvMath",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "BendOrient_Output": "airavata-dp://bend",
+            "ePolyscat_Input_Data": "airavata-dp://bend",
+        },
+    )
+
+    assert policy == {
+        "exclusive": True,
+        "input_names": {
+            "Calculation_Type",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "BendOrient_Output",
+        },
+    }
+
+
+def test_frontera_wrapper_supports_workflow_analysis_utility_contract():
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/opt/epolyscat/bin/epolyscat_wrapper.sh",
+        input_values={
+            "Calculation_Type": "WORKFLOW",
+            "Application_Workflow": "Analysis",
+            "Application_Utility": "CnvLinFull",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "DumpOut": "airavata-dp://dump",
+        },
+    )
+
+    assert policy == {
+        "exclusive": True,
+        "input_names": {
+            "Calculation_Type",
+            "Application_Workflow",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "DumpOut",
+        },
+    }
+
+
+def test_frontera_wrapper_rejects_incomplete_utility_contract():
+    with pytest.raises(ValueError, match="control file"):
+        remote_launch_contract.resolve_command_line_policy(
+            executable_path="/opt/epolyscat/bin/epolyscat_wrapper.sh",
+            input_values={
+                "Calculation_Type": "UTILITY",
+                "Application_Utility": "Cube2igor",
+                "Cube_Output": "airavata-dp://cube",
+            },
+        )
+
+
 def test_deployment_lookup_uses_module_and_compute_resource():
     deployments = [
         SimpleNamespace(

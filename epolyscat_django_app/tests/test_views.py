@@ -1665,6 +1665,81 @@ class RunViewSetBackendTests(TestCase):
             "airavata-dp://orient",
         )
 
+    def test_command_line_inputs_include_utility_control_and_specific_data(self):
+        self.assertEqual(
+            views._command_line_input_names(
+                {
+                    "Calculation_Type": "UTILITY",
+                    "Application_Utility": "CnvLinFull",
+                    "ePolyscat_Input_File": "airavata-dp://control",
+                    "DumpOut": "airavata-dp://dump",
+                    "ePolyscat_Input_Data": "airavata-dp://dump",
+                }
+            ),
+            {
+                "Calculation_Type",
+                "Application_Utility",
+                "ePolyscat_Input_File",
+                "DumpOut",
+            },
+        )
+
+        self.assertEqual(
+            views._command_line_input_names(
+                {
+                    "Calculation_Type": "WORKFLOW",
+                    "Application_Workflow": "Analysis",
+                    "Application_Utility": "NRFPAD",
+                    "ePolyscat_Input_File": "airavata-dp://control",
+                    "Cross_Section_Input_File": "airavata-dp://orient",
+                }
+            ),
+            {
+                "Calculation_Type",
+                "Application_Workflow",
+                "Application_Utility",
+                "ePolyscat_Input_File",
+                "Cross_Section_Input_File",
+            },
+        )
+
+    def test_submit_utility_rejects_missing_control_before_airavata_creation(self):
+        user = get_user_model().objects.create_user(username="utility-validation")
+        request = RequestFactory().post(
+            "/epolyscat_django_app/api/runs/1/submit/"
+        )
+        request.user = user
+        run = self.create_run(user)
+        run.run_mode = "utility"
+        run.utility_application = "CnvMath"
+        run.save(update_fields=["run_mode", "utility_application"])
+        bend_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="BendOrient_Output",
+        )
+        models.File.objects.create(
+            input=bend_input,
+            name="bendorient.dat",
+            data_product_uri="airavata-dp://bend",
+        )
+        viewset = views.RunViewSet()
+        viewset._get_run_app_interface_id = mock.Mock()
+        viewset._create_remote_execution = mock.Mock()
+
+        with mock.patch(
+            "epolyscat_django_app.views.user_storage.open_file",
+            return_value=StringIO("bend data"),
+        ), mock.patch(
+            "epolyscat_django_app.views.user_storage.save_input_file",
+            return_value=SimpleNamespace(productUri="airavata-dp://staged-bend"),
+        ):
+            with self.assertRaisesRegex(exceptions.ValidationError, "control file"):
+                viewset._submit_single_run(request, run, is_tutorial=False)
+
+        viewset._get_run_app_interface_id.assert_not_called()
+        viewset._create_remote_execution.assert_not_called()
+
     def test_run_serializer_exposes_workflow_presentation_metadata(self):
         user = get_user_model().objects.create_user(
             username="user@example.com",

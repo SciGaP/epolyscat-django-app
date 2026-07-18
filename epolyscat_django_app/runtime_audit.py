@@ -2,29 +2,16 @@
 
 import json
 
+from epolyscat_django_app import utility_runtime_contracts
 
-EXPECTED_UTILITIES = (
-    "CnvMath",
-    "CnvMatLab",
-    "CnvLinFull",
-    "MoldenMerge",
-    "NRFPAD",
-    "Cube2igor",
-)
+EXPECTED_UTILITIES = tuple(utility_runtime_contracts.UTILITY_CONTRACTS)
 
 UTILITY_REQUIRED_INPUTS = {
-    "CnvMath": ("BendOrient_Output",),
-    "CnvMatLab": ("BendOrient_Output",),
-    "CnvLinFull": ("DumpOut",),
-    "MoldenMerge": ("molden.dat",),
-    "NRFPAD": ("Cross_Section_Input_File",),
-    "Cube2igor": ("Cube_Output",),
+    utility_id: contract["data_input_names"]
+    for utility_id, contract in utility_runtime_contracts.UTILITY_CONTRACTS.items()
 }
 
-GENERIC_POSTPROCESSING_INPUTS = (
-    "ePolyscat_Input_Data",
-    "ePolyScat_Input_Data",
-)
+GENERIC_POSTPROCESSING_INPUTS = utility_runtime_contracts.GENERIC_UTILITY_DATA_INPUT_NAMES
 
 
 def _value(instance, *names, default=None):
@@ -64,14 +51,28 @@ def _deployment_data(deployment):
     executable_path = _value(
         deployment, "executablePath", "executable_path", default=""
     )
+    executable_basename = str(executable_path).rsplit("/", 1)[-1].lower()
+    utility_dispatcher_entrypoint = (
+        "controller" in executable_basename
+        or ("epolyscat" in executable_basename and "wrapper" in executable_basename)
+    )
     return {
         "id": _value(deployment, "appDeploymentId", "app_deployment_id", default=""),
         "compute_host_id": _value(
             deployment, "computeHostId", "compute_host_id", default=""
         ),
         "executable_path": executable_path,
-        "controller_entrypoint": "controller" in executable_path.lower(),
+        "controller_entrypoint": utility_dispatcher_entrypoint,
+        "utility_dispatcher_entrypoint": utility_dispatcher_entrypoint,
     }
+
+
+def _is_uri_collection(input_data):
+    data_type = _value(input_data, "type", default=None)
+    if data_type == 4:
+        return True
+    data_type_name = getattr(data_type, "name", "")
+    return str(data_type_name or data_type).upper().endswith("URI_COLLECTION")
 
 
 def audit_runtime_configuration(
@@ -120,10 +121,16 @@ def audit_runtime_configuration(
     # Utility selectors require the dispatching controller, not the direct
     # ePolyScat executable used by module-only deployments.
     deployed = bool(controller_deployments)
+    control_input_configured = any(
+        input_name in inputs_by_name
+        for input_name in utility_runtime_contracts.UTILITY_CONTROL_INPUT_NAMES
+    )
 
     utilities = []
     for utility_id in EXPECTED_UTILITIES:
-        required_inputs = UTILITY_REQUIRED_INPUTS[utility_id]
+        contract = utility_runtime_contracts.get_utility_contract(utility_id)
+        required_inputs = contract["data_input_names"]
+        minimum_data_file_count = contract["minimum_data_file_count"]
         selectable = utility_id in selector_values
         direct_inputs_configured = all(
             input_name in inputs_by_name for input_name in required_inputs
@@ -145,12 +152,32 @@ def audit_runtime_configuration(
             if generic_input_configured
             else "missing"
         )
+        configured_input_names = (
+            required_inputs
+            if direct_inputs_configured
+            else GENERIC_POSTPROCESSING_INPUTS
+            if generic_input_configured
+            else ()
+        )
+        supports_required_file_count = bool(
+            required_inputs_configured
+            and (
+                minimum_data_file_count <= 1
+                or any(
+                    _is_uri_collection(inputs_by_name[input_name])
+                    for input_name in configured_input_names
+                    if input_name in inputs_by_name
+                )
+            )
+        )
         ready = bool(
             matching_modules
             and interface is not None
             and deployed
             and selectable
+            and control_input_configured
             and required_inputs_configured
+            and supports_required_file_count
         )
         utilities.append(
             {
@@ -160,6 +187,9 @@ def audit_runtime_configuration(
                 "required_inputs": list(required_inputs),
                 "required_inputs_configured": required_inputs_configured,
                 "required_input_mode": required_input_mode,
+                "control_input_configured": control_input_configured,
+                "minimum_data_file_count": minimum_data_file_count,
+                "supports_required_file_count": supports_required_file_count,
                 "deployed": deployed,
             }
         )

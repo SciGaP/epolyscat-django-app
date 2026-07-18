@@ -5,7 +5,9 @@ set -u
 executable=${EPOLYSCAT_EXECUTABLE:-/home1/06170/ampuser/apps/ePolyScat/epolyscat/bin/expanseintelmkl/ePolyScat.exe}
 output_file=${EPOLYSCAT_OUTPUT_FILE:-ePolyScat.out}
 launcher=${EPOLYSCAT_LAUNCHER-}
+utility_bin_dir=${EPOLYSCAT_UTILITY_BIN_DIR:-/home1/06170/ampuser/apps/ePolyScat/epolyscat/bin/expanseintelmkl}
 created_input=0
+created_fort10=0
 
 fail() {
     echo "Frontera ePolyScat wrapper: $1" >&2
@@ -15,6 +17,9 @@ fail() {
 cleanup() {
     if [ "$created_input" -eq 1 ]; then
         rm -f ./inp.dat
+    fi
+    if [ "$created_fort10" -eq 1 ]; then
+        rm -f ./fort.10
     fi
 }
 
@@ -64,6 +69,59 @@ run_epolyscat() {
     fi
 }
 
+utility_executable_name() {
+    case "$1" in
+    CnvMath) printf '%s\n' CnvMath.exe ;;
+    CnvMatLab) printf '%s\n' CnvMatLab.exe ;;
+    CnvLinFull) printf '%s\n' CnvLinFull.exe ;;
+    MoldenMerge) printf '%s\n' MoldenMerge.exe ;;
+    NRFPAD) printf '%s\n' NRFPAD.exe ;;
+    Cube2igor) printf '%s\n' Cube2igor.exe ;;
+    *) fail "unsupported utility on Frontera: ${1:-<missing>}" ;;
+    esac
+}
+
+run_utility() {
+    utility_name=$1
+    shift
+    [ "$#" -ge 1 ] || fail "$utility_name requires a utility control file and scientific data file(s)"
+
+    control_file=$1
+    shift
+    minimum_data_files=1
+    [ "$utility_name" != "MoldenMerge" ] || minimum_data_files=2
+    [ "$#" -ge "$minimum_data_files" ] || \
+        fail "$utility_name requires at least $minimum_data_files scientific data file(s)"
+
+    [ -f "$control_file" ] && [ -r "$control_file" ] || \
+        fail "utility control file is missing or unreadable: $control_file" 66
+    for data_file in "$@"; do
+        [ -f "$data_file" ] && [ -r "$data_file" ] || \
+            fail "utility data file is missing or unreadable: $data_file" 66
+    done
+
+    utility_executable="$utility_bin_dir/$(utility_executable_name "$utility_name")"
+    [ -x "$utility_executable" ] || \
+        fail "utility executable is missing or not executable: $utility_executable" 69
+    utility_output=${EPOLYSCAT_UTILITY_OUTPUT_FILE:-${utility_name}.out}
+
+    trap cleanup EXIT HUP INT TERM
+    if [ "$utility_name" = "Cube2igor" ]; then
+        [ ! -e ./fort.10 ] || fail "refusing to overwrite an existing fort.10" 73
+        ln -s "$1" ./fort.10 || fail "failed to stage Cube2igor input as fort.10" 73
+        created_fort10=1
+    fi
+
+    if "$utility_executable" < "$control_file" > "$utility_output" 2>&1; then
+        utility_status=0
+    else
+        utility_status=$?
+    fi
+    cat "$utility_output"
+    [ "$utility_status" -eq 0 ] || \
+        fail "$utility_name exited with status $utility_status; inspect $utility_output" "$utility_status"
+}
+
 run_type=${1-}
 
 case "$run_type" in
@@ -74,8 +132,22 @@ MODULE)
     input_file=${3-${EPOLYSCAT_INPUT_FILE-}}
     [ -n "$input_file" ] || input_file=ep_input
     ;;
-UTILITY|WORKFLOW)
-    fail "unsupported run type on the Frontera ePolyScat deployment: $run_type"
+UTILITY)
+    utility_name=${2-}
+    [ -n "$utility_name" ] || fail "UTILITY requires an application selector"
+    shift 2
+    run_utility "$utility_name" "$@"
+    exit 0
+    ;;
+WORKFLOW)
+    workflow_stage=${2-}
+    [ "$workflow_stage" = "Analysis" ] || \
+        fail "unsupported workflow stage on Frontera: ${workflow_stage:-<missing>}"
+    utility_name=${3-}
+    [ -n "$utility_name" ] || fail "WORKFLOW Analysis requires a utility selector"
+    shift 3
+    run_utility "$utility_name" "$@"
+    exit 0
     ;;
 "")
     fail "an input file or MODULE ePolyScat selector is required"

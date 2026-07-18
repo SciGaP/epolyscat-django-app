@@ -368,6 +368,29 @@ def test_create_run_workflow_application_picker_is_separated_from_stage_options(
     assert "workflow-application-picker" not in source
 
 
+def test_create_run_analysis_stage_supports_ordered_multiple_utilities():
+    source = _source()
+
+    expected_hooks = [
+        "workflow-analysis-editor",
+        "workflow-analysis-list",
+        "workflow-analysis-item",
+        "workflowAnalysisApplications",
+        "selectedAnalysisApplications",
+        "availableAnalysisApplications",
+        "activateAnalysisApplication(application.id)",
+        "addWorkflowAnalysisApplication",
+        "removeWorkflowAnalysisApplication",
+        "moveWorkflowAnalysisApplication",
+        "analysisApplications: [...this.workflowAnalysisApplications]",
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+    assert "analysisApplications: [this.workflowStageSelections.Analysis" not in source
+
+
 def test_create_run_input_files_section_owns_upload_actions():
     source = _source()
 
@@ -411,7 +434,7 @@ def test_create_run_save_payload_uses_inline_run_selection():
         "utilityApplication: this.selectedUtilityApplication",
         "isWorkflowPlan: this.selectedRunType === \"workflow\"",
         "dataGenerationApplication: this.workflowStageSelections.Data_Gen",
-        "analysisApplications: [this.workflowStageSelections.Analysis",
+        "analysisApplications: [...this.workflowAnalysisApplications]",
         "plannedStageIds: [\"Data_Gen\", \"ePolyScat_Run\", \"Analysis\", \"Visualization\"]",
     ]
 

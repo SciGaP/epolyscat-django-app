@@ -143,7 +143,94 @@
                   v-if="activeWorkflowApplications.length > 0"
                   class="workflow-stage-application-panel"
               >
-                <div class="workflow-stage-application-options">
+                <div
+                    v-if="selectedApplicationId === 'Analysis' && !isWorkflowChildEdit"
+                    class="workflow-analysis-editor"
+                >
+                  <div class="workflow-analysis-list">
+                    <div
+                        v-for="(application, index) in selectedAnalysisApplications"
+                        :key="application.id"
+                        class="workflow-analysis-item"
+                        :class="{ active: activeWorkflowApplicationId === application.id }"
+                    >
+                      <button
+                          type="button"
+                          class="workflow-analysis-application"
+                          v-on:click="activateAnalysisApplication(application.id)"
+                      >
+                        <span class="workflow-analysis-index">{{ index + 1 }}</span>
+                        <span class="workflow-analysis-copy">
+                          <span class="workflow-stage-application-label">{{ application.label }}</span>
+                          <span class="workflow-stage-application-description">{{ application.description }}</span>
+                        </span>
+                      </button>
+                      <div class="workflow-analysis-actions">
+                        <button
+                            type="button"
+                            class="workflow-analysis-action"
+                            title="Move utility earlier"
+                            :disabled="index === 0"
+                            v-on:click="moveWorkflowAnalysisApplication(index, -1)"
+                        >
+                          <b-icon icon="chevron-up" aria-hidden="true" />
+                          <span class="sr-only">Move {{ application.label }} earlier</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="workflow-analysis-action"
+                            title="Move utility later"
+                            :disabled="index === selectedAnalysisApplications.length - 1"
+                            v-on:click="moveWorkflowAnalysisApplication(index, 1)"
+                        >
+                          <b-icon icon="chevron-down" aria-hidden="true" />
+                          <span class="sr-only">Move {{ application.label }} later</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="workflow-analysis-action"
+                            title="Remove utility"
+                            :disabled="selectedAnalysisApplications.length === 1"
+                            v-on:click="removeWorkflowAnalysisApplication(application.id)"
+                        >
+                          <b-icon icon="x" aria-hidden="true" />
+                          <span class="sr-only">Remove {{ application.label }}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="workflow-analysis-add-row">
+                    <label for="workflow-analysis-application">Add utility</label>
+                    <select
+                        id="workflow-analysis-application"
+                        v-model="analysisApplicationToAdd"
+                        class="workflow-analysis-select"
+                        :disabled="availableAnalysisApplications.length === 0"
+                    >
+                      <option value="" disabled>
+                        {{ availableAnalysisApplications.length > 0 ? "Select utility" : "All utilities added" }}
+                      </option>
+                      <option
+                          v-for="application in availableAnalysisApplications"
+                          :key="application.id"
+                          :value="application.id"
+                      >
+                        {{ application.label }} - {{ application.description }}
+                      </option>
+                    </select>
+                    <button
+                        type="button"
+                        class="workflow-analysis-add"
+                        title="Add utility"
+                        :disabled="!analysisApplicationToAdd"
+                        v-on:click="addWorkflowAnalysisApplication"
+                    >
+                      <b-icon icon="plus" aria-hidden="true" />
+                      <span class="sr-only">Add utility</span>
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="workflow-stage-application-options">
                   <button
                       v-for="application in activeWorkflowApplications"
                       :key="application.id"
@@ -673,6 +760,12 @@ import {
   replaceEPolyScatSequenceNode,
 } from "@/utils/epolyscat-input-script";
 import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
+import {
+  addAnalysisApplication,
+  moveAnalysisApplication,
+  normalizeAnalysisApplications,
+  removeAnalysisApplication,
+} from "@/utils/workflow-analysis-selection";
 
 const utilityControlRequiredFile = () => ({
   name: "ePolyscat_Input_File",
@@ -704,6 +797,8 @@ export default {
         ePolyScat_Run: "ePolyScat",
         Analysis: "CnvMath",
       },
+      workflowAnalysisApplications: ["CnvMath"],
+      analysisApplicationToAdd: "",
       runTypeOptions: [
         {
           id: "module",
@@ -1013,6 +1108,20 @@ export default {
       return (this.activeRunApplication.workflowApplicationIds || [])
           .map(applicationId => this.reusableApplications.find(application => application.id === applicationId))
           .filter(application => !!application);
+    },
+    analysisWorkflowApplicationIds() {
+      const analysisStage = this.activeRunTypeApplications.find(application => application.id === "Analysis");
+      return analysisStage ? analysisStage.workflowApplicationIds || [] : [];
+    },
+    selectedAnalysisApplications() {
+      return this.workflowAnalysisApplications
+          .map(applicationId => this.utilityApplications.find(application => application.id === applicationId))
+          .filter(application => !!application);
+    },
+    availableAnalysisApplications() {
+      return this.utilityApplications.filter(
+          application => !this.workflowAnalysisApplications.includes(application.id)
+      );
     },
     activeWorkflowApplicationTitle() {
       if (this.selectedApplicationId === "Data_Gen") {
@@ -1484,6 +1593,68 @@ export default {
         [this.selectedApplicationId]: applicationId,
       };
       this.applySelectedRunConfiguration();
+    },
+    activateAnalysisApplication(applicationId) {
+      if (!this.workflowAnalysisApplications.includes(applicationId)) {
+        return;
+      }
+
+      this.selectWorkflowApplication(applicationId);
+    },
+    addWorkflowAnalysisApplication() {
+      const updatedApplications = addAnalysisApplication(
+          this.workflowAnalysisApplications,
+          this.analysisApplicationToAdd,
+          this.analysisWorkflowApplicationIds,
+      );
+      const addedApplication = this.analysisApplicationToAdd;
+      this.workflowAnalysisApplications = updatedApplications;
+      this.analysisApplicationToAdd = "";
+
+      if (updatedApplications.includes(addedApplication)) {
+        this.activateAnalysisApplication(addedApplication);
+      }
+    },
+    removeWorkflowAnalysisApplication(applicationId) {
+      const applicationIndex = this.workflowAnalysisApplications.indexOf(applicationId);
+      const updatedApplications = removeAnalysisApplication(
+          this.workflowAnalysisApplications,
+          applicationId,
+      );
+      if (updatedApplications.length === this.workflowAnalysisApplications.length) {
+        return;
+      }
+
+      this.workflowAnalysisApplications = updatedApplications;
+      if (this.activeWorkflowApplicationId === applicationId) {
+        const nextIndex = Math.min(applicationIndex, updatedApplications.length - 1);
+        this.activateAnalysisApplication(updatedApplications[nextIndex]);
+      }
+    },
+    moveWorkflowAnalysisApplication(index, offset) {
+      this.workflowAnalysisApplications = moveAnalysisApplication(
+          this.workflowAnalysisApplications,
+          index,
+          offset,
+      );
+    },
+    setWorkflowAnalysisApplications(applications) {
+      this.workflowAnalysisApplications = normalizeAnalysisApplications(
+          applications,
+          this.analysisWorkflowApplicationIds,
+          "CnvMath",
+      );
+
+      const activeApplication = this.workflowAnalysisApplications.includes(this.workflowStageSelections.Analysis)
+          ? this.workflowStageSelections.Analysis
+          : this.workflowAnalysisApplications[0];
+      this.workflowStageSelections = {
+        ...this.workflowStageSelections,
+        Analysis: activeApplication,
+      };
+      if (this.selectedApplicationId === "Analysis") {
+        this.selectedWorkflowApplicationId = activeApplication;
+      }
     },
     rememberWorkflowStageSelection() {
       if (this.selectedRunType !== "workflow" || !this.selectedApplicationId) {
@@ -2318,7 +2489,7 @@ export default {
             selectedApplication: this.activeExecutionApplication ? this.activeExecutionApplication.id : "",
             requiredFiles: this.activeRequiredFiles.map(file => file.name),
             dataGenerationApplication: this.workflowStageSelections.Data_Gen || "OpenMolcas",
-            analysisApplications: [this.workflowStageSelections.Analysis || "CnvMath"],
+            analysisApplications: [...this.workflowAnalysisApplications],
             plannedStageIds: ["Data_Gen", "ePolyScat_Run", "Analysis", "Visualization"],
           },
           viewIds: this.viewIds
@@ -2377,6 +2548,11 @@ export default {
         ...this.run,
         ...sourceRun,
       };
+      this.setWorkflowAnalysisApplications(
+          sourceRun.workflowMetadata && sourceRun.workflowMetadata.analysisApplications
+              ? sourceRun.workflowMetadata.analysisApplications
+              : [applicationId],
+      );
       this.viewIds = sourceRun.isTutorial ? [] : sourceRun.viewIds || [];
       this.applySelectedRunConfiguration({ replaceExisting: false });
     },
@@ -2743,6 +2919,136 @@ export default {
   margin-top: 3px;
   opacity: 0.78;
   overflow-wrap: anywhere;
+}
+
+.workflow-analysis-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.workflow-analysis-list {
+  display: grid;
+  gap: 6px;
+}
+
+.workflow-analysis-item {
+  align-items: stretch;
+  background: #ffffff;
+  border: 1px solid #d4d9df;
+  border-radius: 6px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 52px;
+}
+
+.workflow-analysis-item.active {
+  border-color: #226597;
+  box-shadow: inset 3px 0 0 #226597;
+}
+
+.workflow-analysis-application {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #1f2933;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-width: 0;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.workflow-analysis-index {
+  align-items: center;
+  background: #edf1f4;
+  border-radius: 50%;
+  color: #36454f;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  height: 24px;
+  justify-content: center;
+  width: 24px;
+}
+
+.workflow-analysis-item.active .workflow-analysis-index {
+  background: #226597;
+  color: #ffffff;
+}
+
+.workflow-analysis-copy,
+.workflow-analysis-copy > span {
+  display: block;
+  min-width: 0;
+}
+
+.workflow-analysis-actions {
+  align-items: center;
+  border-left: 1px solid #e1e5e9;
+  display: flex;
+  padding: 0 5px;
+}
+
+.workflow-analysis-action,
+.workflow-analysis-add {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #4f5b66;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.workflow-analysis-action:hover:not(:disabled),
+.workflow-analysis-action:focus:not(:disabled),
+.workflow-analysis-add:hover:not(:disabled),
+.workflow-analysis-add:focus:not(:disabled) {
+  background: #edf3f7;
+  color: #226597;
+  outline: 0;
+}
+
+.workflow-analysis-action:disabled,
+.workflow-analysis-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.workflow-analysis-add-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr) 34px;
+}
+
+.workflow-analysis-add-row label {
+  color: #36454f;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.workflow-analysis-select {
+  background: #ffffff;
+  border: 1px solid #c9cfd6;
+  border-radius: 4px;
+  color: #1f2933;
+  font-size: 13px;
+  height: 36px;
+  min-width: 0;
+  padding: 0 28px 0 10px;
+  width: 100%;
+}
+
+.workflow-analysis-add {
+  background: #226597;
+  border-radius: 4px;
+  color: #ffffff;
+  height: 36px;
 }
 
 .required-file-list {
@@ -3515,6 +3821,24 @@ export default {
 }
 
 @media (max-width: 760px) {
+  .workflow-analysis-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .workflow-analysis-actions {
+    border-left: 0;
+    border-top: 1px solid #e1e5e9;
+    justify-content: flex-end;
+  }
+
+  .workflow-analysis-add-row {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+
+  .workflow-analysis-add-row label {
+    grid-column: 1 / -1;
+  }
+
   .ordered-sequence-toolbar {
     grid-template-columns: 1fr;
   }

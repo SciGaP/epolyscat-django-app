@@ -824,6 +824,11 @@ def test_view_run_can_continue_an_eligible_completed_run_into_workflow():
         "workflowStageStatusText(stage)",
         'previousStage.status === "imported"',
         'previousStage.status === "not_included"',
+        "workflow-continuation-preview",
+        "workflowContinuation.nextStagePreview",
+        "continuationPreviewOutputName",
+        'label: "Continue to"',
+        'label: "Inherited input"',
     ]
     expected_service_hooks = [
         "fetchWorkflowContinuation",
@@ -832,6 +837,8 @@ def test_view_run_can_continue_an_eligible_completed_run_into_workflow():
         "workflow_parent_run_id",
         "next_child_run_id",
         "source_run_id",
+        "next_stage_preview",
+        "nextStagePreview",
     ]
 
     for hook in expected_view_hooks:

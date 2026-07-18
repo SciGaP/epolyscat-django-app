@@ -13,6 +13,16 @@ ANALYSIS_INPUT_CONTRACTS = {
     "Cube2igor": ("Cube_Output", "cube"),
 }
 
+ANALYSIS_APPLICATION_PRIORITY = (
+    "CnvLinFull",
+    "CnvMath",
+    "CnvMatLab",
+    "NRFPAD",
+    "Cube2igor",
+    "MoldenMerge",
+)
+DEFAULT_ANALYSIS_APPLICATION = ANALYSIS_APPLICATION_PRIORITY[0]
+
 
 def _value(file_data, *names):
     for name in names:
@@ -197,19 +207,24 @@ def resolve_workflow_output_binding(
         return _missing_result(input_file_name, expected_roles[0])
 
     if target_stage == "Analysis" and target_application in ANALYSIS_INPUT_CONTRACTS:
-        input_file_name, expected_role = ANALYSIS_INPUT_CONTRACTS[target_application]
-        input_file_name = required_file_name or input_file_name
-        candidates = _files_for_role(files, expected_role)
-        if not candidates:
-            return _missing_result(input_file_name, expected_role)
-        return {
-            "status": "ready",
-            "input_file_name": input_file_name,
-            "expected_role": expected_role,
-            "selected": _serialized_file(candidates[0]),
-            "candidates": [_serialized_file(file_data) for file_data in candidates],
-            "data_entry_values": None,
-        }
+        contract_input_name, expected_role = ANALYSIS_INPUT_CONTRACTS[
+            target_application
+        ]
+        if not required_file_name or required_file_name == contract_input_name:
+            input_file_name = required_file_name or contract_input_name
+            candidates = _files_for_role(files, expected_role)
+            if not candidates:
+                return _missing_result(input_file_name, expected_role)
+            return {
+                "status": "ready",
+                "input_file_name": input_file_name,
+                "expected_role": expected_role,
+                "selected": _serialized_file(candidates[0]),
+                "candidates": [
+                    _serialized_file(file_data) for file_data in candidates
+                ],
+                "data_entry_values": None,
+            }
 
     required_name = str(required_file_name or "").lower()
     candidates = [
@@ -223,5 +238,56 @@ def resolve_workflow_output_binding(
         "expected_role": "exact_filename",
         "selected": _serialized_file(candidates[0]),
         "candidates": [_serialized_file(file_data) for file_data in candidates],
+        "data_entry_values": None,
+    }
+
+
+def resolve_next_stage_preview(
+    *, output_manifest, source_application, next_stage
+):
+    """Resolve the default target and inherited file for a continuation."""
+
+    if next_stage == "ePolyScat_Run":
+        binding = resolve_workflow_output_binding(
+            output_manifest=output_manifest,
+            source_application=source_application,
+            target_stage=next_stage,
+        )
+        return {
+            **binding,
+            "next_stage": next_stage,
+            "target_application": "ePolyScat",
+        }
+
+    if next_stage == "Analysis":
+        fallback = None
+        for application in ANALYSIS_APPLICATION_PRIORITY:
+            input_file_name, _expected_role = ANALYSIS_INPUT_CONTRACTS[application]
+            binding = resolve_workflow_output_binding(
+                output_manifest=output_manifest,
+                source_application=source_application,
+                target_stage=next_stage,
+                target_application=application,
+                required_file_name=input_file_name,
+            )
+            preview = {
+                **binding,
+                "next_stage": next_stage,
+                "target_application": application,
+            }
+            if fallback is None:
+                fallback = preview
+            if binding["status"] == "ready":
+                return preview
+        return fallback
+
+    return {
+        "status": "missing",
+        "next_stage": next_stage,
+        "target_application": "",
+        "input_file_name": "",
+        "expected_role": "",
+        "selected": None,
+        "candidates": [],
         "data_entry_values": None,
     }

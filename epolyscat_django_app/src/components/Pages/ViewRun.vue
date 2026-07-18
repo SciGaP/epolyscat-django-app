@@ -36,6 +36,20 @@
         </div>
       </header>
 
+      <section
+          v-if="workflowContinuation.eligible && workflowContinuation.nextStagePreview"
+          class="workflow-continuation-preview"
+          aria-label="Workflow continuation preview"
+      >
+        <div v-for="item in continuationPreviewItems" :key="item.label">
+          <span class="workflow-status-label">{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <span v-if="item.detail" class="workflow-status-application">
+            {{ item.detail }}
+          </span>
+        </div>
+      </section>
+
       <nav
           v-if="presentation.mode === 'workflow'"
           class="workflow-stepper"
@@ -253,6 +267,7 @@ export default {
         reason: "",
         message: "",
         scientificVerification: null,
+        nextStagePreview: null,
       },
       workflowContinuationLoading: false,
       plotForm: {
@@ -305,6 +320,38 @@ export default {
         complete: "Complete",
       };
       return labels[state] || state;
+    },
+    continuationPreviewItems() {
+      const preview = this.workflowContinuation.nextStagePreview;
+      if (!preview) {
+        return [];
+      }
+      const stageLabels = {
+        Data_Gen: "Data Generation",
+        ePolyScat_Run: "ePolyScat Run",
+        Analysis: "Visualization & Analysis",
+      };
+
+      return [
+        {
+          label: "Continue to",
+          value: stageLabels[preview.nextStage]
+              || this.formatStatusLabel(preview.nextStage),
+          detail: preview.targetApplication || "",
+        },
+        {
+          label: "Inherited input",
+          value: this.continuationPreviewOutputName,
+          detail: preview.inputFileName || "",
+        },
+      ];
+    },
+    continuationPreviewOutputName() {
+      const preview = this.workflowContinuation.nextStagePreview;
+      const outputFile = preview ? preview.outputFile : null;
+      return outputFile
+          ? this.fileDisplayName(outputFile)
+          : "Manual selection required";
     },
     isWorkflowChildRun() {
       return Boolean(this.run && this.run.parentRunId);
@@ -641,6 +688,7 @@ export default {
         reason: "",
         message: "",
         scientificVerification: null,
+        nextStagePreview: null,
       };
       try {
         this.workflowContinuation = await RunService.fetchWorkflowContinuation({
@@ -652,6 +700,7 @@ export default {
           reason: "status_unavailable",
           message: "Workflow continuation is unavailable.",
           scientificVerification: null,
+          nextStagePreview: null,
         };
       }
     },
@@ -1026,6 +1075,29 @@ export default {
   padding: 6px 10px;
 }
 
+.workflow-continuation-preview {
+  border-bottom: 1px solid #d8dde5;
+  border-top: 1px solid #d8dde5;
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: -4px 0 28px;
+  max-width: 1017px;
+  padding: 14px 0;
+}
+
+.workflow-continuation-preview > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.workflow-continuation-preview strong,
+.workflow-continuation-preview .workflow-status-application {
+  overflow-wrap: anywhere;
+}
+
 .workflow-stepper {
   align-items: center;
   display: flex;
@@ -1389,7 +1461,8 @@ export default {
   }
 
   .target-states-matrix,
-  .target-input-grid {
+  .target-input-grid,
+  .workflow-continuation-preview {
     grid-template-columns: 1fr;
   }
 }

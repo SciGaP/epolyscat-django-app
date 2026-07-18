@@ -170,6 +170,11 @@ class RunViewSetBackendTests(TestCase):
         self.assertTrue(response.data["eligible"])
         self.assertEqual(response.data["source_stage"], "Data_Gen")
         self.assertEqual(response.data["next_stage"], "ePolyScat_Run")
+        preview = response.data["next_stage_preview"]
+        self.assertEqual(preview["status"], "ready")
+        self.assertEqual(preview["target_application"], "ePolyScat")
+        self.assertEqual(preview["input_file_name"], "ePolyScat_Input_Data")
+        self.assertEqual(preview["selected"]["name"], "gaussian.log")
 
     @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
@@ -248,6 +253,15 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(
             [(child.workflow_step_order, child.workflow_stage) for child in child_runs],
             [(3, "Analysis")],
+        )
+        self.assertEqual(child_runs[0].utility_application, "CnvLinFull")
+        self.assertEqual(
+            parent.workflow_metadata["analysisApplications"],
+            ["CnvLinFull"],
+        )
+        self.assertEqual(
+            response.data["next_stage_preview"]["selected"]["name"],
+            "test03dumpidy.dat",
         )
         self.assertEqual(response.data["next_child_run_id"], child_runs[0].id)
         self.assertEqual(response.data["source_run_id"], source.id)

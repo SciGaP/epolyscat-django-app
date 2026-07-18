@@ -98,6 +98,82 @@ def test_missing_scientific_output_does_not_bind_generic_data_file():
     assert result["expected_role"] == "dump_out"
 
 
+def test_analysis_output_does_not_fill_the_utility_control_input():
+    result = workflow_output_contracts.resolve_workflow_output_binding(
+        output_files=[
+            {"name": "test03dumpidy.dat", "fileType": "DumpOut"},
+        ],
+        source_application="ePolyScat",
+        target_stage="Analysis",
+        target_application="CnvLinFull",
+        required_file_name="ePolyscat_Input_File",
+    )
+
+    assert result["status"] == "missing"
+    assert result["input_file_name"] == "ePolyscat_Input_File"
+    assert result["expected_role"] == "exact_filename"
+    assert result["selected"] is None
+
+
+def test_next_stage_preview_selects_gaussian_output_for_epolyscat():
+    preview = workflow_output_contracts.resolve_next_stage_preview(
+        output_manifest=[
+            {
+                "name": "gaussian.log",
+                "roles": ["gaussian_output"],
+                "descriptor": {
+                    "name": "gaussian.log",
+                    "data-product-uri": "airavata-dp://gaussian",
+                },
+            }
+        ],
+        source_application="Gaussian16",
+        next_stage="ePolyScat_Run",
+    )
+
+    assert preview["status"] == "ready"
+    assert preview["next_stage"] == "ePolyScat_Run"
+    assert preview["target_application"] == "ePolyScat"
+    assert preview["input_file_name"] == "ePolyScat_Input_Data"
+    assert preview["selected"]["name"] == "gaussian.log"
+
+
+def test_next_stage_preview_selects_compatible_analysis_utility():
+    preview = workflow_output_contracts.resolve_next_stage_preview(
+        output_manifest=[
+            {
+                "name": "test03dumpidy.dat",
+                "roles": ["dump_out"],
+                "descriptor": {
+                    "name": "test03dumpidy.dat",
+                    "data-product-uri": "airavata-dp://dump",
+                },
+            }
+        ],
+        source_application="ePolyScat",
+        next_stage="Analysis",
+    )
+
+    assert preview["status"] == "ready"
+    assert preview["next_stage"] == "Analysis"
+    assert preview["target_application"] == "CnvLinFull"
+    assert preview["input_file_name"] == "DumpOut"
+    assert preview["selected"]["name"] == "test03dumpidy.dat"
+
+
+def test_next_stage_preview_keeps_manual_analysis_fallback_when_no_output_matches():
+    preview = workflow_output_contracts.resolve_next_stage_preview(
+        output_manifest=[],
+        source_application="ePolyScat",
+        next_stage="Analysis",
+    )
+
+    assert preview["status"] == "missing"
+    assert preview["target_application"] == "CnvLinFull"
+    assert preview["input_file_name"] == "DumpOut"
+    assert preview["selected"] is None
+
+
 def test_output_classifier_accepts_object_descriptors_and_airavata_file_types():
     output = SimpleNamespace(name="result.dat", fileType="DumpOut")
 

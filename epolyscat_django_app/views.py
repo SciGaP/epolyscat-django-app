@@ -761,7 +761,17 @@ class RunViewSet(viewsets.ModelViewSet):
         report = self._scientific_output_report(request, run)
         verification = report["scientific_verification"]
         eligibility["scientific_verification"] = verification
-        if not eligibility["eligible"] or verification["status"] == "verified":
+        if not eligibility["eligible"]:
+            return eligibility
+
+        if verification["status"] == "verified":
+            eligibility["next_stage_preview"] = (
+                workflow_output_contracts.resolve_next_stage_preview(
+                    output_manifest=report["files"],
+                    source_application=eligibility["source_application"],
+                    next_stage=eligibility["next_stage"],
+                )
+            )
             return eligibility
 
         reason_by_status = {
@@ -1417,7 +1427,16 @@ class RunViewSet(viewsets.ModelViewSet):
                 if eligibility["source_stage"] == "Data_Gen"
                 else "OpenMolcas"
             ),
-            "analysisApplications": ["CnvMath"],
+            "analysisApplications": [
+                (
+                    eligibility.get("next_stage_preview", {}).get(
+                        "target_application"
+                    )
+                    if eligibility["next_stage"] == "Analysis"
+                    else workflow_output_contracts.DEFAULT_ANALYSIS_APPLICATION
+                )
+                or workflow_output_contracts.DEFAULT_ANALYSIS_APPLICATION
+            ],
             "plannedStageIds": list(
                 workflow_continuation_domain.WORKFLOW_PRESENTATION_STAGES
             ),

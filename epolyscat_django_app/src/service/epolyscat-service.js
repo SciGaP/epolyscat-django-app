@@ -24,6 +24,27 @@ const axiosInstance = axios.create({
 
 const appBaseUrl = "/epolyscat_django_app/api/";
 
+function encodeWorkflowContinuation(data) {
+    const preview = data.next_stage_preview
+        ? {
+            ...data.next_stage_preview,
+            nextStage: data.next_stage_preview.next_stage || "",
+            targetApplication: data.next_stage_preview.target_application || "",
+            inputFileName: data.next_stage_preview.input_file_name || "",
+            outputFile: data.next_stage_preview.selected || null,
+        }
+        : null;
+
+    return {
+        ...data,
+        sourceStage: data.source_stage || "",
+        sourceApplication: data.source_application || "",
+        nextStage: data.next_stage || "",
+        nextStagePreview: preview,
+        scientificVerification: data.scientific_verification,
+    };
+}
+
 export const InputService = {
     async fetchApplicationInputs() {
         // const { data: { applicationInputs } } = await axiosInstance.get("/api/applications/ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442/application_interface/")
@@ -1054,13 +1075,7 @@ export const RunService = {
         const {data} = await axiosInstance.get(
             `/epolyscat_django_app/api/runs/${runId}/workflow_continuation/`
         );
-        return {
-            ...data,
-            sourceStage: data.source_stage || "",
-            sourceApplication: data.source_application || "",
-            nextStage: data.next_stage || "",
-            scientificVerification: data.scientific_verification,
-        };
+        return encodeWorkflowContinuation(data);
     },
     async continueWorkflow({runId = null} = {}) {
         const {data} = await axiosInstance.post(
@@ -1068,7 +1083,7 @@ export const RunService = {
             {}
         );
         return {
-            ...data,
+            ...encodeWorkflowContinuation(data),
             workflowParentRunId: data.workflow_parent_run_id,
             nextChildRunId: data.next_child_run_id,
             sourceRunId: data.source_run_id,

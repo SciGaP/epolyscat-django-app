@@ -660,6 +660,56 @@ function sequenceNodeLabel(node) {
   return node.keyword || "Unknown";
 }
 
+function sequenceNodeArgumentsText(node) {
+  if (!node || !node.sourceLines || !node.sourceLines.length || !node.label) {
+    return "";
+  }
+
+  const code = stripEPolyScatComment(node.sourceLines[0].raw);
+  const keywordMatch = code.match(/^\s*\S+/);
+  return keywordMatch ? code.slice(keywordMatch[0].length).trim() : "";
+}
+
+function sequenceNodeContinuationRows(node) {
+  if (!node || !Array.isArray(node.sourceLines)) {
+    return [];
+  }
+
+  const engFormStructure = node.label === "EngForm"
+      ? engFormSourceStructure(node.sourceLines)
+      : null;
+  return node.sourceLines.reduce((rows, sourceLine, sourceLineIndex) => {
+    if (sourceLineIndex === 0) {
+      return rows;
+    }
+    const value = stripEPolyScatComment(sourceLine.raw).trim();
+    if (!value) {
+      return rows;
+    }
+    rows.push({
+      sourceLineIndex,
+      value,
+      hasInlineComment: stripEPolyScatComment(sourceLine.raw).length !== sourceLine.raw.length,
+      removable: engFormStructure
+        ? engFormStructure.termRows.some(row => row.sourceLine === sourceLine)
+        : node.type === "Command",
+    });
+    return rows;
+  }, []);
+}
+
+function sequenceNodeAllowsContinuationAppend(node, continuationRows) {
+  if (!node || !node.schema) {
+    return false;
+  }
+  if (node.label === "EngForm") {
+    const structure = engFormSourceStructure(node.sourceLines);
+    return [1, 2].includes(structure.formulaType);
+  }
+  return node.type === "Command"
+    && (node.schema.continuation !== "none" || continuationRows.length > 0);
+}
+
 function sequenceNodeAt(document, nodeIndex) {
   if (!Number.isInteger(nodeIndex) || !isSequenceNode(document.nodes[nodeIndex])) {
     throw new RangeError(`No editable ePolyScat sequence node exists at index ${nodeIndex}.`);
@@ -693,6 +743,7 @@ export function listEPolyScatSequenceNodes(contents) {
 
     const label = sequenceNodeLabel(node);
     const occurrenceKey = `${node.type}:${label}`;
+    const continuationRows = sequenceNodeContinuationRows(node);
     occurrences[occurrenceKey] = (occurrences[occurrenceKey] || 0) + 1;
     sequence.push({
       nodeIndex,
@@ -701,6 +752,10 @@ export function listEPolyScatSequenceNodes(contents) {
       occurrence: occurrences[occurrenceKey],
       raw: stripOneTerminalLineEnding(node.raw),
       multiline: Array.isArray(node.sourceLines) && node.sourceLines.length > 1,
+      supportsStructuredEditing: node.type === "DataRecord" || node.type === "Command",
+      argumentsText: sequenceNodeArgumentsText(node),
+      continuationRows,
+      allowsContinuationRows: sequenceNodeAllowsContinuationAppend(node, continuationRows),
       sourceSpan: { ...node.sourceSpan },
     });
     return sequence;
@@ -716,6 +771,108 @@ export function replaceEPolyScatSequenceNode(contents, nodeIndex, raw) {
       nodeTerminalLineEnding(node)
   );
   return `${document.source.slice(0, node.sourceSpan.start)}${replacement}${document.source.slice(node.sourceSpan.end)}`;
+}
+
+export function updateEPolyScatSequenceNodeArguments(contents, nodeIndex, argumentsText) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  if (!node.label || (node.type !== "DataRecord" && node.type !== "Command")) {
+    throw new TypeError("Only known ePolyScat records and commands have structured arguments.");
+  }
+
+  const code = [node.label, String(argumentsText == null ? "" : argumentsText).trim()]
+      .filter(Boolean)
+      .join(" ");
+  replaceSourceLineCode(node.sourceLines[0], code);
+  return serializeEPolyScatDocument(document);
+}
+
+export function updateEPolyScatSequenceContinuationRow(contents, nodeIndex, sourceLineIndex, value) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  if (!Number.isInteger(sourceLineIndex) || sourceLineIndex <= 0 || sourceLineIndex >= node.sourceLines.length) {
+    throw new RangeError(`No continuation row exists at index ${sourceLineIndex}.`);
+  }
+
+  replaceSourceLineCode(node.sourceLines[sourceLineIndex], value);
+  return serializeEPolyScatDocument(document);
+}
+
+export function appendEPolyScatSequenceContinuationRow(contents, nodeIndex, value) {
+  const rowValue = String(value == null ? "" : value).trim();
+  if (!rowValue) {
+    return String(contents == null ? "" : contents);
+  }
+
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  const continuationRows = sequenceNodeContinuationRows(node);
+  const engFormStructure = node.label === "EngForm"
+      ? engFormSourceStructure(node.sourceLines)
+      : null;
+  if (!sequenceNodeAllowsContinuationAppend(node, continuationRows)) {
+    throw new TypeError(`${sequenceNodeLabel(node)} does not accept continuation rows.`);
+  }
+
+  const lastSemanticRow = continuationRows[continuationRows.length - 1];
+  const insertionIndex = lastSemanticRow ? lastSemanticRow.sourceLineIndex + 1 : 1;
+  const anchorLine = node.sourceLines[insertionIndex - 1];
+  const existingValueLine = continuationRows.length
+      ? node.sourceLines[continuationRows[0].sourceLineIndex]
+      : null;
+  const indentation = existingValueLine
+      ? (existingValueLine.raw.match(/^\s*/) || [" "])[0]
+      : " ";
+  const terminalLineEnding = anchorLine.eol;
+  if (!terminalLineEnding) {
+    anchorLine.eol = document.newline || "\n";
+  }
+  node.sourceLines.splice(insertionIndex, 0, {
+    raw: `${indentation}${rowValue}`,
+    eol: terminalLineEnding || "",
+  });
+  if (engFormStructure && engFormStructure.countRow) {
+    replaceSourceLineCode(
+        engFormStructure.countRow.sourceLine,
+        Math.max(0, engFormStructure.termCount) + 1,
+    );
+  }
+  return serializeEPolyScatDocument(document);
+}
+
+export function removeEPolyScatSequenceContinuationRow(contents, nodeIndex, sourceLineIndex) {
+  const document = parseEPolyScatDocument(contents);
+  const node = sequenceNodeAt(document, nodeIndex);
+  if (!Number.isInteger(sourceLineIndex) || sourceLineIndex <= 0 || sourceLineIndex >= node.sourceLines.length) {
+    throw new RangeError(`No continuation row exists at index ${sourceLineIndex}.`);
+  }
+
+  const sourceLine = node.sourceLines[sourceLineIndex];
+  const continuationRow = sequenceNodeContinuationRows(node)
+      .find(row => row.sourceLineIndex === sourceLineIndex);
+  if (!continuationRow || !continuationRow.removable) {
+    throw new TypeError(
+        `Cannot remove a structural continuation row from ${sequenceNodeLabel(node)}.`
+    );
+  }
+  const engFormStructure = node.label === "EngForm"
+      ? engFormSourceStructure(node.sourceLines)
+      : null;
+  const removesEngFormTerm = Boolean(
+      engFormStructure
+      && engFormStructure.termRows.some(row => row.sourceLine === sourceLine)
+  );
+  const [removedLine] = node.sourceLines.splice(sourceLineIndex, 1);
+  if (!removedLine.eol && node.sourceLines.length) {
+    node.sourceLines[node.sourceLines.length - 1].eol = "";
+  }
+  if (removesEngFormTerm && engFormStructure.countRow) {
+    replaceSourceLineCode(
+        engFormStructure.countRow.sourceLine,
+        Math.max(0, engFormStructure.termRows.length - 1),
+    );
+  }
+  return serializeEPolyScatDocument(document);
 }
 
 export function removeEPolyScatSequenceNode(contents, nodeIndex) {

@@ -1448,6 +1448,32 @@ def test_ordered_sequence_compact_editor_keeps_keyboard_and_mobile_hooks():
         assert hook in source
 
 
+def test_ordered_sequence_expanded_rows_offer_structured_and_source_editors():
+    source = _source()
+
+    expected_hooks = [
+        'class="ordered-sequence-editor-mode"',
+        "Structured fields",
+        "Source text",
+        'class="ordered-sequence-structured-editor"',
+        'class="ordered-sequence-arguments"',
+        'class="ordered-sequence-continuation-rows"',
+        "item.argumentsText",
+        "item.continuationRows",
+        "updateDataEntrySequenceNodeArguments",
+        "updateDataEntrySequenceContinuationRow",
+        "appendDataEntrySequenceContinuationRow",
+        "removeDataEntrySequenceContinuationRow",
+        "updateEPolyScatSequenceNodeArguments",
+        "updateEPolyScatSequenceContinuationRow",
+        "appendEPolyScatSequenceContinuationRow",
+        "removeEPolyScatSequenceContinuationRow",
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+
 def test_uploaded_file_table_uses_blank_missing_values_with_default_placeholders():
     source = _source()
 

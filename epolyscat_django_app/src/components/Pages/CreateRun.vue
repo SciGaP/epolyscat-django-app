@@ -654,7 +654,104 @@
                             :id="`sequence-node-editor-${item.nodeIndex}`"
                             class="ordered-sequence-expanded-editor"
                         >
+                          <div
+                              v-if="item.supportsStructuredEditing"
+                              class="ordered-sequence-editor-mode"
+                              role="group"
+                              aria-label="Sequence node editor mode"
+                          >
+                            <button
+                                type="button"
+                                :class="{ active: sequenceNodeEditorMode(item) === 'structured' }"
+                                v-on:click="setSequenceNodeEditorMode(item.nodeIndex, 'structured')"
+                            >
+                              Structured fields
+                            </button>
+                            <button
+                                type="button"
+                                :class="{ active: sequenceNodeEditorMode(item) === 'source' }"
+                                v-on:click="setSequenceNodeEditorMode(item.nodeIndex, 'source')"
+                            >
+                              Source text
+                            </button>
+                          </div>
+                          <div
+                              v-if="sequenceNodeEditorMode(item) === 'structured'"
+                              class="ordered-sequence-structured-editor"
+                          >
+                            <div class="ordered-sequence-arguments">
+                              <label :for="`sequence-node-arguments-${item.nodeIndex}`">Header arguments</label>
+                              <b-form-input
+                                  :id="`sequence-node-arguments-${item.nodeIndex}`"
+                                  :value="item.argumentsText"
+                                  :placeholder="`${item.label} arguments`"
+                                  v-on:change="updateDataEntrySequenceNodeArguments(item.nodeIndex, $event)"
+                              />
+                            </div>
+                            <div
+                                v-if="item.continuationRows.length || item.allowsContinuationRows"
+                                class="ordered-sequence-continuation-rows"
+                            >
+                              <span class="ordered-sequence-field-label">Continuation rows</span>
+                              <div
+                                  v-for="(row, rowIndex) in item.continuationRows"
+                                  :key="`${item.nodeIndex}-${row.sourceLineIndex}`"
+                                  class="ordered-sequence-continuation-row"
+                              >
+                                <span>{{ rowIndex + 1 }}</span>
+                                <b-form-input
+                                    :value="row.value"
+                                    :aria-label="`Edit ${item.label} continuation row ${rowIndex + 1}`"
+                                    v-on:change="updateDataEntrySequenceContinuationRow(
+                                      item.nodeIndex,
+                                      row.sourceLineIndex,
+                                      $event
+                                    )"
+                                />
+                                <button
+                                    type="button"
+                                    class="ordered-sequence-action ordered-sequence-remove"
+                                    :disabled="!row.removable"
+                                    :title="row.removable
+                                      ? 'Remove continuation row'
+                                      : 'Structural row cannot be removed'"
+                                    :aria-label="row.removable
+                                      ? `Remove ${item.label} continuation row ${rowIndex + 1}`
+                                      : `${item.label} structural continuation row ${rowIndex + 1}`"
+                                    v-on:click="removeDataEntrySequenceContinuationRow(
+                                      item.nodeIndex,
+                                      row.sourceLineIndex
+                                    )"
+                                >
+                                  <b-icon icon="x" aria-hidden="true" />
+                                </button>
+                              </div>
+                              <div
+                                  v-if="item.allowsContinuationRows"
+                                  class="ordered-sequence-continuation-add"
+                              >
+                                <b-form-input
+                                    :value="sequenceContinuationDraft(item.nodeIndex)"
+                                    :placeholder="`New ${item.label} continuation row`"
+                                    :aria-label="`New ${item.label} continuation row`"
+                                    v-on:input="setSequenceContinuationDraft(item.nodeIndex, $event)"
+                                    v-on:keydown.enter.prevent="appendDataEntrySequenceContinuationRow(item.nodeIndex)"
+                                />
+                                <button
+                                    type="button"
+                                    class="ordered-sequence-continuation-add-button"
+                                    title="Add continuation row"
+                                    :disabled="!sequenceContinuationDraft(item.nodeIndex).trim()"
+                                    v-on:click="appendDataEntrySequenceContinuationRow(item.nodeIndex)"
+                                >
+                                  <b-icon icon="plus" aria-hidden="true" />
+                                  <span class="sr-only">Add continuation row</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                           <b-form-textarea
+                              v-else
                               :value="item.raw"
                               :rows="item.multiline ? 4 : 2"
                               :aria-label="`Edit ${item.label}`"
@@ -745,6 +842,7 @@ import UserStorage from "@/components/overlay/UserStorage";
 import { descriptions } from "@/fileData";
 import { InputService } from "@/service/epolyscat-service";
 import {
+  appendEPolyScatSequenceContinuationRow,
   appendEPolyScatSequenceNode,
   buildEPolyScatInputScript as buildEPolyScatInputScriptFromValues,
   EPOLYSCAT_DATA_ENTRY_SECTIONS,
@@ -756,8 +854,11 @@ import {
   normalizeEPolyScatInputContents,
   parseEPolyScatInputScript as parseEPolyScatInputScriptFromContents,
   patchEPolyScatInputScript,
+  removeEPolyScatSequenceContinuationRow,
   removeEPolyScatSequenceNode,
   replaceEPolyScatSequenceNode,
+  updateEPolyScatSequenceContinuationRow,
+  updateEPolyScatSequenceNodeArguments,
 } from "@/utils/epolyscat-input-script";
 import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
 import {
@@ -1015,6 +1116,8 @@ export default {
       sequenceSearchOpen: false,
       sequenceActiveOptionIndex: 0,
       expandedSequenceNodeIndex: null,
+      sequenceNodeEditorModes: {},
+      sequenceContinuationDrafts: {},
 
       inpcContent: null,
       inpcContentType: 'text',
@@ -2171,6 +2274,21 @@ export default {
           ? null
           : nodeIndex;
     },
+    sequenceNodeEditorMode(item) {
+      if (!item.supportsStructuredEditing) {
+        return "source";
+      }
+      return this.sequenceNodeEditorModes[item.nodeIndex] || "structured";
+    },
+    setSequenceNodeEditorMode(nodeIndex, mode) {
+      this.$set(this.sequenceNodeEditorModes, nodeIndex, mode);
+    },
+    sequenceContinuationDraft(nodeIndex) {
+      return this.sequenceContinuationDrafts[nodeIndex] || "";
+    },
+    setSequenceContinuationDraft(nodeIndex, value) {
+      this.$set(this.sequenceContinuationDrafts, nodeIndex, value);
+    },
     sequenceNodePreview(raw) {
       return String(raw || "").replace(/\s+/g, " ").trim();
     },
@@ -2204,6 +2322,48 @@ export default {
         const nextPosition = Math.min(Math.max(previousPosition, 0), nodes.length - 1);
         this.expandedSequenceNodeIndex = nodes[nextPosition].nodeIndex;
       });
+    },
+    updateDataEntrySequenceNodeArguments(nodeIndex, argumentsText) {
+      const contents = updateEPolyScatSequenceNodeArguments(
+          this.inpcContent || "",
+          nodeIndex,
+          argumentsText,
+      );
+      this.applyDataEntrySequenceContents(contents);
+      this.expandedSequenceNodeIndex = nodeIndex;
+    },
+    updateDataEntrySequenceContinuationRow(nodeIndex, sourceLineIndex, value) {
+      const contents = updateEPolyScatSequenceContinuationRow(
+          this.inpcContent || "",
+          nodeIndex,
+          sourceLineIndex,
+          value,
+      );
+      this.applyDataEntrySequenceContents(contents);
+      this.expandedSequenceNodeIndex = nodeIndex;
+    },
+    appendDataEntrySequenceContinuationRow(nodeIndex) {
+      const draft = this.sequenceContinuationDraft(nodeIndex).trim();
+      if (!draft) {
+        return;
+      }
+      const contents = appendEPolyScatSequenceContinuationRow(
+          this.inpcContent || "",
+          nodeIndex,
+          draft,
+      );
+      this.applyDataEntrySequenceContents(contents);
+      this.$set(this.sequenceContinuationDrafts, nodeIndex, "");
+      this.expandedSequenceNodeIndex = nodeIndex;
+    },
+    removeDataEntrySequenceContinuationRow(nodeIndex, sourceLineIndex) {
+      const contents = removeEPolyScatSequenceContinuationRow(
+          this.inpcContent || "",
+          nodeIndex,
+          sourceLineIndex,
+      );
+      this.applyDataEntrySequenceContents(contents);
+      this.expandedSequenceNodeIndex = nodeIndex;
     },
     removeDataEntrySequenceNode(nodeIndex) {
       const previousNodes = this.dataEntrySequenceNodes;
@@ -3770,6 +3930,125 @@ export default {
   padding: 0 8px 10px 46px;
 }
 
+.ordered-sequence-editor-mode {
+  border: 1px solid #b7c0c9;
+  border-radius: 6px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  height: 34px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.ordered-sequence-editor-mode button {
+  background: #ffffff;
+  border: 0;
+  color: #455967;
+  font-size: 12px;
+  font-weight: 700;
+  height: 34px;
+  padding: 0 10px;
+}
+
+.ordered-sequence-editor-mode button + button {
+  border-left: 1px solid #b7c0c9;
+}
+
+.ordered-sequence-editor-mode button:hover,
+.ordered-sequence-editor-mode button:focus {
+  color: #226597;
+  outline: 0;
+}
+
+.ordered-sequence-editor-mode button.active {
+  background: #e9f2f8;
+  color: #1f4e68;
+}
+
+.ordered-sequence-structured-editor {
+  border-top: 1px solid #d8dde5;
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.ordered-sequence-arguments {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 132px minmax(0, 1fr);
+}
+
+.ordered-sequence-arguments label,
+.ordered-sequence-field-label {
+  color: #455967;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.ordered-sequence-arguments input,
+.ordered-sequence-continuation-row input,
+.ordered-sequence-continuation-add input {
+  border-color: #b7c0c9;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  height: 36px;
+  min-width: 0;
+}
+
+.ordered-sequence-continuation-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.ordered-sequence-continuation-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 24px minmax(0, 1fr) 30px;
+}
+
+.ordered-sequence-continuation-row > span {
+  color: #61707c;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.ordered-sequence-continuation-add {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  margin-left: 32px;
+}
+
+.ordered-sequence-continuation-add-button {
+  align-items: center;
+  background: #226597;
+  border: 1px solid #226597;
+  border-radius: 4px;
+  color: #ffffff;
+  display: inline-flex;
+  height: 34px;
+  justify-content: center;
+  padding: 0;
+  width: 34px;
+}
+
+.ordered-sequence-continuation-add-button:hover:not(:disabled),
+.ordered-sequence-continuation-add-button:focus:not(:disabled) {
+  background: #1b537d;
+  border-color: #1b537d;
+  outline: 0;
+}
+
+.ordered-sequence-continuation-add-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 .ordered-sequence-source {
   border-color: #b7c0c9;
   border-radius: 6px;
@@ -3870,6 +4149,19 @@ export default {
 
   .ordered-sequence-expanded-editor {
     padding: 0 8px 10px;
+  }
+
+  .ordered-sequence-editor-mode {
+    width: 100%;
+  }
+
+  .ordered-sequence-arguments {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .ordered-sequence-continuation-add {
+    margin-left: 0;
   }
 }
 

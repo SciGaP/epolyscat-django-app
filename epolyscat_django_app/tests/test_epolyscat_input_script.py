@@ -526,6 +526,164 @@ def test_ordered_sequence_editor_mutations_preserve_nonsemantic_source_and_order
     assert result.returncode == 0, result.stderr
 
 
+def test_structured_sequence_editor_projects_arguments_and_semantic_rows_losslessly():
+    script = textwrap.dedent(
+        """
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const {
+          listEPolyScatSequenceNodes,
+          removeEPolyScatSequenceContinuationRow,
+          updateEPolyScatSequenceContinuationRow,
+          updateEPolyScatSequenceNodeArguments,
+        } = moduleObject.exports;
+        const original = [
+          "Convert '$pt/test03.molden2012' 'molden' # keep convert note",
+          "EngForm",
+          " 0 2 # charge and formula type",
+          " # keep block note",
+          " 2",
+          " 2.0 -1.0 0",
+          " 2.0 -0.5 1",
+          "Scat",
+          "",
+        ].join("\\n");
+        const sequence = listEPolyScatSequenceNodes(original);
+        const convert = sequence.find(item => item.label === "Convert");
+        const engForm = sequence.find(item => item.label === "EngForm");
+
+        if (convert.argumentsText !== "'$pt/test03.molden2012' 'molden'") {
+          throw new Error(`Quoted arguments were not preserved: ${convert.argumentsText}`);
+        }
+        if (JSON.stringify(engForm.continuationRows.map(row => row.value)) !== JSON.stringify([
+          "0 2", "2", "2.0 -1.0 0", "2.0 -0.5 1",
+        ])) {
+          throw new Error(`Unexpected semantic rows: ${JSON.stringify(engForm.continuationRows)}`);
+        }
+        if (JSON.stringify(engForm.continuationRows.map(row => row.removable)) !== JSON.stringify([
+          false, false, true, true,
+        ])) {
+          throw new Error(`EngForm structural rows were not protected: ${JSON.stringify(engForm.continuationRows)}`);
+        }
+        try {
+          removeEPolyScatSequenceContinuationRow(
+            original,
+            engForm.nodeIndex,
+            engForm.continuationRows[1].sourceLineIndex,
+          );
+          throw new Error("Removing the EngForm term-count row should fail.");
+        } catch (error) {
+          if (!String(error.message).includes("structural continuation row")) {
+            throw error;
+          }
+        }
+
+        const updatedConvert = updateEPolyScatSequenceNodeArguments(
+          original,
+          convert.nodeIndex,
+          "'$pt/replacement.molden' 'molden'",
+        );
+        if (!updatedConvert.includes(
+          "Convert '$pt/replacement.molden' 'molden' # keep convert note"
+        )) {
+          throw new Error(`Header update lost source context:\n${updatedConvert}`);
+        }
+
+        const reparsedEngForm = listEPolyScatSequenceNodes(updatedConvert)
+          .find(item => item.label === "EngForm");
+        const updatedRow = updateEPolyScatSequenceContinuationRow(
+          updatedConvert,
+          reparsedEngForm.nodeIndex,
+          reparsedEngForm.continuationRows[0].sourceLineIndex,
+          "1 2",
+        );
+        if (!updatedRow.includes(" 1 2 # charge and formula type")) {
+          throw new Error(`Continuation update lost its inline comment:\n${updatedRow}`);
+        }
+        if (!updatedRow.includes(" # keep block note")) {
+          throw new Error(`Continuation update removed a comment line:\n${updatedRow}`);
+        }
+        """
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_structured_sequence_editor_adds_and_removes_rows_without_rewriting_neighbors():
+    script = textwrap.dedent(
+        """
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        const sourcePath = path.join(process.cwd(), "src", "utils", "epolyscat-input-script.js");
+        const source = fs.readFileSync(sourcePath, "utf8");
+        const compiled = babel.transformSync(source, {
+          plugins: ["@babel/plugin-transform-modules-commonjs"],
+        }).code;
+        const moduleObject = { exports: {} };
+        new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+
+        const {
+          appendEPolyScatSequenceContinuationRow,
+          listEPolyScatSequenceNodes,
+          removeEPolyScatSequenceContinuationRow,
+        } = moduleObject.exports;
+        const original = [
+          "EngForm",
+          " 0 1",
+          " # preserve between rows",
+          " 1",
+          " 2.0 -1.0",
+          "CustomLegacyRecord keep me",
+          "",
+          "Scat",
+          "",
+        ].join("\\n");
+        const engForm = listEPolyScatSequenceNodes(original)
+          .find(item => item.label === "EngForm");
+        const appended = appendEPolyScatSequenceContinuationRow(
+          original,
+          engForm.nodeIndex,
+          "3.0 -0.5",
+        );
+        const appendedEngForm = listEPolyScatSequenceNodes(appended)
+          .find(item => item.label === "EngForm");
+
+        if (!appended.includes(" 2.0 -1.0\\n 3.0 -0.5\\nCustomLegacyRecord keep me")) {
+          throw new Error(`New row was not inserted at the end of the block:\n${appended}`);
+        }
+
+        const addedRow = appendedEngForm.continuationRows
+          .find(row => row.value === "3.0 -0.5");
+        const removed = removeEPolyScatSequenceContinuationRow(
+          appended,
+          appendedEngForm.nodeIndex,
+          addedRow.sourceLineIndex,
+        );
+        if (removed !== original) {
+          throw new Error(`Add/remove round trip rewrote neighboring source:\n${removed}`);
+        }
+        """
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_canonical_schema_covers_all_manual_sample_data_records():
     script = textwrap.dedent(
         r'''

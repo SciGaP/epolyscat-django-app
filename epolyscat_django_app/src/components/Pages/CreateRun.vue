@@ -789,7 +789,10 @@
           :run="run"
           :input-state="inputState"
           :application-module-id="resourceApplicationModuleId"
+          :application-label="resourceApplicationLabel"
+          :deployment-execution-kind="resourceDeploymentExecutionKind"
           v-on:updateResources="updateResources"
+          v-on:readinessChanged="onResourceReadinessChanged"
       />
 
       <div class="validation-copy" aria-hidden="true">
@@ -1118,6 +1121,11 @@ export default {
       expandedSequenceNodeIndex: null,
       sequenceNodeEditorModes: {},
       sequenceContinuationDrafts: {},
+      resourceReadiness: {
+        status: "checking",
+        message: "Checking application deployments...",
+        ready: false,
+      },
 
       inpcContent: null,
       inpcContentType: 'text',
@@ -1251,14 +1259,28 @@ export default {
           "settings/epolyscatApplicationModuleId"
       ];
       if (this.activeExecutionApplication && this.activeExecutionApplication.id === "Gaussian16") {
-        return this.$store.getters["settings/gaussian16ApplicationModuleId"]
-            || epolyscatApplicationModuleId;
+        return this.$store.getters["settings/gaussian16ApplicationModuleId"];
       }
       if (this.activeExecutionApplication && this.activeExecutionApplication.id === "OpenMolcas") {
-        return this.$store.getters["settings/openmolcasApplicationModuleId"]
-            || epolyscatApplicationModuleId;
+        return this.$store.getters["settings/openmolcasApplicationModuleId"];
       }
       return epolyscatApplicationModuleId;
+    },
+    resourceApplicationLabel() {
+      return this.activeExecutionApplication
+          ? this.activeExecutionApplication.label || this.activeExecutionApplication.id
+          : "Application";
+    },
+    resourceDeploymentExecutionKind() {
+      if (
+          this.activeExecutionApplication
+          && this.utilityApplications.some(
+              application => application.id === this.activeExecutionApplication.id
+          )
+      ) {
+        return "utility";
+      }
+      return "module";
     },
     activeWorkflowApplicationId() {
       if (this.selectedRunType !== "workflow") {
@@ -1455,7 +1477,7 @@ export default {
             : this.inpcContentType !== "text" ? true
                 : (!!this.inpcContent && this.inpcContent.length >= 1),
         groupResourceProfileId: !!this.groupResourceProfileId,
-        computeResourceId: !!this.computeResourceId,
+        computeResourceId: !!this.computeResourceId && this.resourceReadiness.ready,
         queueName: !!this.queueName,
         coreCount: this.coreCount > 0,
         nodeCount: this.nodeCount > 0,
@@ -2470,6 +2492,9 @@ export default {
     },
     updateResources(resources) {
       Object.assign(this.run, resources);
+    },
+    onResourceReadinessChanged(readiness) {
+      this.resourceReadiness = readiness;
     },
     async readInputFileContents(file) {
       if (!file) {

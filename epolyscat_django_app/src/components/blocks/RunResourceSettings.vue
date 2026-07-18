@@ -131,8 +131,17 @@
             </div>
           </div>
           <b-form-invalid-feedback :state="resourceInputState.computeResourceId">
-            Compute resource is required
+            {{ computeResourceValidationMessage }}
           </b-form-invalid-feedback>
+          <div
+              class="resource-readiness"
+              :class="`status-${resourceReadiness.status}`"
+              role="status"
+              aria-live="polite"
+          >
+            <b-icon :icon="resourceReadinessIcon" aria-hidden="true" />
+            <span>{{ resourceReadiness.message }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -263,6 +272,10 @@
 
 <script>
 import store from "@/store";
+import {
+  buildComputeResourceReadiness,
+  filterEligibleApplicationDeployments,
+} from "@/utils/compute-resource-readiness";
 
 const {services} = AiravataAPI;
 
@@ -281,6 +294,15 @@ export default {
     applicationModuleId: {
       type: String,
       default: null,
+    },
+    applicationLabel: {
+      type: String,
+      default: "Application",
+    },
+    deploymentExecutionKind: {
+      type: String,
+      default: "module",
+      validator: value => ["module", "utility"].includes(value),
     },
     disabled: {
       type: Boolean,
@@ -317,6 +339,12 @@ export default {
       resourceOptionsLoading: false,
       resourceOptionsLoaded: false,
       resourceOptionsError: null,
+      computeResourcesLoading: false,
+      computeResourceLoadError: null,
+      computeResourceRequestId: 0,
+      loadedApplicationModuleId: null,
+      loadedGroupResourceProfileId: null,
+      loadedDeploymentExecutionKind: null,
       saveTargetSearch: "",
       showSaveTargetMenu: false,
     };
@@ -391,8 +419,7 @@ export default {
       };
     },
     epolyscatApplicationModuleId() {
-      return this.applicationModuleId
-          || this.$store.getters["settings/epolyscatApplicationModuleId"];
+      return this.applicationModuleId;
     },
     filteredSaveTargetOptions() {
       const query = this.saveTargetSearch.trim().toLowerCase();
@@ -413,7 +440,16 @@ export default {
       return this.filterResourceOptions(this.queueOptions, this.queueSearch);
     },
     computeResourceEmptyMessage() {
-      return this.groupResourceProfileId ? "Select an available option" : "Select allocation first";
+      if (!this.groupResourceProfileId) return "Select allocation first";
+      if (this.resourceReadiness.status === "checking") return "Checking deployments";
+      if (this.resourceReadiness.status === "load-error") return "Unable to load deployments";
+      if (this.resourceReadiness.status === "no-deployment") return "No deployment available";
+      return "Select an available option";
+    },
+    computeResourceValidationMessage() {
+      return this.resourceReadiness.ready
+        ? "Compute resource is required"
+        : this.resourceReadiness.message;
     },
     queueDisplayName() {
       if (this.queueName) return this.queueName;
@@ -423,6 +459,38 @@ export default {
       return this.applicationDeployments.find(
           deployment => deployment.computeHostId === this.computeResourceId
       ) || null;
+    },
+    selectedComputeResourceLabel() {
+      return this.resourceOptionLabel(
+          this.computeResourceOptions,
+          this.computeResourceId
+      );
+    },
+    deploymentScopeLoaded() {
+      return this.loadedApplicationModuleId === this.epolyscatApplicationModuleId
+        && this.loadedGroupResourceProfileId === this.groupResourceProfileId
+        && this.loadedDeploymentExecutionKind === this.deploymentExecutionKind;
+    },
+    resourceReadiness() {
+      return buildComputeResourceReadiness({
+        applicationModuleId: this.epolyscatApplicationModuleId,
+        applicationLabel: this.applicationLabel,
+        groupResourceProfileId: this.groupResourceProfileId,
+        computeResourceId: this.computeResourceId,
+        computeResourceLabel: this.selectedComputeResourceLabel,
+        eligibleDeployments: this.applicationDeployments,
+        scopeLoaded: this.deploymentScopeLoaded,
+        loading: this.computeResourcesLoading,
+        error: this.computeResourceLoadError,
+      });
+    },
+    resourceReadinessIcon() {
+      if (this.resourceReadiness.status === "ready") return "check-circle";
+      if (this.resourceReadiness.status === "checking") return "clock";
+      if (["selection-required", "allocation-required"].includes(this.resourceReadiness.status)) {
+        return "info-circle";
+      }
+      return "exclamation-circle";
     },
     selectedGroupResourceProfile() {
       return this.groupResourceProfiles.find(
@@ -509,6 +577,9 @@ export default {
       } else if (kind === "compute") {
         this.showComputeResourceMenu = true;
         this.showAllocationMenu = false;
+        if (this.computeResourceLoadError && !this.computeResourcesLoading) {
+          this.loadComputeResourceOptions();
+        }
       }
 
       this.showSaveTargetMenu = false;
@@ -575,49 +646,83 @@ export default {
       this.syncAllocationSearchToSelection();
     },
     async loadComputeResourceOptions() {
-      const computeResourceNames = await services.ComputeResourceService.names();
-      let includedComputeResourceIds = null;
+      const requestId = ++this.computeResourceRequestId;
+      const applicationModuleId = this.epolyscatApplicationModuleId;
+      const groupResourceProfileId = this.groupResourceProfileId;
+      const deploymentExecutionKind = this.deploymentExecutionKind;
 
-      if (!this.groupResourceProfileId) {
+      this.computeResourceLoadError = null;
+      this.loadedApplicationModuleId = null;
+      this.loadedGroupResourceProfileId = null;
+      this.loadedDeploymentExecutionKind = null;
+
+      if (!groupResourceProfileId) {
+        this.computeResourcesLoading = false;
         this.clearComputeResourceOptions();
         return;
       }
 
-      if (!this.epolyscatApplicationModuleId) {
+      if (!applicationModuleId) {
+        this.computeResourcesLoading = false;
         this.clearComputeResourceOptions();
         return;
       }
 
-      const applicationDeployments = await services.ApplicationDeploymentService.list(
-          {
-            appModuleId: this.epolyscatApplicationModuleId,
-            groupResourceProfileId: this.groupResourceProfileId,
-          },
-          {ignoreErrors: true}
-      ).catch(() => []);
-      this.applicationDeployments = applicationDeployments || [];
-      const deploymentIds = applicationDeployments
-          .map(deployment => deployment.computeHostId)
-          .filter(Boolean);
-      includedComputeResourceIds = new Set(deploymentIds);
+      this.computeResourcesLoading = true;
+      try {
+        const [computeResourceNames, applicationDeployments] = await Promise.all([
+          services.ComputeResourceService.names(),
+          services.ApplicationDeploymentService.list(
+              {
+                appModuleId: applicationModuleId,
+                groupResourceProfileId,
+              },
+              {ignoreErrors: true}
+          ),
+        ]);
+        if (requestId !== this.computeResourceRequestId) return;
 
-      this.computeResourceOptions = this.normalizeComputeResourceOptions(
-          computeResourceNames,
-          includedComputeResourceIds
-      );
+        this.applicationDeployments = filterEligibleApplicationDeployments(
+            applicationDeployments,
+            deploymentExecutionKind
+        );
+        const deploymentIds = this.applicationDeployments
+            .map(deployment => deployment.computeHostId)
+            .filter(Boolean);
+        const includedComputeResourceIds = new Set(deploymentIds);
 
-      if (
-          this.computeResourceId
-          && !this.computeResourceOptions.find(option => option.value === this.computeResourceId)
-      ) {
-        this.computeResourceId = null;
-        this.computeResourceSearch = "";
-      }
-      this.syncComputeResourceSearchToSelection();
-      if (this.computeResourceId) {
-        await this.loadQueueOptionsForSelection({ preserveExisting: true });
-      } else {
-        this.clearQueueOptions();
+        this.computeResourceOptions = this.normalizeComputeResourceOptions(
+            computeResourceNames,
+            includedComputeResourceIds
+        );
+        this.loadedApplicationModuleId = applicationModuleId;
+        this.loadedGroupResourceProfileId = groupResourceProfileId;
+        this.loadedDeploymentExecutionKind = deploymentExecutionKind;
+
+        if (
+            this.computeResourceId
+            && !this.computeResourceOptions.find(option => option.value === this.computeResourceId)
+        ) {
+          this.computeResourceId = null;
+          this.computeResourceSearch = "";
+        }
+        this.syncComputeResourceSearchToSelection();
+        if (this.computeResourceId) {
+          await this.loadQueueOptionsForSelection({ preserveExisting: true });
+        } else {
+          this.clearQueueOptions();
+        }
+      } catch (error) {
+        if (requestId !== this.computeResourceRequestId) return;
+        this.computeResourceLoadError = error;
+        this.clearComputeResourceOptions();
+        this.loadedApplicationModuleId = applicationModuleId;
+        this.loadedGroupResourceProfileId = groupResourceProfileId;
+        this.loadedDeploymentExecutionKind = deploymentExecutionKind;
+      } finally {
+        if (requestId === this.computeResourceRequestId) {
+          this.computeResourcesLoading = false;
+        }
       }
     },
     clearComputeResourceOptions() {
@@ -944,6 +1049,16 @@ export default {
     epolyscatApplicationModuleId() {
       this.loadComputeResourceOptions();
     },
+    deploymentExecutionKind() {
+      this.loadComputeResourceOptions();
+    },
+    resourceReadiness: {
+      handler(readiness) {
+        this.$emit("readinessChanged", { ...readiness });
+      },
+      immediate: true,
+      deep: true,
+    },
   },
   async mounted() {
     await this.$store.dispatch("settings/fetchSettings");
@@ -1005,6 +1120,33 @@ export default {
 .resource-search-input.is-valid {
   background-position: right 38px center;
   padding-right: 62px;
+}
+
+.resource-readiness {
+  align-items: flex-start;
+  color: #455967;
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  line-height: 1.35;
+  margin-top: 7px;
+}
+
+.resource-readiness .b-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.resource-readiness.status-ready {
+  color: #21643f;
+}
+
+.resource-readiness.status-load-error,
+.resource-readiness.status-no-deployment,
+.resource-readiness.status-configuration-missing,
+.resource-readiness.status-invalid-selection {
+  color: #9b2f2f;
 }
 
 .resource-search-toggle {

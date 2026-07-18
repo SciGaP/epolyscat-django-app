@@ -113,6 +113,8 @@
         <RunResourceSettings
             :run="run"
             :input-state="inputState"
+            :application-module-id="epolyscatApplicationModuleId"
+            application-label="ePolyScat"
             v-on:updateResources="updateResources"
         />
       </section>
@@ -196,6 +198,9 @@ export default {
     };
   },
   computed: {
+    epolyscatApplicationModuleId() {
+      return this.$store.getters["settings/epolyscatApplicationModuleId"];
+    },
     activeStageLabel() {
       const stage = this.workflowStages.find(stage => stage.id === this.activeStageId);
       return stage ? stage.label : this.activeStageId;

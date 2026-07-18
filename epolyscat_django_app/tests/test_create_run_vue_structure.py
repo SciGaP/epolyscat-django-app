@@ -676,6 +676,59 @@ def test_create_run_filters_resources_for_the_selected_application_module():
     assert "openmolcasApplicationModuleId" in settings_source
 
 
+def test_create_run_validates_selected_application_deployment_readiness():
+    create_source = _source()
+    resource_source = _resource_settings_source()
+
+    create_hooks = [
+        ':application-label="resourceApplicationLabel"',
+        ':deployment-execution-kind="resourceDeploymentExecutionKind"',
+        'v-on:readinessChanged="onResourceReadinessChanged"',
+        "resourceApplicationLabel()",
+        "resourceDeploymentExecutionKind()",
+        "resourceReadiness:",
+        "onResourceReadinessChanged(readiness)",
+        "!!this.computeResourceId && this.resourceReadiness.ready",
+    ]
+    resource_hooks = [
+        'class="resource-readiness"',
+        "buildComputeResourceReadiness",
+        "filterEligibleApplicationDeployments",
+        "deploymentExecutionKind",
+        "computeResourceRequestId",
+        "loadedApplicationModuleId",
+        "loadedGroupResourceProfileId",
+        "readinessChanged",
+        "No deployment",
+        "Unable to load",
+    ]
+
+    for hook in create_hooks:
+        assert hook in create_source
+    for hook in resource_hooks:
+        assert hook in resource_source
+
+
+def test_dedicated_application_ids_do_not_fall_back_to_epolyscat_deployments():
+    source = _source()
+    resource_source = _resource_settings_source()
+    workflow_source = _workflow_source()
+    computed = re.search(
+        r"resourceApplicationModuleId\(\) \{(?P<body>.*?)\n    \},",
+        source,
+        re.DOTALL,
+    )
+    assert computed, "resourceApplicationModuleId computed property is missing"
+    body = computed.group("body")
+
+    assert 'return this.$store.getters["settings/gaussian16ApplicationModuleId"];' in body
+    assert 'return this.$store.getters["settings/openmolcasApplicationModuleId"];' in body
+    assert "|| epolyscatApplicationModuleId" not in body
+    assert 'return this.applicationModuleId;' in resource_source
+    assert 'settings/epolyscatApplicationModuleId' not in resource_source
+    assert ':application-module-id="epolyscatApplicationModuleId"' in workflow_source
+
+
 def test_create_run_and_workflow_reuse_same_resource_settings_component():
     create_source = _source()
     workflow_source = _workflow_source()

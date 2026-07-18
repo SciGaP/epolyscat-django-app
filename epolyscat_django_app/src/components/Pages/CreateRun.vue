@@ -400,25 +400,100 @@
                       class="ordered-sequence-editor"
                   >
                     <div class="ordered-sequence-toolbar">
-                      <b-form-select
-                          id="sequence-node-type"
-                          v-model="sequenceNodeType"
-                          :options="sequenceNodeTypeOptions"
+                      <div
+                          class="ordered-sequence-mode-switch"
+                          role="group"
                           aria-label="Record or command type"
-                          class="ordered-sequence-select"
-                          v-on:input="onSequenceNodeTypeInput"
-                      />
-                      <b-form-select
-                          id="sequence-node-label"
-                          v-model="sequenceNodeLabel"
-                          :options="sequenceNodeLabelOptions"
-                          aria-label="Record or command name"
-                          class="ordered-sequence-select ordered-sequence-label-select"
-                      />
+                      >
+                        <button
+                            type="button"
+                            :class="{ active: sequenceNodeType === 'DataRecord' }"
+                            :aria-pressed="sequenceNodeType === 'DataRecord' ? 'true' : 'false'"
+                            aria-label="Data records"
+                            v-on:click="onSequenceNodeTypeInput('DataRecord')"
+                        >
+                          Data records
+                        </button>
+                        <button
+                            type="button"
+                            :class="{ active: sequenceNodeType === 'Command' }"
+                            :aria-pressed="sequenceNodeType === 'Command' ? 'true' : 'false'"
+                            aria-label="Commands"
+                            v-on:click="onSequenceNodeTypeInput('Command')"
+                        >
+                          Commands
+                        </button>
+                      </div>
+                      <div
+                          class="ordered-sequence-combobox"
+                          v-on:focusout="onSequenceSearchFocusOut"
+                      >
+                        <div class="ordered-sequence-combobox-input-wrap">
+                          <input
+                              id="sequence-node-search"
+                              v-model="sequenceSearchQuery"
+                              type="text"
+                              role="combobox"
+                              aria-autocomplete="list"
+                              aria-controls="sequence-node-options"
+                              :aria-expanded="sequenceSearchOpen ? 'true' : 'false'"
+                              :aria-activedescendant="sequenceActiveDescendant"
+                              :placeholder="sequenceNodeType === 'Command' ? 'Search commands' : 'Search data records'"
+                              autocomplete="off"
+                              class="ordered-sequence-search-input form-control"
+                              v-on:focus="openSequenceSearch"
+                              v-on:click="openSequenceSearch"
+                              v-on:input="onSequenceSearchInput"
+                              v-on:keydown="onSequenceSearchKeydown"
+                          />
+                          <b-icon icon="search" aria-hidden="true" />
+                        </div>
+                        <div
+                            v-if="sequenceSearchOpen"
+                            id="sequence-node-options"
+                            role="listbox"
+                            :aria-label="sequenceNodeType === 'Command' ? 'Commands' : 'Data records'"
+                            class="ordered-sequence-combobox-menu"
+                        >
+                          <template v-if="filteredSequenceNodeLabelOptions.length">
+                            <div
+                                v-for="group in sequenceNodeOptionGroups"
+                                :key="group.key"
+                                class="ordered-sequence-option-group"
+                            >
+                              <div class="ordered-sequence-option-group-label">{{ group.label }}</div>
+                              <button
+                                  v-for="option in group.options"
+                                  :id="sequenceOptionId(option.optionIndex)"
+                                  :key="option.value"
+                                  type="button"
+                                  role="option"
+                                  tabindex="-1"
+                                  :aria-selected="option.optionIndex === sequenceActiveOptionIndex ? 'true' : 'false'"
+                                  :class="{ active: option.optionIndex === sequenceActiveOptionIndex }"
+                                  class="ordered-sequence-option"
+                                  v-on:mouseenter="sequenceActiveOptionIndex = option.optionIndex"
+                                  v-on:mousedown.prevent="selectSequenceNodeOption(option)"
+                              >
+                                <span>{{ option.text }}</span>
+                                <b-icon
+                                    v-if="option.value === sequenceNodeLabel"
+                                    icon="check"
+                                    aria-hidden="true"
+                                />
+                              </button>
+                            </div>
+                          </template>
+                          <div v-else class="ordered-sequence-no-options">
+                            No matching {{ sequenceNodeType === 'Command' ? 'commands' : 'data records' }}
+                          </div>
+                        </div>
+                      </div>
                       <b-button
                           type="button"
                           variant="primary"
                           class="ordered-sequence-add"
+                          :disabled="!sequenceNodeLabel"
                           v-on:click="appendDataEntrySequenceNode"
                       >
                         <b-icon icon="plus" aria-hidden="true" />
@@ -431,13 +506,30 @@
                           v-for="(item, sequenceIndex) in dataEntrySequenceNodes"
                           :key="`${item.nodeIndex}-${item.type}-${item.label}-${item.occurrence}`"
                           class="ordered-sequence-row"
+                          :class="{ expanded: isDataEntrySequenceNodeExpanded(item.nodeIndex) }"
                       >
                         <div class="ordered-sequence-row-header">
                           <span class="ordered-sequence-index">{{ sequenceIndex + 1 }}</span>
-                          <div class="ordered-sequence-identity">
-                            <strong>{{ item.label }}</strong>
-                            <span>{{ sequenceNodeTypeText(item.type) }} - occurrence {{ item.occurrence }}</span>
-                          </div>
+                          <button
+                              type="button"
+                              class="ordered-sequence-summary"
+                              :aria-expanded="isDataEntrySequenceNodeExpanded(item.nodeIndex) ? 'true' : 'false'"
+                              :aria-controls="`sequence-node-editor-${item.nodeIndex}`"
+                              :aria-label="isDataEntrySequenceNodeExpanded(item.nodeIndex) ? 'Collapse record' : 'Expand record'"
+                              v-on:click="toggleDataEntrySequenceNode(item.nodeIndex)"
+                          >
+                            <span class="ordered-sequence-identity">
+                              <strong>{{ item.label }}</strong>
+                              <span v-if="item.occurrence > 1">#{{ item.occurrence }}</span>
+                            </span>
+                            <span class="ordered-sequence-preview">
+                              {{ sequenceNodePreview(item.raw) }}
+                            </span>
+                            <b-icon
+                                :icon="isDataEntrySequenceNodeExpanded(item.nodeIndex) ? 'chevron-down' : 'chevron-right'"
+                                aria-hidden="true"
+                            />
+                          </button>
                           <div class="ordered-sequence-actions">
                             <button
                                 type="button"
@@ -470,12 +562,19 @@
                             </button>
                           </div>
                         </div>
-                        <b-form-textarea
-                            :value="item.raw"
-                            :rows="item.multiline ? 5 : 2"
-                            class="ordered-sequence-source"
-                            v-on:change="replaceDataEntrySequenceNode(item.nodeIndex, $event)"
-                        />
+                        <div
+                            v-if="isDataEntrySequenceNodeExpanded(item.nodeIndex)"
+                            :id="`sequence-node-editor-${item.nodeIndex}`"
+                            class="ordered-sequence-expanded-editor"
+                        >
+                          <b-form-textarea
+                              :value="item.raw"
+                              :rows="item.multiline ? 4 : 2"
+                              :aria-label="`Edit ${item.label}`"
+                              class="ordered-sequence-source"
+                              v-on:change="replaceDataEntrySequenceNode(item.nodeIndex, $event)"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -802,10 +901,10 @@ export default {
       dataEntryViewMode: "table",
       sequenceNodeType: "DataRecord",
       sequenceNodeLabel: "LMax",
-      sequenceNodeTypeOptions: [
-        { value: "DataRecord", text: "Data record" },
-        { value: "Command", text: "Command" },
-      ],
+      sequenceSearchQuery: "LMax",
+      sequenceSearchOpen: false,
+      sequenceActiveOptionIndex: 0,
+      expandedSequenceNodeIndex: null,
 
       inpcContent: null,
       inpcContentType: 'text',
@@ -1214,7 +1313,41 @@ export default {
       const schemaItems = this.sequenceNodeType === "Command"
           ? EPOLYSCAT_INPUT_SCHEMA.commands
           : EPOLYSCAT_INPUT_SCHEMA.dataRecords;
-      return schemaItems.map(item => ({ value: item.label, text: item.label }));
+      return schemaItems.map(item => ({
+        value: item.label,
+        text: item.label,
+        group: item.group || (this.sequenceNodeType === "Command" ? "commands" : "advanced"),
+      }));
+    },
+    filteredSequenceNodeLabelOptions() {
+      const query = this.sequenceSearchQuery.trim().toLowerCase();
+      return this.sequenceNodeLabelOptions.filter(option => (
+        !query || option.text.toLowerCase().includes(query)
+      ));
+    },
+    sequenceNodeOptionGroups() {
+      const groupDefinitions = [
+        { key: "grid-expansion", label: "Grid / Expansion" },
+        { key: "state-definitions", label: "State Definitions" },
+        { key: "potentials", label: "Potentials" },
+        { key: "energies", label: "Energies / Partial Waves" },
+        { key: "outputs", label: "Outputs" },
+        { key: "advanced", label: "Advanced" },
+        { key: "commands", label: "Commands" },
+      ];
+      const optionsByGroup = this.filteredSequenceNodeLabelOptions.reduce((groups, option, optionIndex) => {
+        if (!groups[option.group]) groups[option.group] = [];
+        groups[option.group].push({ ...option, optionIndex });
+        return groups;
+      }, {});
+      return groupDefinitions
+          .filter(group => optionsByGroup[group.key] && optionsByGroup[group.key].length)
+          .map(group => ({ ...group, options: optionsByGroup[group.key] }));
+    },
+    sequenceActiveDescendant() {
+      if (!this.sequenceSearchOpen) return null;
+      const option = this.filteredSequenceNodeLabelOptions[this.sequenceActiveOptionIndex];
+      return option ? this.sequenceOptionId(this.sequenceActiveOptionIndex) : null;
     },
     ePolyScatInputScript() {
       return this.buildEPolyScatInputScript();
@@ -1733,16 +1866,108 @@ export default {
     },
     selectDataEntryTab(tabId) {
       this.selectedDataEntryTab = tabId;
+      if (tabId === "ordered-sequence") {
+        this.$nextTick(() => this.ensureExpandedSequenceNode());
+      }
     },
     onSequenceNodeTypeInput(type) {
       this.sequenceNodeType = type;
       const firstOption = this.sequenceNodeLabelOptions[0];
       this.sequenceNodeLabel = firstOption ? firstOption.value : "";
+      this.sequenceSearchQuery = firstOption ? firstOption.text : "";
+      this.sequenceSearchOpen = false;
+      this.sequenceActiveOptionIndex = 0;
     },
-    sequenceNodeTypeText(type) {
-      if (type === "DataRecord") return "Data record";
-      if (type === "Command") return "Command";
-      return "Unrecognized input";
+    openSequenceSearch() {
+      if (!this.sequenceSearchOpen) {
+        this.sequenceSearchQuery = "";
+        this.sequenceActiveOptionIndex = 0;
+      }
+      this.sequenceSearchOpen = true;
+    },
+    closeSequenceSearch() {
+      this.sequenceSearchOpen = false;
+      this.sequenceSearchQuery = this.sequenceNodeLabel;
+    },
+    onSequenceSearchInput(event) {
+      this.sequenceSearchQuery = event.target.value;
+      this.sequenceSearchOpen = true;
+      this.sequenceActiveOptionIndex = 0;
+    },
+    onSequenceSearchFocusOut(event) {
+      const nextTarget = event.relatedTarget;
+      if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+        this.closeSequenceSearch();
+      }
+    },
+    selectSequenceNodeOption(option) {
+      this.sequenceNodeLabel = option.value;
+      this.sequenceSearchQuery = option.text;
+      this.sequenceSearchOpen = false;
+      this.sequenceActiveOptionIndex = option.optionIndex || 0;
+    },
+    sequenceOptionId(optionIndex) {
+      return `sequence-node-option-${optionIndex}`;
+    },
+    scrollActiveSequenceOptionIntoView() {
+      this.$nextTick(() => {
+        const option = this.$el.querySelector(`#${this.sequenceOptionId(this.sequenceActiveOptionIndex)}`);
+        if (option) option.scrollIntoView({ block: "nearest" });
+      });
+    },
+    onSequenceSearchKeydown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        this.closeSequenceSearch();
+        return;
+      }
+
+      const options = this.filteredSequenceNodeLabelOptions;
+      if (!options.length) return;
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const delta = event.key === "ArrowDown" ? 1 : -1;
+        this.sequenceSearchOpen = true;
+        this.sequenceActiveOptionIndex = (
+          this.sequenceActiveOptionIndex + delta + options.length
+        ) % options.length;
+        this.scrollActiveSequenceOptionIntoView();
+        return;
+      }
+
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        this.sequenceSearchOpen = true;
+        this.sequenceActiveOptionIndex = event.key === "Home" ? 0 : options.length - 1;
+        this.scrollActiveSequenceOptionIntoView();
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        this.selectSequenceNodeOption(options[this.sequenceActiveOptionIndex]);
+      }
+    },
+    ensureExpandedSequenceNode() {
+      const exists = this.dataEntrySequenceNodes.some(
+          item => item.nodeIndex === this.expandedSequenceNodeIndex
+      );
+      if (!exists) {
+        const first = this.dataEntrySequenceNodes[0];
+        this.expandedSequenceNodeIndex = first ? first.nodeIndex : null;
+      }
+    },
+    isDataEntrySequenceNodeExpanded(nodeIndex) {
+      return this.expandedSequenceNodeIndex === nodeIndex;
+    },
+    toggleDataEntrySequenceNode(nodeIndex) {
+      this.expandedSequenceNodeIndex = this.expandedSequenceNodeIndex === nodeIndex
+          ? null
+          : nodeIndex;
+    },
+    sequenceNodePreview(raw) {
+      return String(raw || "").replace(/\s+/g, " ").trim();
     },
     applyDataEntrySequenceContents(contents) {
       this.inpcContentType = "text";
@@ -1756,18 +1981,72 @@ export default {
         label: this.sequenceNodeLabel,
       });
       this.applyDataEntrySequenceContents(contents);
+      this.$nextTick(() => {
+        const last = this.dataEntrySequenceNodes[this.dataEntrySequenceNodes.length - 1];
+        this.expandedSequenceNodeIndex = last ? last.nodeIndex : null;
+      });
     },
     replaceDataEntrySequenceNode(nodeIndex, raw) {
+      const previousPosition = this.dataEntrySequenceNodes.findIndex(item => item.nodeIndex === nodeIndex);
       const contents = replaceEPolyScatSequenceNode(this.inpcContent || "", nodeIndex, raw);
       this.applyDataEntrySequenceContents(contents);
+      this.$nextTick(() => {
+        const nodes = this.dataEntrySequenceNodes;
+        if (!nodes.length) {
+          this.expandedSequenceNodeIndex = null;
+          return;
+        }
+        const nextPosition = Math.min(Math.max(previousPosition, 0), nodes.length - 1);
+        this.expandedSequenceNodeIndex = nodes[nextPosition].nodeIndex;
+      });
     },
     removeDataEntrySequenceNode(nodeIndex) {
+      const previousNodes = this.dataEntrySequenceNodes;
+      const removedPosition = previousNodes.findIndex(item => item.nodeIndex === nodeIndex);
+      const expandedPosition = previousNodes.findIndex(
+          item => item.nodeIndex === this.expandedSequenceNodeIndex
+      );
       const contents = removeEPolyScatSequenceNode(this.inpcContent || "", nodeIndex);
       this.applyDataEntrySequenceContents(contents);
+      this.$nextTick(() => {
+        const nodes = this.dataEntrySequenceNodes;
+        if (!nodes.length || expandedPosition < 0) {
+          this.expandedSequenceNodeIndex = null;
+          return;
+        }
+
+        let nextPosition = expandedPosition;
+        if (expandedPosition === removedPosition) {
+          nextPosition = Math.min(removedPosition, nodes.length - 1);
+        } else if (expandedPosition > removedPosition) {
+          nextPosition = expandedPosition - 1;
+        }
+        this.expandedSequenceNodeIndex = nodes[nextPosition].nodeIndex;
+      });
     },
     moveDataEntrySequenceNode(nodeIndex, direction) {
+      const previousNodes = this.dataEntrySequenceNodes;
+      const sourcePosition = previousNodes.findIndex(item => item.nodeIndex === nodeIndex);
+      const targetPosition = sourcePosition + (direction === "up" ? -1 : 1);
+      if (sourcePosition < 0 || targetPosition < 0 || targetPosition >= previousNodes.length) return;
+
+      const expandedPosition = previousNodes.findIndex(
+          item => item.nodeIndex === this.expandedSequenceNodeIndex
+      );
       const contents = moveEPolyScatSequenceNode(this.inpcContent || "", nodeIndex, direction);
       this.applyDataEntrySequenceContents(contents);
+      this.$nextTick(() => {
+        if (expandedPosition < 0) {
+          this.expandedSequenceNodeIndex = null;
+          return;
+        }
+
+        let nextPosition = expandedPosition;
+        if (expandedPosition === sourcePosition) nextPosition = targetPosition;
+        else if (expandedPosition === targetPosition) nextPosition = sourcePosition;
+        const nextNode = this.dataEntrySequenceNodes[nextPosition];
+        this.expandedSequenceNodeIndex = nextNode ? nextNode.nodeIndex : null;
+      });
     },
     fieldSelectOptions(field) {
       return [
@@ -2878,20 +3157,134 @@ export default {
 }
 
 .ordered-sequence-toolbar {
-  align-items: center;
+  align-items: start;
   display: grid;
   gap: 10px;
-  grid-template-columns: minmax(132px, 0.45fr) minmax(180px, 1fr) auto;
+  grid-template-columns: auto minmax(220px, 1fr) auto;
   margin-bottom: 16px;
 }
 
-.ordered-sequence-select {
-  border-color: #b7c0c9;
+.ordered-sequence-mode-switch {
+  border: 1px solid #b7c0c9;
   border-radius: 6px;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  height: 38px;
+  overflow: hidden;
+}
+
+.ordered-sequence-mode-switch button {
+  background: #ffffff;
+  border: 0;
+  color: #455967;
   font-size: 14px;
   font-weight: 700;
   height: 38px;
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.ordered-sequence-mode-switch button + button {
+  border-left: 1px solid #b7c0c9;
+}
+
+.ordered-sequence-mode-switch button:hover,
+.ordered-sequence-mode-switch button:focus {
+  color: #226597;
+  outline: 0;
+}
+
+.ordered-sequence-mode-switch button.active {
+  background: #e9f2f8;
+  color: #1f4e68;
+}
+
+.ordered-sequence-combobox {
   min-width: 0;
+  position: relative;
+}
+
+.ordered-sequence-combobox-input-wrap {
+  position: relative;
+}
+
+.ordered-sequence-combobox-input-wrap > svg {
+  color: #61707c;
+  pointer-events: none;
+  position: absolute;
+  right: 12px;
+  top: 11px;
+}
+
+.ordered-sequence-search-input {
+  border-color: #b7c0c9;
+  border-radius: 6px;
+  color: #1f2933;
+  font-size: 14px;
+  height: 38px;
+  min-width: 0;
+  padding-right: 36px;
+}
+
+.ordered-sequence-search-input:focus {
+  border-color: #226597;
+  box-shadow: 0 0 0 2px rgba(34, 101, 151, 0.14);
+}
+
+.ordered-sequence-combobox-menu {
+  background: #ffffff;
+  border: 1px solid #b7c0c9;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(31, 41, 51, 0.16);
+  left: 0;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+}
+
+.ordered-sequence-option-group-label {
+  background: #f3f5f7;
+  color: #61707c;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  padding: 6px 10px;
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+  z-index: 1;
+}
+
+.ordered-sequence-option {
+  align-items: center;
+  background: #ffffff;
+  border: 0;
+  color: #1f2933;
+  display: flex;
+  font-size: 13px;
+  justify-content: space-between;
+  min-height: 34px;
+  padding: 7px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.ordered-sequence-option:hover,
+.ordered-sequence-option:focus,
+.ordered-sequence-option.active {
+  background: #e9f2f8;
+  color: #1f4e68;
+  outline: 0;
+}
+
+.ordered-sequence-no-options {
+  color: #61707c;
+  font-size: 13px;
+  padding: 12px 10px;
 }
 
 .ordered-sequence-add {
@@ -2911,15 +3304,17 @@ export default {
 
 .ordered-sequence-row {
   border-bottom: 1px solid #e3e7eb;
-  padding: 12px 0;
+  min-width: 0;
 }
 
 .ordered-sequence-row-header {
   align-items: center;
   display: grid;
+  grid-template-areas: "index summary actions";
   gap: 10px;
   grid-template-columns: 28px minmax(0, 1fr) auto;
-  margin-bottom: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
 }
 
 .ordered-sequence-index {
@@ -2931,14 +3326,36 @@ export default {
   display: inline-flex;
   font-size: 12px;
   font-weight: 700;
+  grid-area: index;
   height: 28px;
   justify-content: center;
   width: 28px;
 }
 
+.ordered-sequence-summary {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  display: grid;
+  gap: 10px;
+  grid-area: summary;
+  grid-template-columns: minmax(92px, 0.3fr) minmax(0, 1fr) 18px;
+  min-width: 0;
+  padding: 2px 0;
+  text-align: left;
+}
+
+.ordered-sequence-summary:hover,
+.ordered-sequence-summary:focus {
+  color: #226597;
+  outline: 0;
+}
+
 .ordered-sequence-identity {
-  display: flex;
-  flex-direction: column;
+  align-items: center;
+  display: inline-flex;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -2946,19 +3363,35 @@ export default {
   color: #1f2933;
   font-size: 14px;
   line-height: 1.25;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ordered-sequence-identity span {
+  background: #eef3f7;
+  border-radius: 4px;
+  color: #455967;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 4px;
+}
+
+.ordered-sequence-preview {
   color: #61707c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
-  font-weight: 600;
-  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ordered-sequence-actions {
   display: flex;
   gap: 4px;
+  grid-area: actions;
 }
 
 .ordered-sequence-action {
@@ -2991,6 +3424,10 @@ export default {
 .ordered-sequence-remove:focus:not(:disabled) {
   border-color: #a83a3a;
   color: #a83a3a;
+}
+
+.ordered-sequence-expanded-editor {
+  padding: 0 8px 10px 46px;
 }
 
 .ordered-sequence-source {
@@ -3043,6 +3480,41 @@ export default {
   min-width: 120px;
 }
 
+@media (max-width: 760px) {
+  .ordered-sequence-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .ordered-sequence-mode-switch {
+    width: 100%;
+  }
+
+  .ordered-sequence-add {
+    justify-self: start;
+  }
+
+  .ordered-sequence-row-header {
+    align-items: center;
+    grid-template-areas:
+      "index actions"
+      "summary summary";
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  .ordered-sequence-actions {
+    justify-self: end;
+  }
+
+  .ordered-sequence-summary {
+    grid-template-columns: minmax(88px, 0.35fr) minmax(0, 1fr) 18px;
+    width: 100%;
+  }
+
+  .ordered-sequence-expanded-editor {
+    padding: 0 8px 10px;
+  }
+}
+
 @media (max-width: 920px) {
   .new-run-content {
     padding: 16px 18px 70px;
@@ -3078,13 +3550,8 @@ export default {
   }
 
   .manual-field-row,
-  .output-record-row,
-  .ordered-sequence-toolbar {
+  .output-record-row {
     grid-template-columns: 1fr;
-  }
-
-  .ordered-sequence-add {
-    justify-self: start;
   }
 
   .output-record-extension {

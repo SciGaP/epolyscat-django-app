@@ -1337,6 +1337,53 @@ def test_data_entry_table_exposes_lossless_ordered_record_and_command_editor():
         assert hook in source
 
 
+def test_data_entry_ordered_sequence_uses_searchable_compact_accordion_editor():
+    source = _source() + _input_script_source()
+
+    expected_hooks = [
+        'class="ordered-sequence-mode-switch"',
+        'role="combobox"',
+        ':aria-expanded="sequenceSearchOpen ? \'true\' : \'false\'"',
+        'role="listbox"',
+        "filteredSequenceNodeLabelOptions",
+        "sequenceNodeOptionGroups",
+        "onSequenceSearchKeydown",
+        "selectSequenceNodeOption",
+        "expandedSequenceNodeIndex",
+        "ensureExpandedSequenceNode",
+        "toggleDataEntrySequenceNode",
+        "isDataEntrySequenceNodeExpanded",
+        "sequenceNodePreview",
+        'class="ordered-sequence-preview"',
+        'v-if="isDataEntrySequenceNodeExpanded(item.nodeIndex)"',
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+    assert 'id="sequence-node-label"' not in source
+    assert ':rows="item.multiline ? 5 : 2"' not in source
+
+
+def test_ordered_sequence_compact_editor_keeps_keyboard_and_mobile_hooks():
+    source = _source()
+
+    expected_hooks = [
+        'aria-label="Data records"',
+        'aria-label="Commands"',
+        "aria-activedescendant",
+        "'Collapse record'",
+        "'Expand record'",
+        '.ordered-sequence-combobox-menu',
+        'max-height: 240px',
+        'text-overflow: ellipsis',
+        '@media (max-width: 760px)',
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+
 def test_uploaded_file_table_uses_blank_missing_values_with_default_placeholders():
     source = _source()
 

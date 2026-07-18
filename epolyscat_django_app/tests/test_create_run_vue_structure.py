@@ -932,8 +932,9 @@ def test_view_run_plot_dropdown_only_uses_plottable_files():
     source = _view_run_source()
 
     expected_hooks = [
-        "plottableFileNames",
-        "presentation.plottable_file_names",
+        "file.plottable === true",
+        "file.plot_contract",
+        "applyPlotContractForFile",
         "isPlottableFile(file)",
         "plottableOutputFileForName",
         "const files = this.plottableOutputFiles",

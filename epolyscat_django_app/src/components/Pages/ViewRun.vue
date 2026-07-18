@@ -230,7 +230,7 @@ export default {
         file_groups: [],
         target_states: { input_columns: [], output_files: [] },
         parameters: [],
-        plot: { file: "cross_sections", x_axis: "energy", y_axis: "cross section", flags: "" },
+        plot: { file: "", x_axis: "0", y_axis: "1", flags: "-linY" },
         plottable_file_names: [],
         stages: [],
         code: "",
@@ -256,10 +256,10 @@ export default {
       },
       workflowContinuationLoading: false,
       plotForm: {
-        file: "cross_sections",
-        x_axis: "energy",
-        y_axis: "cross section",
-        flags: "",
+        file: "",
+        x_axis: "0",
+        y_axis: "1",
+        flags: "-linY",
       },
     };
   },
@@ -459,9 +459,6 @@ export default {
 
       return nonPlotApplications.indexOf(this.activeRunApplicationForPlot) < 0;
     },
-    plottableFileNames() {
-      return this.presentation.plottable_file_names || [];
-    },
     plottableOutputFiles() {
       return this.outputFiles.filter(file => (
         this.fileDataProductURI(file) && this.isPlottableFile(file)
@@ -509,10 +506,17 @@ export default {
         return [{ value: "", text: "No plottable output files yet", disabled: true }];
       }
 
-      return files.map(file => ({
-        value: this.fileDisplayName(file),
-        text: this.fileDisplayName(file),
-      }));
+      return files.map(file => {
+        const contract = this.plotContractForFile(file);
+        const dimension = contract && contract.dimension
+          ? ` (${contract.dimension}D)`
+          : "";
+
+        return {
+          value: this.fileDisplayName(file),
+          text: `${this.fileDisplayName(file)}${dimension}`,
+        };
+      });
     },
     hasPlottableOutputFiles() {
       return this.plottableOutputFiles.length > 0;
@@ -563,6 +567,13 @@ export default {
         this.selectedFile = this.plotForm.file;
       }
     },
+    "plotForm.file"(filename) {
+      const outputFile = this.plottableOutputFileForName(filename);
+      this.applyPlotContractForFile(outputFile);
+      if (filename && this.visualizationMode) {
+        this.selectedFile = filename;
+      }
+    },
   },
   methods: {
     async refreshRun() {
@@ -599,7 +610,7 @@ export default {
         file_groups: [],
         target_states: { input_columns: [], output_files: [] },
         parameters: [],
-        plot: { file: "", x_axis: "energy", y_axis: "cross section", flags: "" },
+        plot: { file: "", x_axis: "0", y_axis: "1", flags: "-linY" },
         plottable_file_names: [],
         stages: [],
         code: "",
@@ -614,9 +625,9 @@ export default {
       };
       normalized.plot = {
         file: "",
-        x_axis: "energy",
-        y_axis: "cross section",
-        flags: "",
+        x_axis: "0",
+        y_axis: "1",
+        flags: "-linY",
         ...(normalized.plot || {}),
       };
       normalized.stages = normalized.stages || [];
@@ -681,16 +692,18 @@ export default {
     initializePlotForm() {
       const currentOutput = this.plottableOutputFileForName(this.plotForm.file || this.presentation.plot.file);
       const firstOutput = this.plottableOutputFiles[0];
-      const plotFile = currentOutput && this.fileDataProductURI(currentOutput)
-          ? this.fileDisplayName(currentOutput)
-          : firstOutput ? this.fileDisplayName(firstOutput) : "";
+      const selectedOutput = currentOutput && this.fileDataProductURI(currentOutput)
+          ? currentOutput
+          : firstOutput || null;
+      const plotFile = selectedOutput ? this.fileDisplayName(selectedOutput) : "";
 
       this.plotForm = {
         file: plotFile,
-        x_axis: this.presentation.plot.x_axis,
-        y_axis: this.presentation.plot.y_axis,
-        flags: this.presentation.plot.flags,
+        x_axis: this.presentation.plot.x_axis || "0",
+        y_axis: this.presentation.plot.y_axis || "1",
+        flags: this.presentation.plot.flags || "",
       };
+      this.applyPlotContractForFile(selectedOutput);
       this.plotImageUrl = "";
       this.plotError = "";
       this.plotOutput = "";
@@ -710,6 +723,10 @@ export default {
       try {
         const inputFile = this.inputFileForName(this.selectedFile);
         const outputFile = this.outputFileForName(this.selectedFile);
+        if (outputFile && outputFile.viewable === false) {
+          this.filePreviewError = "This file is binary and cannot be previewed as text.";
+          return;
+        }
         const content = inputFile && this.fileDataProductURI(inputFile)
             ? await InputService.fetchFileContents(inputFile)
             : outputFile && this.fileDataProductURI(outputFile)
@@ -832,8 +849,24 @@ export default {
       return this.plottableOutputFiles.find(file => this.fileDisplayName(file) === filename);
     },
     isPlottableFile(file) {
-      const filename = this.fileDisplayName(file);
-      return this.plottableFileNames.indexOf(filename) >= 0;
+      return Boolean(file && (file.plottable === true || file.plot_contract));
+    },
+    plotContractForFile(file) {
+      if (!file) {
+        return null;
+      }
+
+      return file.plot_contract || file.plotContract || null;
+    },
+    applyPlotContractForFile(file) {
+      const contract = this.plotContractForFile(file);
+      if (!contract) {
+        return;
+      }
+
+      this.plotForm.x_axis = contract.x_axis || "0";
+      this.plotForm.y_axis = contract.y_axes || contract.y_axis || "1";
+      this.plotForm.flags = contract.flags || "";
     },
     inputFileForName(filename) {
       return this.runInputFiles.find(file => this.fileDisplayName(file) === filename);

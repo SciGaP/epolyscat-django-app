@@ -40,6 +40,7 @@ from rest_framework.response import Response
 
 from epolyscat_django_app import (
     models,
+    output_presentation_contracts,
     remote_launch_contract,
     runtime_audit as runtime_audit_domain,
     scientific_output_contracts,
@@ -552,7 +553,58 @@ class RunViewSet(viewsets.ModelViewSet):
             append_experiment_directory_files(experiment_id)
             append_experiment_directory_files(experiment_id, path="ARCHIVE")
 
-        return output_files
+        declared_file_types = self._epolyscat_output_declarations(request, run)
+        return output_presentation_contracts.annotate_output_files(
+            output_files,
+            declared_file_types=declared_file_types,
+        )
+
+    @staticmethod
+    def _is_epolyscat_run(run):
+        applications = (
+            run.module_application,
+            run.workflow_application,
+            run.utility_application,
+        )
+        return run.workflow_stage == "ePolyScat_Run" or any(
+            re.sub(r"[^a-z0-9]", "", str(application or "").lower())
+            == "epolyscat"
+            for application in applications
+        )
+
+    def _epolyscat_output_declarations(self, request, run):
+        if not self._is_epolyscat_run(run):
+            return {}
+
+        declarations = {}
+        script_inputs = models.Input.objects.filter(
+            run=run,
+            type="files",
+            name__in=("ePolyscat_Input_File", "ePolyScat_Input_File"),
+        ).prefetch_related("files")
+        for input_instance in script_inputs:
+            for file_instance in input_instance.files.all():
+                file_object = None
+                try:
+                    file_object = user_storage.open_file(
+                        request,
+                        data_product_uri=file_instance.data_product_uri,
+                    )
+                    declarations.update(
+                        output_presentation_contracts.parse_file_name_declarations(
+                            file_object.read()
+                        )
+                    )
+                except Exception:
+                    logger.debug(
+                        "Unable to read ePolyScat output declarations from %s",
+                        file_instance.name,
+                        exc_info=True,
+                    )
+                finally:
+                    if file_object is not None and hasattr(file_object, "close"):
+                        file_object.close()
+        return declarations
 
     @staticmethod
     def _chunk_bytes(value):
@@ -1705,44 +1757,35 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(methods=["get"], detail=True)
     def viewables(self, request, pk=None):
         run: models.Run = self.get_object()
-        viewables = []
-
-        epolyscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "ePolyScat"
-        ]
-        for filename, description in epolyscat_settings["FILE_VIEWABLE"].items():
-            if run_file_exists(request, run, filename):
-                url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
-                viewables.append(dict(filename=filename, url=url))
-
-        for data_type in self.DATA_TYPE_TO_FILENAME.keys():
-            try:
-                dp_uri = get_run_output_data_product_uri(
-                    request, run, data_type=data_type
-                )
-                if dp_uri is not None:
-                    filename = self.DATA_TYPE_TO_FILENAME[data_type]
-                    url = self.reverse_action(
-                        url_name="show-viewable", args=[pk, filename]
-                    )
-                    viewables.append(dict(filename=filename, url=url))
-            except:
-                logger.exception(f"Failed to check if {data_type} is available")
-
-        return Response(viewables)
+        return Response(
+            [
+                file_data
+                for file_data in self._output_files_for_run(request, run)
+                if file_data.get("viewable")
+            ]
+        )
 
     @action(methods=["get"], detail=True, url_path="input-files")
     def input_files(self, request, pk=None):
         run: models.Run = self.get_object()
         input_files_list = []
-
-        eployscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "ePolyScat"
-        ]
-        for filename, description in eployscat_settings["FILE_INPUT"].items():
-            if run_file_exists(request, run, filename):
-                url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
-                input_files_list.append(dict(filename=filename, url=url))
+        inputs = models.Input.objects.filter(
+            run=run,
+            type="files",
+        ).prefetch_related("files")
+        for input_instance in inputs:
+            for file_instance in input_instance.files.all():
+                input_files_list.append(
+                    {
+                        "name": file_instance.name,
+                        "filename": file_instance.name,
+                        "data_product_uri": file_instance.data_product_uri,
+                        "data-product-uri": file_instance.data_product_uri,
+                        "viewable": output_presentation_contracts.is_viewable_file(
+                            file_instance.name
+                        ),
+                    }
+                )
         return Response(input_files_list)
 
     @action(methods=["get"], detail=True, url_path=r"viewables/(?P<filename>[^/]+)")

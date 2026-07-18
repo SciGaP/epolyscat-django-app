@@ -33,6 +33,11 @@ class RunViewSetBackendTests(TestCase):
         self.assertIn("workflow_continuation", action_names)
         self.assertIn("output_manifest", action_names)
 
+    def test_plot_serializer_does_not_require_removed_legacy_plotfile(self):
+        serializer = serializers.PlotSerializer()
+
+        self.assertFalse(serializer.fields["plotfile"].required)
+
     @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
     def test_output_manifest_reports_verified_gaussian_result(
@@ -1150,6 +1155,135 @@ class RunViewSetBackendTests(TestCase):
         )
         self.assertEqual(mock_list_experiment_dir.call_count, 2)
 
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_get_output_files_annotates_custom_epolyscat_plot_output(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="plot-contract-user")
+        request = RequestFactory().get(
+            "/epolyscat_django_app/api/runs/1/get_output_files/"
+        )
+        request.user = user
+        run = self.create_run(user)
+        run.module_application = "ePolyScat"
+        run.save(update_fields=["module_application"])
+        script_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="ePolyscat_Input_File",
+        )
+        models.File.objects.create(
+            input=script_input,
+            name="input_file.inp",
+            data_product_uri="airavata-dp://input-script",
+        )
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="plot-contract-experiment",
+        )
+        mock_list_experiment_dir.side_effect = lambda *_args, **kwargs: (
+            [],
+            []
+            if kwargs.get("path") == "ARCHIVE"
+            else [
+                {
+                    "name": "scientist-selected-name.dat",
+                    "data-product-uri": "airavata-dp://plot-data",
+                }
+            ],
+        )
+        mock_open_file.return_value = BytesIO(
+            b"FileName 'PlotData' '$po/scientist-selected-name.dat' 'REWIND'\n"
+        )
+        viewset = views.RunViewSet()
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.get_output_files(request, pk=run.id)
+
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["file_type"], "PlotData")
+        self.assertEqual(response.data[0]["semantic_roles"], ["plot_data_1d"])
+        self.assertTrue(response.data[0]["viewable"])
+        self.assertTrue(response.data[0]["plottable"])
+        self.assertEqual(response.data[0]["plot_contract"]["x_axis"], "0")
+        self.assertEqual(response.data[0]["plot_contract"]["y_axes"], "1")
+
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_viewables_returns_real_output_descriptors(self, mock_list_experiment_dir):
+        user = get_user_model().objects.create_user(username="viewable-contract-user")
+        request = RequestFactory().get(
+            "/epolyscat_django_app/api/runs/1/viewables/"
+        )
+        request.user = user
+        run = self.create_run(user)
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="viewable-contract-experiment",
+        )
+        mock_list_experiment_dir.side_effect = lambda *_args, **kwargs: (
+            [],
+            []
+            if kwargs.get("path") == "ARCHIVE"
+            else [
+                {
+                    "name": "calculation.log",
+                    "data-product-uri": "airavata-dp://calculation-log",
+                },
+                {
+                    "name": "checkpoint.chk",
+                    "data-product-uri": "airavata-dp://checkpoint",
+                },
+            ],
+        )
+        viewset = views.RunViewSet()
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.viewables(request, pk=run.id)
+
+        self.assertEqual(
+            [file_data["name"] for file_data in response.data],
+            ["calculation.log"],
+        )
+        self.assertTrue(response.data[0]["viewable"])
+
+    def test_input_files_returns_actual_run_file_descriptors(self):
+        user = get_user_model().objects.create_user(username="input-contract-user")
+        request = RequestFactory().get(
+            "/epolyscat_django_app/api/runs/1/input-files/"
+        )
+        request.user = user
+        run = self.create_run(user)
+        input_instance = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="Gaussian_Input",
+        )
+        models.File.objects.create(
+            input=input_instance,
+            name="gaussian.in",
+            data_product_uri="airavata-dp://gaussian-input",
+        )
+        viewset = views.RunViewSet()
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.input_files(request, pk=run.id)
+
+        self.assertEqual(
+            response.data,
+            [
+                {
+                    "name": "gaussian.in",
+                    "filename": "gaussian.in",
+                    "data_product_uri": "airavata-dp://gaussian-input",
+                    "data-product-uri": "airavata-dp://gaussian-input",
+                    "viewable": True,
+                }
+            ],
+        )
+
     @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
     def test_get_output_files_recurses_experiment_output_directories(self, mock_list_experiment_dir):
         user = get_user_model().objects.create_user(
@@ -1583,7 +1717,7 @@ class RunViewSetBackendTests(TestCase):
         self.assertIn("target_states", result.data)
         self.assertEqual(
             result.data["plottable_file_names"],
-            ["spec_total", "spec_partial", "expec", "Laser", "eig"],
+            [],
         )
 
     def test_run_presentation_files_follow_module_application(self):

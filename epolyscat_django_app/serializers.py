@@ -328,8 +328,8 @@ class RunSerializer(serializers.ModelSerializer):
             ],
             "plot": metadata.get("plot") or {
                 "file": schema["plot_file"],
-                "x_axis": "energy",
-                "y_axis": "cross section",
+                "x_axis": "0",
+                "y_axis": "1",
                 "flags": "-linY",
             },
             "plottable_file_names": self._plottable_file_names(),
@@ -352,10 +352,9 @@ class RunSerializer(serializers.ModelSerializer):
         return names
 
     def _plottable_file_names(self):
-        settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "EPOLYSCAT_DJANGO_APP"
-        ]
-        return list(settings["FILE_PLOTABLE"].keys())
+        # Kept in the presentation shape for older clients. New clients use the
+        # per-output plottable and plot_contract fields from get_output_files.
+        return []
 
     def _presentation_context_run(self, run_instance):
         if run_instance.run_mode != "workflow" or run_instance.parent_run_id is not None:
@@ -1101,7 +1100,7 @@ class PlotParametersSerializer(serializers.ModelSerializer):
 
 class PlotSerializer(serializers.Serializer):
     runs = RunIdRelatedField(many=True)
-    plotfile = serializers.CharField(max_length=20)
+    plotfile = serializers.CharField(max_length=20, required=False, allow_blank=True)
     plotfiles = PlotfileSerializer(many=True)
     plot_parameters = PlotParametersSerializer(required=False)
     plot_parameters_id = PlotParametersIdRelatedField(required=False)

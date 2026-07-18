@@ -18,6 +18,8 @@ EPOLYSCAT_RESULT_ROLES = {
     "orbital_grid",
     "orientation_data",
     "orient_ncro",
+    "plot_data_1d",
+    "plot_data_2d",
     "wavefunction",
 }
 

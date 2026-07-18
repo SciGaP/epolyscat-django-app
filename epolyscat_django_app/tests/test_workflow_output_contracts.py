@@ -130,8 +130,10 @@ def test_binding_accepts_standard_manifest_and_returns_original_descriptor():
 
 def test_classifier_covers_manual_epolyscat_output_families():
     expectations = {
-        "PlotData": "cross_section",
+        "PlotData": "plot_data_1d",
+        "PlotData2D": "plot_data_2d",
         "MFDCSFull": "cross_section",
+        "MFDCSGeom": "cross_section_geometry",
         "MatrixElements": "matrix_elements",
         "VibAveIdy": "matrix_elements",
         "AWaveFun": "wavefunction",

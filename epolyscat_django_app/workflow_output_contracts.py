@@ -92,13 +92,17 @@ def classify_output_file(file_data):
         (".cube", ".cub")
     ):
         roles.append("cube")
-    if file_type in {
-        "mfdcs",
-        "mfdcsfull",
-        "mfdcsgeom",
-        "plotdata",
-        "plotdata2d",
-    } or any(
+    if file_type == "plotdata":
+        roles.append("plot_data_1d")
+    elif file_type == "plotdata2d":
+        roles.append("plot_data_2d")
+    elif file_type == "mfdcs":
+        roles.extend(("cross_section", "plot_data_2d"))
+    elif file_type == "mfdcsfull":
+        roles.append("cross_section")
+    elif file_type == "mfdcsgeom":
+        roles.append("cross_section_geometry")
+    elif any(
         token in name
         for token in ("cross-section", "cross_section", "crosssection", "mfdcs")
     ):

@@ -11,6 +11,7 @@ from .workflow_output_contracts import (
 
 EPOLYSCAT_RESULT_ROLES = {
     "bend_orient",
+    "blm_coefficients",
     "cross_section",
     "cube",
     "dump_out",
@@ -257,12 +258,12 @@ def verify_scientific_outputs(application, manifest, read_text=None):
                     "ePolyScat reported an abnormal ending.",
                     [entry["name"]],
                 )
-            if "End EDCS" in contents and "Finalize" in contents:
+            if "Finalize" in contents:
                 return _result(
                     application,
                     "verified",
                     "",
-                    "ePolyScat reached EDCS completion and finalization.",
+                    "ePolyScat finalized and produced a recognized scientific result.",
                     [entry["name"], scientific_results[0]["name"]],
                 )
         if readable:
@@ -270,7 +271,7 @@ def verify_scientific_outputs(application, manifest, read_text=None):
                 application,
                 "failed",
                 "success_marker_missing",
-                "ePolyScat output is missing EDCS completion or finalization markers.",
+                "ePolyScat output is missing its finalization marker.",
                 [entry["name"] for entry, _contents in readable],
             )
         return _result(

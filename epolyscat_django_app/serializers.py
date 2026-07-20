@@ -12,7 +12,7 @@ from django.conf import settings
 from django.utils.text import get_valid_filename
 from rest_framework import reverse, serializers, validators
 
-from epolyscat_django_app import models
+from epolyscat_django_app import models, scientific_output_service
 
 logger = logging.getLogger(__name__)
 
@@ -297,7 +297,12 @@ class RunSerializer(serializers.ModelSerializer):
     def get_presentation(self, run_instance: models.Run):
         mode = run_instance.run_mode or "module"
         metadata = run_instance.workflow_metadata or {}
-        context_run = self._presentation_context_run(run_instance)
+        child_stages = (
+            self._cached_workflow_child_stages(run_instance)
+            if mode == "workflow"
+            else []
+        )
+        context_run = self._presentation_context_run(run_instance, child_stages)
         schema = self._presentation_file_schema(run_instance, context_run)
         workflow_stage = schema["active_stage_id"]
         input_files = self._run_file_names(run_instance, "files")
@@ -338,11 +343,107 @@ class RunSerializer(serializers.ModelSerializer):
         }
 
         if mode == "workflow":
-            child_stages = self._workflow_child_stages(run_instance)
             presentation["stages"] = child_stages or self._workflow_stages(workflow_stage)
             presentation.update(self._workflow_progress(run_instance, presentation["stages"]))
 
         return presentation
+
+    def _cached_workflow_child_stages(self, run_instance):
+        parent_run = (
+            run_instance.parent_run
+            if run_instance.parent_run_id is not None
+            else run_instance
+        )
+        cache = getattr(self, "_workflow_child_stages_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_child_stages_cache = cache
+        if parent_run.pk not in cache:
+            cache[parent_run.pk] = self._workflow_child_stages(parent_run)
+        return cache[parent_run.pk]
+
+    def _workflow_parent_summary(self, run_instance):
+        if (
+            run_instance.run_mode != "workflow"
+            or run_instance.parent_run_id is not None
+            or not run_instance.workflow_steps.exists()
+        ):
+            return None
+
+        cache = getattr(self, "_workflow_parent_summary_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_parent_summary_cache = cache
+        if run_instance.pk in cache:
+            return cache[run_instance.pk]
+
+        stages = self._cached_workflow_child_stages(run_instance)
+        progress = self._workflow_progress(run_instance, stages)
+        remote_stages = [stage for stage in stages if not stage.get("local_only")]
+        child_runs = list(
+            run_instance.workflow_steps.order_by("workflow_step_order", "id")
+        )
+
+        if remote_stages and all(
+            self._workflow_stage_is_complete(stage) for stage in remote_stages
+        ):
+            status = "COMPLETED"
+        else:
+            latest_terminal_statuses = {
+                child.latest_execution.airavata_experiment_status
+                for child in child_runs
+                if child.latest_execution is not None
+            }
+            if "FAILED" in latest_terminal_statuses:
+                status = "FAILED"
+            elif "CANCELED" in latest_terminal_statuses:
+                status = "CANCELED"
+            else:
+                metadata_state = (run_instance.workflow_metadata or {}).get(
+                    "workflow_state"
+                )
+                started = (
+                    metadata_state in ("running", "waiting", "complete")
+                    or run_instance.workflow_source_run_id is not None
+                    or any(child.executions.exists() for child in child_runs)
+                    or any(
+                        self._workflow_stage_is_complete(stage)
+                        for stage in remote_stages
+                    )
+                )
+                status = "RUNNING" if started else "UNSUBMITTED"
+
+        active_child_id = progress.get("active_child_run_id")
+        active_child = next(
+            (child for child in child_runs if child.id == active_child_id),
+            None,
+        )
+        resource_candidates = [
+            candidate
+            for candidate in (
+                [active_child]
+                + list(reversed(child_runs))
+                + [run_instance.workflow_source_run]
+            )
+            if candidate is not None and candidate.latest_execution is not None
+        ]
+        resource = next(
+            (
+                candidate.latest_execution.resource_name
+                for candidate in resource_candidates
+                if candidate.latest_execution.resource_name
+            ),
+            "",
+        )
+        summary = {
+            "status": status,
+            "job_status": status,
+            "resource": resource,
+            "stages": stages,
+            "progress": progress,
+        }
+        cache[run_instance.pk] = summary
+        return summary
 
     def _run_file_names(self, run_instance: models.Run, input_type):
         names = []
@@ -356,7 +457,7 @@ class RunSerializer(serializers.ModelSerializer):
         # per-output plottable and plot_contract fields from get_output_files.
         return []
 
-    def _presentation_context_run(self, run_instance):
+    def _presentation_context_run(self, run_instance, stages=None):
         if run_instance.run_mode != "workflow" or run_instance.parent_run_id is not None:
             return run_instance
 
@@ -364,25 +465,81 @@ class RunSerializer(serializers.ModelSerializer):
         if not children:
             return run_instance
 
+        stages = stages or []
+        children_by_id = {child.id: child for child in children}
         metadata = run_instance.workflow_metadata or {}
         active_child_run_id = metadata.get("active_child_run_id")
         if active_child_run_id:
-            active_child = next(
-                (child for child in children if child.id == active_child_run_id),
+            active_stage = next(
+                (
+                    stage for stage in stages
+                    if active_child_run_id in (
+                        [stage.get("child_run_id")]
+                        + list(stage.get("child_run_ids") or [])
+                    )
+                ),
                 None,
             )
-            if active_child is not None:
-                return active_child
+            if (
+                active_stage is not None
+                and not self._workflow_stage_is_complete(active_stage)
+                and active_child_run_id in children_by_id
+            ):
+                return children_by_id[active_child_run_id]
 
-        active_child = next(
+        active_stage = next(
             (
-                child for child in children
-                if child.workflow_step_status in ("submitted", "running")
-                or child.executions.exists()
+                stage for stage in stages
+                if stage.get("state") == "active"
+                and stage.get("child_run_id") in children_by_id
             ),
             None,
         )
-        return active_child or children[0]
+        if active_stage is not None:
+            return children_by_id[active_stage["child_run_id"]]
+
+        workflow_started = (
+            metadata.get("workflow_state") in ("running", "waiting", "complete")
+            or any(self._workflow_stage_is_complete(stage) for stage in stages)
+        )
+        if workflow_started:
+            pending_stage = self._first_actionable_pending_stage(stages)
+            if (
+                pending_stage is not None
+                and pending_stage.get("child_run_id") in children_by_id
+            ):
+                return children_by_id[pending_stage["child_run_id"]]
+
+        visualization_stage = next(
+            (
+                stage for stage in stages
+                if stage.get("local_only")
+                and stage.get("state") == "active"
+                and stage.get("source_child_run_id") in children_by_id
+            ),
+            None,
+        )
+        if visualization_stage is not None:
+            return children_by_id[visualization_stage["source_child_run_id"]]
+
+        return children[0]
+
+    def _workflow_stage_is_complete(self, stage):
+        return (
+            stage.get("state") == "complete"
+            or stage.get("status") in ("complete", "imported", "not_included")
+        )
+
+    def _first_actionable_pending_stage(self, stages):
+        for index, stage in enumerate(stages):
+            if stage.get("local_only") or stage.get("state") != "pending":
+                continue
+            if all(
+                self._workflow_stage_is_complete(previous_stage)
+                for previous_stage in stages[:index]
+            ):
+                return stage
+        return None
 
     def _presentation_file_schema(self, display_run, context_run):
         application = self._presentation_application(context_run)
@@ -705,8 +862,13 @@ class RunSerializer(serializers.ModelSerializer):
         ]
 
     def _workflow_child_state(self, child_run):
-        if child_run.workflow_step_status == "complete" or self._workflow_child_has_finished_execution(child_run):
+        if (
+            child_run.workflow_step_status == "complete"
+            or self._workflow_child_has_verified_completion(child_run)
+        ):
             return "complete"
+        if self._workflow_child_has_terminal_execution(child_run):
+            return "pending"
         if child_run.workflow_step_status in ("submitted", "running"):
             return "active"
         if child_run.executions.exists():
@@ -714,16 +876,54 @@ class RunSerializer(serializers.ModelSerializer):
         return "pending"
 
     def _workflow_child_status(self, child_run):
-        if child_run.workflow_step_status == "complete" or self._workflow_child_has_finished_execution(child_run):
+        if (
+            child_run.workflow_step_status == "complete"
+            or self._workflow_child_has_verified_completion(child_run)
+        ):
             return "complete"
+        if self._workflow_child_has_terminal_execution(child_run):
+            return "pending"
         return child_run.workflow_step_status or "pending"
 
-    def _workflow_child_has_finished_execution(self, child_run):
+    def _workflow_child_report(self, child_run):
         request = self.context.get("request")
+        if not request or not child_run.executions.exists():
+            return None
+
+        cache = getattr(self, "_workflow_scientific_report_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_scientific_report_cache = cache
+        if child_run.pk not in cache:
+            try:
+                cache[child_run.pk] = scientific_output_service.build_report(
+                    request,
+                    child_run,
+                )
+            except Exception:
+                logger.warning(
+                    "Unable to verify scientific completion for workflow child %s",
+                    child_run.pk,
+                    exc_info=True,
+                )
+                cache[child_run.pk] = None
+        return cache[child_run.pk]
+
+    def _workflow_child_has_verified_completion(self, child_run):
+        report = self._workflow_child_report(child_run)
         return bool(
-            request
-            and child_run.executions.exists()
-            and child_run.are_all_executions_finished(request)
+            report
+            and report.get("scheduler_complete")
+            and report.get("scientific_verification", {}).get("status")
+            == "verified"
+        )
+
+    def _workflow_child_has_terminal_execution(self, child_run):
+        report = self._workflow_child_report(child_run)
+        return bool(
+            report
+            and report.get("scheduler_status")
+            in scientific_output_service.TERMINAL_SCHEDULER_STATUSES
         )
 
     def _workflow_child_application(self, child_run):
@@ -742,6 +942,7 @@ class RunSerializer(serializers.ModelSerializer):
             (
                 stage for stage in stages
                 if active_child_run_id and stage.get("child_run_id") == active_child_run_id
+                and not self._workflow_stage_is_complete(stage)
             ),
             None,
         )
@@ -750,6 +951,14 @@ class RunSerializer(serializers.ModelSerializer):
                 (stage for stage in stages if stage.get("state") == "active"),
                 None,
             )
+        workflow_started = (
+            workflow_state in ("running", "waiting", "complete")
+            or any(self._workflow_stage_is_complete(stage) for stage in stages)
+        )
+        if active_stage is None and workflow_started:
+            active_stage = self._first_actionable_pending_stage(stages)
+            if active_stage is not None:
+                active_stage["state"] = "active"
         if active_stage and workflow_state == "not_started":
             workflow_state = "running"
 
@@ -794,6 +1003,10 @@ class RunSerializer(serializers.ModelSerializer):
 #            return latest_execution.get_airavata_experiment_status(request)
 
     def get_status(self, run_instance: models.Run):
+        workflow_summary = self._workflow_parent_summary(run_instance)
+        if workflow_summary is not None:
+            return workflow_summary["status"]
+
         request = self.context["request"]
         if not run_instance.executions.exists():
             return "UNSUBMITTED"
@@ -834,6 +1047,10 @@ class RunSerializer(serializers.ModelSerializer):
 
 
     def get_job_status(self, run_instance: models.Run):
+        workflow_summary = self._workflow_parent_summary(run_instance)
+        if workflow_summary is not None:
+            return workflow_summary["job_status"]
+
         request = self.context["request"]
             
         if not run_instance.executions.exists():
@@ -884,6 +1101,10 @@ class RunSerializer(serializers.ModelSerializer):
 
 
     def get_resource(self, instance):
+        workflow_summary = self._workflow_parent_summary(instance)
+        if workflow_summary is not None:
+            return workflow_summary["resource"]
+
         request = self.context["request"]
         if not instance.executions.exists():
             return ""

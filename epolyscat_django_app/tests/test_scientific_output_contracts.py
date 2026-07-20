@@ -129,6 +129,74 @@ def test_epolyscat_requires_completion_markers_and_scientific_result():
     assert failed["status"] == "failed"
 
 
+def test_epolyscat_accepts_photoionization_finalization_with_matrix_elements():
+    manifest = scientific_output_contracts.build_output_manifest(
+        [
+            {
+                "name": "ePolyScat.stdout",
+                "fileType": "STDOUT",
+                "data-product-uri": "airavata-dp://stdout",
+            },
+            {
+                "name": "test12PU.idy",
+                "fileType": "MatrixElements",
+                "data-product-uri": "airavata-dp://matrix-elements",
+            },
+        ]
+    )
+
+    result = scientific_output_contracts.verify_scientific_outputs(
+        "ePolyScat",
+        manifest,
+        read_text=_reader(
+            {
+                "ePolyScat.stdout": (
+                    "End CrossSection\n"
+                    "EPhi 25.5810 8.8675 8.2210 7.6302\n"
+                    "Finalize\n"
+                )
+            }
+        ),
+    )
+
+    assert result["status"] == "verified"
+    assert result["evidence_files"] == ["ePolyScat.stdout", "test12PU.idy"]
+
+
+def test_epolyscat_accepts_finalized_electron_scattering_with_saved_blms():
+    manifest = scientific_output_contracts.build_output_manifest(
+        [
+            {
+                "name": "ePolyScat.stdout",
+                "fileType": "STDOUT",
+                "data-product-uri": "airavata-dp://stdout",
+            },
+            {
+                "name": "test01Blms.dat",
+                "data-product-uri": "airavata-dp://blms",
+            },
+        ]
+    )
+
+    result = scientific_output_contracts.verify_scientific_outputs(
+        "ePolyScat",
+        manifest,
+        read_text=_reader(
+            {
+                "ePolyScat.stdout": (
+                    "SaveBlms 'test01Blms.dat'\n"
+                    "Total Cross Sections\n"
+                    "Finalize\n"
+                )
+            }
+        ),
+    )
+
+    assert manifest[1]["roles"] == ["blm_coefficients"]
+    assert result["status"] == "verified"
+    assert result["evidence_files"] == ["ePolyScat.stdout", "test01Blms.dat"]
+
+
 def test_utility_requires_its_declared_output_role():
     manifest = scientific_output_contracts.build_output_manifest(
         [

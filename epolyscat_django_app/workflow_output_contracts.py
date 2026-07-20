@@ -119,6 +119,8 @@ def classify_output_file(file_data):
         roles.append("cross_section")
     if file_type in {"matrixelements", "vibaveidy"}:
         roles.append("matrix_elements")
+    if file_type in {"blms", "blmcoefficients"} or name.endswith("blms.dat"):
+        roles.append("blm_coefficients")
     if file_type in {"awavefun", "swavefun"}:
         roles.append("wavefunction")
     if file_type in {
@@ -150,6 +152,15 @@ def _files_for_role(output_files, role):
             else classify_output_file(file_data)
         )
     ]
+
+
+def _openmolcas_molden_priority(file_data):
+    name = os.path.basename(_filename(file_data)).lower()
+    if re.search(r"(?:^|[._-])scf(?:[._-]|$)", name):
+        return 0
+    if "guessorb" in _normalized_token(name):
+        return 2
+    return 1
 
 
 def _missing_result(input_file_name, expected_role):
@@ -190,6 +201,8 @@ def resolve_workflow_output_binding(
             candidates = _files_for_role(files, expected_role)
             if not candidates:
                 continue
+            if source_application == "OpenMolcas" and expected_role == "molden":
+                candidates = sorted(candidates, key=_openmolcas_molden_priority)
             selected = candidates[0]
             return {
                 "status": "ready",

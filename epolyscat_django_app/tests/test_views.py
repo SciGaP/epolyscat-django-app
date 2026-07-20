@@ -25,6 +25,139 @@ class RunViewSetBackendTests(TestCase):
             experiment=experiment,
         )
 
+    @mock.patch("epolyscat_django_app.views.user_storage.delete")
+    def test_update_single_file_input_replaces_stale_file(self, mock_delete):
+        user = get_user_model().objects.create_user(username="single-file-update")
+        request = RequestFactory().patch("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        run = self.create_run(user)
+        control_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="ePolyscat_Input_File",
+        )
+        old_file = models.File.objects.create(
+            input=control_input,
+            name="input_file.inp",
+            data_product_uri="airavata-dp://old-control",
+        )
+        viewset = views.RunViewSet()
+
+        def save_replacement(_request, _run, file_data, input_instance):
+            return models.File.objects.create(
+                input=input_instance,
+                name=file_data["name"],
+                data_product_uri="airavata-dp://new-control",
+            )
+
+        viewset._save_file = mock.Mock(side_effect=save_replacement)
+
+        viewset._update_input(
+            request,
+            run,
+            {
+                "type": "files",
+                "name": "ePolyscat_Input_File",
+                "isMultiFileInput": False,
+                "files": [
+                    {
+                        "name": "cnvlinfull-probe.in",
+                        "deleted": False,
+                        "dataProductURI": "airavata-dp://selected-control",
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(
+            list(control_input.files.values_list("name", flat=True)),
+            ["cnvlinfull-probe.in"],
+        )
+        self.assertFalse(models.File.objects.filter(pk=old_file.pk).exists())
+        mock_delete.assert_called_once_with(
+            request,
+            data_product_uri="airavata-dp://old-control",
+        )
+
+    @mock.patch("epolyscat_django_app.views.user_storage.delete")
+    def test_update_single_file_input_repairs_legacy_duplicates(self, mock_delete):
+        user = get_user_model().objects.create_user(username="single-file-repair")
+        request = RequestFactory().patch("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        run = self.create_run(user)
+        control_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="ePolyscat_Input_File",
+        )
+        old_file = models.File.objects.create(
+            input=control_input,
+            name="input_file.inp",
+            data_product_uri="airavata-dp://old-control",
+        )
+        selected_file = models.File.objects.create(
+            input=control_input,
+            name="cnvlinfull-probe.in",
+            data_product_uri="airavata-dp://selected-control",
+        )
+
+        views.RunViewSet()._update_input(
+            request,
+            run,
+            {
+                "type": "files",
+                "name": "ePolyscat_Input_File",
+                "isMultiFileInput": False,
+                "files": [],
+            },
+        )
+
+        self.assertEqual(
+            list(control_input.files.values_list("id", flat=True)),
+            [selected_file.id],
+        )
+        self.assertFalse(models.File.objects.filter(pk=old_file.pk).exists())
+        mock_delete.assert_called_once_with(
+            request,
+            data_product_uri="airavata-dp://old-control",
+        )
+
+    @mock.patch("epolyscat_django_app.views.user_storage.delete")
+    def test_update_multi_file_input_keeps_existing_files(self, mock_delete):
+        user = get_user_model().objects.create_user(username="multi-file-update")
+        request = RequestFactory().patch("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        run = self.create_run(user)
+        molden_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="molden.dat",
+        )
+        models.File.objects.create(
+            input=molden_input,
+            name="first.molden",
+            data_product_uri="airavata-dp://first",
+        )
+        models.File.objects.create(
+            input=molden_input,
+            name="second.molden",
+            data_product_uri="airavata-dp://second",
+        )
+
+        views.RunViewSet()._update_input(
+            request,
+            run,
+            {
+                "type": "files",
+                "name": "molden.dat",
+                "isMultiFileInput": True,
+                "files": [],
+            },
+        )
+
+        self.assertEqual(molden_input.files.count(), 2)
+        mock_delete.assert_not_called()
+
     def test_run_viewset_exposes_workflow_continuation_action(self):
         action_names = {
             action.__name__ for action in views.RunViewSet.get_extra_actions()
@@ -85,6 +218,71 @@ class RunViewSetBackendTests(TestCase):
         )
         self.assertEqual(response.data["files"][0]["roles"], ["gaussian_output"])
         self.assertNotIn("descriptor", response.data["files"][0])
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_output_manifest_does_not_verify_a_staged_utility_input_as_output(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(username="utility-manifest")
+        run = self.create_run(user)
+        run.run_mode = "workflow"
+        run.workflow_stage = "Analysis"
+        run.utility_application = "CnvLinFull"
+        run.save(
+            update_fields=["run_mode", "workflow_stage", "utility_application"]
+        )
+        dump_input = models.Input.objects.create(
+            run=run,
+            type="files",
+            name="DumpOut",
+        )
+        models.File.objects.create(
+            input=dump_input,
+            name="test12dumpidy.dat",
+            data_product_uri="airavata-dp://staged-dump",
+        )
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="utility-manifest-experiment",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "test12dumpidy.dat",
+                    "fileType": "DumpOut",
+                    "data-product-uri": "airavata-dp://staged-dump",
+                },
+                {
+                    "name": "ePolyScat.stdout",
+                    "fileType": "STDOUT",
+                    "data-product-uri": "airavata-dp://stdout",
+                },
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Selected Workflow\n")
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/runs/{run.id}/output_manifest/"
+        )
+        request.user = user
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.get_object = mock.Mock(return_value=run)
+
+        response = viewset.output_manifest(request, pk=run.id)
+
+        self.assertEqual(
+            [file_data["name"] for file_data in response.data["files"]],
+            ["ePolyScat.stdout"],
+        )
+        self.assertEqual(
+            response.data["scientific_verification"]["status"],
+            "incomplete",
+        )
 
     @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
@@ -335,7 +533,7 @@ class RunViewSetBackendTests(TestCase):
             [
                 ("Data_Gen", "not_included", "not_included"),
                 ("ePolyScat_Run", "complete", "imported"),
-                ("Analysis", "pending", "pending"),
+                ("Analysis", "active", "pending"),
                 ("Visualization", "pending", "pending"),
             ],
         )
@@ -460,6 +658,41 @@ class RunViewSetBackendTests(TestCase):
 
         self.assertIn(workflow_parent, result)
         self.assertNotIn(tutorial_like_run, result)
+
+    def test_run_list_orders_most_recently_updated_runs_first(self):
+        user = get_user_model().objects.create_user(
+            username="recent-runs@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/")
+        request.user = user
+        request.query_params = request.GET
+        older_run = models.Run.objects.create(
+            name="older run",
+            owner=user,
+            run_mode="module",
+            module_application="Gaussian16",
+        )
+        newer_workflow = models.Run.objects.create(
+            name="newer workflow",
+            owner=user,
+            run_mode="workflow",
+            workflow_metadata={"isWorkflowPlan": True},
+        )
+        models.Run.objects.create(
+            name="newer workflow child",
+            owner=user,
+            run_mode="workflow",
+            parent_run=newer_workflow,
+            workflow_step_order=2,
+        )
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.action = "list"
+
+        result = list(viewset.get_queryset())
+
+        self.assertEqual(result, [newer_workflow, older_run])
 
     def test_run_and_view_lists_accept_gateway_user_objects(self):
         user = get_user_model().objects.create_user(
@@ -750,6 +983,191 @@ class RunViewSetBackendTests(TestCase):
         self.assertTrue(command_line_flags["Data_Gen"])
         self.assertTrue(command_line_flags["Gaussian_Inputs"])
         mock_launch.assert_called_once_with(request, "experiment-id")
+
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_utility_specific_data_uses_registered_generic_interface_input(
+        self, mock_launch
+    ):
+        user = get_user_model().objects.create_user(username="utility-interface")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        application_inputs = [
+            SimpleNamespace(
+                name=name,
+                type=input_type,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=False,
+            )
+            for name, input_type in (
+                ("Calculation_Type", 0),
+                ("Application_Utility", 0),
+                ("ePolyscat_Input_File", 3),
+                ("ePolyScat_Input_Data", 3),
+            )
+        ]
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=application_inputs,
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="experiment-id"),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName="expanse")
+            ),
+        )
+        run = self.create_run(user)
+        run.run_mode = "utility"
+        run.utility_application = "CnvLinFull"
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "compute-id"
+        input_values = {
+            "Calculation_Type": "UTILITY",
+            "Application_Utility": "CnvLinFull",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "DumpOut": "airavata-dp://dump",
+            "ePolyscat_Input_Data": "airavata-dp://dump",
+            "ePolyScat_Input_Data": "airavata-dp://dump",
+        }
+
+        views.RunViewSet()._create_remote_execution(
+            request,
+            run,
+            input_values,
+            "app-id",
+            input_values,
+            is_tutorial=False,
+            deployment_executable_path=(
+                "/home/ampuser/apps/ePolyScat/epolyscat/bin/"
+                "epolyscat_controller.sh"
+            ),
+        )
+
+        experiment = request.airavata_client.createExperiment.call_args.args[2]
+        command_line_flags = {
+            inp.name: inp.requiredToAddedToCommandLine
+            for inp in experiment.experimentInputs
+        }
+        self.assertEqual(
+            command_line_flags,
+            {
+                "Calculation_Type": True,
+                "Application_Utility": True,
+                "ePolyscat_Input_File": True,
+                "ePolyScat_Input_Data": True,
+            },
+        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
+
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_single_uri_input_rejects_multiple_data_products_before_creation(
+        self, mock_launch
+    ):
+        user = get_user_model().objects.create_user(username="single-uri-validation")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        application_inputs = [
+            SimpleNamespace(
+                name="ePolyscat_Input_File",
+                type=3,
+                value=None,
+                isRequired=True,
+                requiredToAddedToCommandLine=True,
+            ),
+        ]
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=application_inputs,
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="experiment-id"),
+        )
+        run = self.create_run(user)
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "compute-id"
+        input_values = {
+            "ePolyscat_Input_File": (
+                "airavata-dp://first,airavata-dp://second"
+            ),
+        }
+
+        with self.assertRaisesRegex(
+            exceptions.ValidationError,
+            "accepts a single file",
+        ):
+            views.RunViewSet()._create_remote_execution(
+                request,
+                run,
+                input_values,
+                "app-id",
+                input_values,
+                is_tutorial=False,
+            )
+
+        request.airavata_client.createExperiment.assert_not_called()
+        mock_launch.assert_not_called()
+
+    @override_settings(GATEWAY_ID="test-gateway")
+    @mock.patch(
+        "epolyscat_django_app.views.experiment_util.launch",
+        side_effect=RuntimeError("launch failed"),
+    )
+    def test_launch_failure_keeps_created_experiment_in_local_execution_history(
+        self, mock_launch
+    ):
+        user = get_user_model().objects.create_user(username="launch-bookkeeping")
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        request.authz_token = object()
+        request.airavata_client = SimpleNamespace(
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=[],
+                    applicationOutputs=[],
+                )
+            ),
+            createExperiment=mock.Mock(return_value="created-before-launch-error"),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName="cluster")
+            ),
+        )
+        run = self.create_run(user)
+        run.experiment.airavata_project_id = "project-id"
+        run.experiment.save()
+        run.group_resource_profile_id = "group-id"
+        run.compute_resource_id = "compute-id"
+
+        with self.assertRaisesRegex(RuntimeError, "launch failed"):
+            views.RunViewSet()._create_remote_execution(
+                request,
+                run,
+                {},
+                "app-id",
+                {},
+                is_tutorial=False,
+            )
+
+        execution = run.executions.get()
+        self.assertEqual(
+            execution.airavata_experiment_id,
+            "created-before-launch-error",
+        )
+        mock_launch.assert_called_once_with(
+            request,
+            "created-before-launch-error",
+        )
 
     @override_settings(GATEWAY_ID="test-gateway")
     @mock.patch("epolyscat_django_app.views.experiment_util.launch")
@@ -1671,8 +2089,8 @@ class RunViewSetBackendTests(TestCase):
             run,
             {"Cross_Section_Input_File": "airavata-dp://orient"},
         )
-        self.assertEqual(workflow_analysis_inputs["Calculation_Type"], "WORKFLOW")
-        self.assertEqual(workflow_analysis_inputs["Application_Workflow"], "Analysis")
+        self.assertEqual(workflow_analysis_inputs["Calculation_Type"], "UTILITY")
+        self.assertNotIn("Application_Workflow", workflow_analysis_inputs)
         self.assertEqual(workflow_analysis_inputs["Application_Utility"], "NRFPAD")
         self.assertEqual(
             workflow_analysis_inputs["ePolyscat_Input_Data"],
@@ -2031,7 +2449,13 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(stages[0]["state"], "active")
         self.assertEqual(stages[1]["state"], "pending")
 
-    def test_workflow_presentation_marks_finished_child_step_complete(self):
+    @mock.patch("epolyscat_django_app.serializers.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.serializers.user_storage.list_experiment_dir")
+    def test_workflow_presentation_marks_scientifically_verified_child_step_complete(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
         user = get_user_model().objects.create_user(
             username="user@example.com",
             password="password",
@@ -2050,13 +2474,133 @@ class RunViewSetBackendTests(TestCase):
             airavata_experiment_id="exp-1",
             airavata_experiment_status="COMPLETED",
         )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "molcas.log",
+                    "data-product-uri": "airavata-dp://molcas-log",
+                },
+                {
+                    "name": "target.scf.molden",
+                    "data-product-uri": "airavata-dp://molcas-molden",
+                },
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"_RC_ALL_IS_WELL_")
 
         data = serializers.RunSerializer(parent, context={"request": request}).data
 
         stages = data["presentation"]["stages"]
         self.assertEqual(stages[0]["state"], "complete")
         self.assertEqual(stages[0]["status"], "complete")
-        self.assertEqual(stages[1]["state"], "pending")
+        self.assertEqual(stages[1]["state"], "active")
+        self.assertEqual(data["presentation"]["workflow_state"], "running")
+
+    @mock.patch("epolyscat_django_app.serializers.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.serializers.user_storage.list_experiment_dir")
+    def test_workflow_presentation_keeps_scientifically_incomplete_utility_pending(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(
+            username="incomplete-utility@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+        analysis_child = next(
+            child for child in child_runs if child.workflow_stage == "Analysis"
+        )
+        dump_input = models.Input.objects.create(
+            run=analysis_child,
+            type="files",
+            name="DumpOut",
+        )
+        models.File.objects.create(
+            input=dump_input,
+            name="test12dumpidy.dat",
+            data_product_uri="airavata-dp://staged-dump",
+        )
+        models.RemoteExecution.objects.create(
+            run=analysis_child,
+            airavata_experiment_id="completed-noop-utility",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "test12dumpidy.dat",
+                    "fileType": "DumpOut",
+                    "data-product-uri": "airavata-dp://staged-dump",
+                },
+                {
+                    "name": "ePolyScat.stdout",
+                    "fileType": "STDOUT",
+                    "data-product-uri": "airavata-dp://utility-stdout",
+                },
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Utility Selected\n")
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        analysis = next(
+            stage for stage in data["presentation"]["stages"]
+            if stage["id"] == "Analysis"
+        )
+        visualization = data["presentation"]["stages"][-1]
+        self.assertEqual(analysis["state"], "pending")
+        self.assertEqual(analysis["status"], "pending")
+        self.assertEqual(visualization["state"], "pending")
+
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.list_experiment_dir")
+    def test_workflow_submit_gate_rejects_scheduler_complete_without_scientific_output(
+        self,
+        mock_list_experiment_dir,
+        mock_open_file,
+    ):
+        user = get_user_model().objects.create_user(
+            username="incomplete-submit-gate@example.com",
+            password="password",
+        )
+        request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
+        request.user = user
+        run = self.create_run(user)
+        run.run_mode = "workflow"
+        run.workflow_stage = "Analysis"
+        run.utility_application = "CnvLinFull"
+        run.save(
+            update_fields=["run_mode", "workflow_stage", "utility_application"]
+        )
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="completed-noop-submit-gate",
+            airavata_experiment_status="COMPLETED",
+        )
+        mock_list_experiment_dir.return_value = (
+            [],
+            [
+                {
+                    "name": "ePolyScat.stdout",
+                    "fileType": "STDOUT",
+                    "data-product-uri": "airavata-dp://utility-stdout",
+                },
+            ],
+        )
+        mock_open_file.return_value = BytesIO(b"Utility Selected\n")
+
+        self.assertFalse(
+            views.RunViewSet()._workflow_child_is_complete(request, run)
+        )
 
     def test_workflow_visualization_becomes_ready_after_post_processing_completes(self):
         user = get_user_model().objects.create_user(
@@ -2114,3 +2658,86 @@ class RunViewSetBackendTests(TestCase):
         self.assertEqual(data["presentation"]["active_child_run_id"], child_runs[0].id)
         self.assertEqual(data["presentation"]["active_child_label"], "Data Generation")
         self.assertEqual(data["presentation"]["active_child_status"], "submitted")
+
+    def test_workflow_parent_list_status_comes_from_child_progress(self):
+        user = get_user_model().objects.create_user(
+            username="workflow-list-status@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.workflow_metadata = {"workflow_state": "running"}
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+        child_runs[0].workflow_step_status = "submitted"
+        child_runs[0].save(update_fields=["workflow_step_status"])
+        models.RemoteExecution.objects.create(
+            run=child_runs[0],
+            airavata_experiment_id="workflow-list-status-execution",
+            airavata_experiment_status="EXECUTING",
+            resource_name="Stampede3",
+        )
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        self.assertEqual(data["status"], "RUNNING")
+        self.assertEqual(data["job_status"], "RUNNING")
+        self.assertEqual(data["resource"], "Stampede3")
+
+    def test_workflow_parent_list_status_is_complete_when_remote_steps_complete(self):
+        user = get_user_model().objects.create_user(
+            username="workflow-list-complete@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+        for child_run in child_runs:
+            child_run.workflow_step_status = "complete"
+            child_run.save(update_fields=["workflow_step_status"])
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        self.assertEqual(data["status"], "COMPLETED")
+        self.assertEqual(data["job_status"], "COMPLETED")
+
+    def test_workflow_presentation_derives_next_step_from_completed_children(self):
+        user = get_user_model().objects.create_user(
+            username="derived-progress@example.com",
+            password="password",
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/1/")
+        request.user = user
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.workflow_application = "OpenMolcas"
+        parent.workflow_metadata = {"workflow_state": "not_started"}
+        parent.save()
+        child_runs = views.RunViewSet()._ensure_workflow_child_runs(parent)
+        child_runs[0].workflow_step_status = "complete"
+        child_runs[0].save(update_fields=["workflow_step_status"])
+        child_runs[1].workflow_step_status = "complete"
+        child_runs[1].save(update_fields=["workflow_step_status"])
+
+        data = serializers.RunSerializer(parent, context={"request": request}).data
+
+        presentation = data["presentation"]
+        analysis_child = child_runs[2]
+        analysis_stage = next(
+            stage for stage in presentation["stages"]
+            if stage["id"] == "Analysis"
+        )
+        self.assertEqual(presentation["workflow_state"], "running")
+        self.assertEqual(presentation["active_child_run_id"], analysis_child.id)
+        self.assertEqual(presentation["active_child_label"], "Post-processing")
+        self.assertEqual(presentation["active_child_status"], "pending")
+        self.assertEqual(presentation["subtitle"], "Workflow/Post-processing")
+        self.assertEqual(presentation["active_stage_id"], "Analysis")
+        self.assertEqual(analysis_stage["state"], "active")

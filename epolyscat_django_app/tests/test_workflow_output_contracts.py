@@ -52,6 +52,31 @@ def test_openmolcas_output_binds_molden_file_to_epolyscat():
     assert result["data_entry_values"]["convertFormat"] == "molden"
 
 
+def test_openmolcas_output_prefers_scf_molden_over_guess_orbitals():
+    result = workflow_output_contracts.resolve_workflow_output_binding(
+        output_files=[
+            {
+                "name": "water.guessorb.molden",
+                "data-product-uri": "airavata-dp://guess",
+            },
+            {
+                "name": "water.scf.molden",
+                "data-product-uri": "airavata-dp://scf",
+            },
+        ],
+        source_application="OpenMolcas",
+        target_stage="ePolyScat_Run",
+    )
+
+    assert result["status"] == "ready"
+    assert result["selected"]["name"] == "water.scf.molden"
+    assert result["data_entry_values"]["convertSource"] == "$pt/water.scf.molden"
+    assert [candidate["name"] for candidate in result["candidates"]] == [
+        "water.scf.molden",
+        "water.guessorb.molden",
+    ]
+
+
 def test_analysis_utilities_bind_only_their_scientific_input_roles():
     files = [
         {"name": "cross-sections.dat"},

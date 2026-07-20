@@ -43,7 +43,7 @@ from epolyscat_django_app import (
     output_presentation_contracts,
     remote_launch_contract,
     runtime_audit as runtime_audit_domain,
-    scientific_output_contracts,
+    scientific_output_service,
     serializers,
     utility_runtime_contracts,
     workflow_continuation as workflow_continuation_domain,
@@ -61,6 +61,9 @@ RUN_SELECTOR_INPUT_NAMES = (
     "Application_Utility",
     "Workflow_Application",
 )
+KNOWN_URI_COLLECTION_INPUT_NAMES = {
+    "molden.dat",
+}
 RUN_MODE_INPUT_VALUES = {
     "module": "MODULE",
     "MODULE": "MODULE",
@@ -201,6 +204,48 @@ def _command_line_input_names(input_values):
     return command_line_input_names
 
 
+def _add_registered_utility_input_aliases(
+    application_inputs,
+    input_values,
+    command_line_input_names,
+):
+    command_line_input_names = set(command_line_input_names or ())
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    if mode != "UTILITY":
+        return command_line_input_names
+
+    utility_application = str(input_values.get("Application_Utility") or "")
+    if not utility_application:
+        return command_line_input_names
+
+    contract = utility_runtime_contracts.get_utility_contract(
+        utility_application
+    )
+    registered_names = {
+        interface_input.name for interface_input in application_inputs or ()
+    }
+    registered_command_names = command_line_input_names.intersection(
+        registered_names
+    )
+
+    data_input_names = set(contract["data_input_names"]).union(
+        utility_runtime_contracts.GENERIC_UTILITY_DATA_INPUT_NAMES
+    )
+    if not registered_command_names.intersection(data_input_names):
+        generic_input_name = next(
+            (
+                input_name
+                for input_name in utility_runtime_contracts.GENERIC_UTILITY_DATA_INPUT_NAMES
+                if input_name in registered_names and input_values.get(input_name)
+            ),
+            None,
+        )
+        if generic_input_name:
+            command_line_input_names.add(generic_input_name)
+
+    return command_line_input_names
+
+
 def _validate_utility_run_inputs(input_values):
     mode = str(input_values.get("Calculation_Type") or "").upper()
     is_utility_run = mode == "UTILITY" or (
@@ -306,6 +351,10 @@ def build_airavata_input_values(run, input_values):
             normalized_inputs["Data_Gen"] = workflow_application
             normalized_inputs.pop("Application_Utility", None)
         elif workflow_stage == "Analysis":
+            # Analysis remains a workflow child in the portal, but the remote
+            # controller must dispatch it through the utility entrypoint.
+            normalized_inputs["Calculation_Type"] = "UTILITY"
+            normalized_inputs.pop("Application_Workflow", None)
             normalized_inputs.pop("Data_Gen", None)
             utility_application = _first_nonblank(
                 getattr(run, "utility_application", ""),
@@ -489,9 +538,6 @@ class RunViewSet(viewsets.ModelViewSet):
         "STDOUT": "stdout",
         "STDERR": "stderr",
     }
-    SCIENTIFIC_LOG_HEAD_BYTES = 256 * 1024
-    SCIENTIFIC_LOG_TAIL_BYTES = 768 * 1024
-
     def get_queryset(self):
         request = self.request
         _queryset = models.Run.filter_by_user(request)
@@ -523,232 +569,20 @@ class RunViewSet(viewsets.ModelViewSet):
         if self.action == "list" and not show_tutorial_runs:
             _queryset = _queryset.exclude(owner=None)
 
+        if self.action == "list":
+            _queryset = _queryset.order_by("-updated", "-id")
+
         return _queryset
 
     def _output_files_for_run(self, request, run):
-        output_files = []
-        seen_file_names = set()
-        seen_directories = set()
-
-        def append_output_files(files):
-            for file_data in files:
-                if isinstance(file_data, dict):
-                    filename = (
-                        file_data.get("name")
-                        or file_data.get("filename")
-                        or file_data.get("fileName")
-                    )
-                else:
-                    filename = str(file_data)
-                if filename and filename not in seen_file_names:
-                    output_files.append(file_data)
-                    seen_file_names.add(filename)
-
-        def child_directory_path(parent_path, directory_data):
-            if not isinstance(directory_data, dict):
-                return ""
-            directory_path = directory_data.get("path")
-            if directory_path:
-                return directory_path.strip("/")
-            directory_name = (
-                directory_data.get("name")
-                or directory_data.get("filename")
-                or directory_data.get("fileName")
-            )
-            if not directory_name and directory_data.get("resource_path"):
-                directory_name = os.path.basename(
-                    directory_data["resource_path"].rstrip("/")
-                )
-            if not directory_name:
-                return ""
-            return "/".join(
-                part.strip("/")
-                for part in (parent_path, directory_name)
-                if part and part.strip("/")
-            )
-
-        def append_experiment_directory_files(experiment_id, path="", depth=0):
-            if depth > 4 or path in seen_directories:
-                return
-            seen_directories.add(path)
-            try:
-                directories, files = user_storage.list_experiment_dir(
-                    request,
-                    experiment_id,
-                    path=path,
-                )
-            except Exception:
-                return
-
-            append_output_files(files)
-            for directory_data in directories:
-                child_path = child_directory_path(path, directory_data)
-                if child_path:
-                    append_experiment_directory_files(
-                        experiment_id,
-                        path=child_path,
-                        depth=depth + 1,
-                    )
-
-        if len(run.executions.all()) > 0:
-            most_recent_execution = run.executions.order_by("-created")[0]
-            experiment_id = most_recent_execution.airavata_experiment_id
-            append_experiment_directory_files(experiment_id)
-            append_experiment_directory_files(experiment_id, path="ARCHIVE")
-
-        declared_file_types = self._epolyscat_output_declarations(request, run)
-        return output_presentation_contracts.annotate_output_files(
-            output_files,
-            declared_file_types=declared_file_types,
-        )
-
-    @staticmethod
-    def _is_epolyscat_run(run):
-        applications = (
-            run.module_application,
-            run.workflow_application,
-            run.utility_application,
-        )
-        return run.workflow_stage == "ePolyScat_Run" or any(
-            re.sub(r"[^a-z0-9]", "", str(application or "").lower())
-            == "epolyscat"
-            for application in applications
-        )
-
-    def _epolyscat_output_declarations(self, request, run):
-        if not self._is_epolyscat_run(run):
-            return {}
-
-        declarations = {}
-        script_inputs = models.Input.objects.filter(
-            run=run,
-            type="files",
-            name__in=("ePolyscat_Input_File", "ePolyScat_Input_File"),
-        ).prefetch_related("files")
-        for input_instance in script_inputs:
-            for file_instance in input_instance.files.all():
-                file_object = None
-                try:
-                    file_object = user_storage.open_file(
-                        request,
-                        data_product_uri=file_instance.data_product_uri,
-                    )
-                    declarations.update(
-                        output_presentation_contracts.parse_file_name_declarations(
-                            file_object.read()
-                        )
-                    )
-                except Exception:
-                    logger.debug(
-                        "Unable to read ePolyScat output declarations from %s",
-                        file_instance.name,
-                        exc_info=True,
-                    )
-                finally:
-                    if file_object is not None and hasattr(file_object, "close"):
-                        file_object.close()
-        return declarations
-
-    @staticmethod
-    def _chunk_bytes(value):
-        if isinstance(value, bytes):
-            return value
-        return str(value or "").encode("utf-8", errors="replace")
-
-    def _bounded_log_contents(self, file_object):
-        head = self._chunk_bytes(
-            file_object.read(self.SCIENTIFIC_LOG_HEAD_BYTES)
-        )
-        tail = bytearray()
-        while True:
-            chunk = file_object.read(64 * 1024)
-            if not chunk:
-                break
-            tail.extend(self._chunk_bytes(chunk))
-            if len(tail) > self.SCIENTIFIC_LOG_TAIL_BYTES:
-                del tail[: len(tail) - self.SCIENTIFIC_LOG_TAIL_BYTES]
-        if not tail:
-            contents = head
-        else:
-            contents = head + b"\n... [middle omitted] ...\n" + bytes(tail)
-        return contents.decode("utf-8", errors="replace")
-
-    def _read_manifest_entry_text(self, request, entry):
-        data_product_uri = entry.get("data_product_uri", "")
-        descriptor = entry.get("descriptor", {})
-        path = ""
-        if isinstance(descriptor, dict):
-            path = descriptor.get("resource_path") or descriptor.get("path") or ""
-        if not data_product_uri and not path:
-            return None
-
-        file_object = None
-        try:
-            if data_product_uri:
-                file_object = user_storage.open_file(
-                    request,
-                    data_product_uri=data_product_uri,
-                )
-            else:
-                file_object = user_storage.open_file(request, path=path)
-            return self._bounded_log_contents(file_object)
-        except Exception:
-            return None
-        finally:
-            close = getattr(file_object, "close", None)
-            if callable(close):
-                close()
+        return scientific_output_service.output_files_for_run(request, run)
 
     def _scientific_output_report(self, request, run, output_files=None):
-        output_files = (
-            self._output_files_for_run(request, run)
-            if output_files is None
-            else list(output_files)
+        return scientific_output_service.build_report(
+            request,
+            run,
+            output_files=output_files,
         )
-        manifest = scientific_output_contracts.build_output_manifest(output_files)
-        classification = workflow_continuation_domain.classify_run(run) or {}
-        source_application = classification.get("source_application") or (
-            run.workflow_application
-            or run.module_application
-            or run.utility_application
-        )
-        content_cache = {}
-
-        def read_text(entry):
-            cache_key = entry.get("data_product_uri") or entry.get("name")
-            if cache_key not in content_cache:
-                content_cache[cache_key] = self._read_manifest_entry_text(
-                    request,
-                    entry,
-                )
-            return content_cache[cache_key]
-
-        verification = scientific_output_contracts.verify_scientific_outputs(
-            source_application,
-            manifest,
-            read_text=read_text,
-        )
-        latest_execution = getattr(run, "latest_execution", None)
-        scheduler_status = ""
-        if latest_execution is not None:
-            try:
-                scheduler_status = str(
-                    latest_execution.get_airavata_experiment_status(request)
-                ).upper()
-            except Exception:
-                scheduler_status = str(
-                    getattr(latest_execution, "airavata_experiment_status", "")
-                    or ""
-                ).upper()
-        return {
-            "run_id": run.id,
-            "source_stage": classification.get("source_stage", ""),
-            "source_application": source_application,
-            "scheduler_status": scheduler_status,
-            "scheduler_complete": scheduler_status == "COMPLETED",
-            "files": manifest,
-            "scientific_verification": verification,
-        }
 
     def _continuation_eligibility(self, request, run):
         eligibility = workflow_continuation_domain.continuation_eligibility(
@@ -929,7 +763,37 @@ class RunViewSet(viewsets.ModelViewSet):
             old_input = matching_inputs[0]
 
             if updated_input["type"] == "files":
-                for updated_file in updated_input["files"]:
+                updated_files = updated_input.get("files", [])
+                is_multi_file_input = updated_input.get(
+                    "isMultiFileInput",
+                    updated_input.get("is_multi_file_input"),
+                )
+                if is_multi_file_input is None:
+                    is_multi_file_input = (
+                        updated_input["name"] in KNOWN_URI_COLLECTION_INPUT_NAMES
+                    )
+                else:
+                    is_multi_file_input = (
+                        is_multi_file_input is True
+                        or str(is_multi_file_input).lower() == "true"
+                    )
+
+                active_updates = [
+                    file_data
+                    for file_data in updated_files
+                    if not file_data.get("deleted", False)
+                ]
+                if not is_multi_file_input and len(active_updates) > 1:
+                    raise exceptions.ValidationError(
+                        {
+                            updated_input["name"]: (
+                                "This input accepts a single file. Remove the extra "
+                                "selection before saving."
+                            )
+                        }
+                    )
+
+                for updated_file in updated_files:
                     matching_files = list(filter(lambda file:
                         file.name == updated_file["name"],
                         old_input.files.all()
@@ -954,6 +818,15 @@ class RunViewSet(viewsets.ModelViewSet):
 
                         if not updated_file["deleted"]:
                             self._save_file(request, run_instance, updated_file, old_input)
+
+                if not is_multi_file_input:
+                    stored_files = list(old_input.files.order_by("-id"))
+                    for stale_file in stored_files[1:]:
+                        user_storage.delete(
+                            request,
+                            data_product_uri=stale_file.data_product_uri,
+                        )
+                        stale_file.delete()
             else:
                 old_input.value = updated_input["value"]
 
@@ -1175,10 +1048,7 @@ class RunViewSet(viewsets.ModelViewSet):
     def _workflow_child_is_complete(self, request, child_run):
         return (
             child_run.workflow_step_status == "complete"
-            or (
-                child_run.executions.exists()
-                and child_run.are_all_executions_finished(request)
-            )
+            or scientific_output_service.is_verified_complete(request, child_run)
         )
 
     def _ensure_workflow_child_runs(self, run):
@@ -1528,6 +1398,21 @@ class RunViewSet(viewsets.ModelViewSet):
         )
         experiment.experimentInputs = application_interface.applicationInputs.copy()
         experiment.experimentOutputs = application_interface.applicationOutputs.copy()
+        for interface_input in experiment.experimentInputs:
+            value = input_values.get(interface_input.name)
+            if (
+                interface_input.type == DataType.URI
+                and isinstance(value, str)
+                and len([item for item in value.split(",") if item.strip()]) > 1
+            ):
+                raise exceptions.ValidationError(
+                    {
+                        interface_input.name: (
+                            "This input accepts a single file, but multiple files "
+                            "were selected."
+                        )
+                    }
+                )
         experiment.executionId = app_interface_id
         if run.experiment is not None:
             if run.experiment.airavata_project_id is None:
@@ -1579,6 +1464,11 @@ class RunViewSet(viewsets.ModelViewSet):
             )
         except ValueError as error:
             raise exceptions.ValidationError(str(error)) from error
+        command_line_policy["input_names"] = _add_registered_utility_input_aliases(
+            experiment.experimentInputs,
+            input_values,
+            command_line_policy.get("input_names"),
+        )
         remote_launch_contract.apply_command_line_policy(
             experiment.experimentInputs,
             command_line_policy,
@@ -1593,17 +1483,18 @@ class RunViewSet(viewsets.ModelViewSet):
         experiment_id = request.airavata_client.createExperiment(
             request.authz_token, settings.GATEWAY_ID, experiment
         )
+        remote_execution = run.executions.create(
+            airavata_experiment_id=experiment_id,
+        )
         # launch experiment
         experiment_util.launch(request, experiment_id)
 
-        # add experiment to the run's executions
         compute_resource = request.airavata_client.getComputeResource(
             request.authz_token, run.compute_resource_id
         )
-        return run.executions.create(
-            airavata_experiment_id=experiment_id,
-            resource_name=compute_resource.hostName,
-        )
+        remote_execution.resource_name = compute_resource.hostName
+        remote_execution.save(update_fields=["resource_name", "updated"])
+        return remote_execution
     @action(detail=True, methods=["PATCH"])
     def change_notification_settings(self, request, pk=None, *args, **kwargs):
         run = self.get_object()

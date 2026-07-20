@@ -77,6 +77,34 @@ if [ "$utility" = "Cube2igor" ]; then
     printf 'IGOR geometry\n' > fort.12
 fi
 
+if [ "$utility" = "NRFPAD" ]; then
+    [ -f fort.21 ] || {
+        echo "fake NRFPAD: fort.21 was not staged" >&2
+        exit 95
+    }
+    cmp -s fort.21 "$EXPECTED_NRFPAD_FLN" || {
+        echo "fake NRFPAD: fort.21 differs from the FLNNuLP input" >&2
+        exit 96
+    }
+    if [ -n "${EXPECTED_NRFPAD_HNU-}" ]; then
+        [ -f fort.22 ] || {
+            echo "fake NRFPAD: fort.22 was not staged" >&2
+            exit 97
+        }
+        cmp -s fort.22 "$EXPECTED_NRFPAD_HNU" || {
+            echo "fake NRFPAD: fort.22 differs from the HNu input" >&2
+            exit 98
+        }
+    fi
+    printf 'RFPAD output\n' > fort.20
+    printf 'Matlab coefficients\n' > fort.23
+fi
+
+if [ "${FAKE_UTILITY_MODE-ok}" = "abstop" ]; then
+    printf 'ABSTOP: invalid scientific input\n'
+    exit 0
+fi
+
 printf '%s completed\n' "$utility"
 EOF
     chmod 700 "$utility_bin/$utility.exe"
@@ -183,6 +211,7 @@ printf 'dump data\n' > "$utility_dir/dumpidy.dat"
 printf 'first molden\n' > "$utility_dir/first.molden"
 printf 'second molden\n' > "$utility_dir/second.molden"
 printf 'orient data\n' > "$utility_dir/orientncro.dat"
+printf 'dipole data\n' > "$utility_dir/hnu.dat"
 printf 'cube data\n' > "$utility_dir/density.cube"
 
 (
@@ -190,8 +219,7 @@ printf 'cube data\n' > "$utility_dir/density.cube"
     for specification in \
         "CnvMath bendorient.dat" \
         "CnvMatLab bendorient.dat" \
-        "CnvLinFull dumpidy.dat" \
-        "NRFPAD orientncro.dat"; do
+        "CnvLinFull dumpidy.dat"; do
         set -- $specification
         utility=$1
         data_file=$2
@@ -201,6 +229,18 @@ printf 'cube data\n' > "$utility_dir/density.cube"
         cmp -s control.in "$utility_logs/$utility.stdin"
         grep -q "^$utility completed$" "$utility.out"
     done
+
+
+    EXPECTED_NRFPAD_FLN="$utility_dir/orientncro.dat" \
+    EXPECTED_NRFPAD_HNU="$utility_dir/hnu.dat" \
+    UTILITY_LOG_DIR="$utility_logs" \
+    EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY NRFPAD control.in orientncro.dat hnu.dat
+    cmp -s control.in "$utility_logs/NRFPAD.stdin"
+    grep -q '^RFPAD output$' fort.20
+    grep -q '^Matlab coefficients$' fort.23
+    [[ ! -e fort.21 ]]
+    [[ ! -e fort.22 ]]
 
     UTILITY_LOG_DIR="$utility_logs" \
     EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
@@ -226,6 +266,26 @@ printf 'cube data\n' > "$utility_dir/density.cube"
     expect_status 64 molden-one-input env \
         EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
         bash "$wrapper" UTILITY MoldenMerge control.in first.molden
+
+    expect_status 70 utility-abstop env \
+        FAKE_UTILITY_MODE=abstop \
+        UTILITY_LOG_DIR="$utility_logs" \
+        EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY CnvLinFull control.in dumpidy.dat
+)
+
+nrfpad_occupied_dir="$work/nrfpad-occupied"
+mkdir -p "$nrfpad_occupied_dir"
+printf 'control\n' > "$nrfpad_occupied_dir/control.in"
+printf 'input\n' > "$nrfpad_occupied_dir/orientncro.dat"
+printf 'do not overwrite\n' > "$nrfpad_occupied_dir/fort.21"
+(
+    cd "$nrfpad_occupied_dir"
+    expect_status 73 occupied-fort21 env \
+        UTILITY_LOG_DIR="$utility_logs" \
+        EPOLYSCAT_UTILITY_BIN_DIR="$utility_bin" \
+        bash "$wrapper" UTILITY NRFPAD control.in orientncro.dat
+    grep -q '^do not overwrite$' fort.21
 )
 
 occupied_dir="$work/occupied"

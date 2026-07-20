@@ -113,7 +113,7 @@ def test_nonexclusive_policy_preserves_interface_flags_and_forces_named_inputs()
 def test_direct_epolyscat_deployment_rejects_utility_dispatch():
     with pytest.raises(ValueError, match="does not support utility dispatch"):
         remote_launch_contract.resolve_command_line_policy(
-            executable_path="/opt/epolyscat/bin/ePolyScat",
+            executable_path="/opt/epolyscat/bin/ePolyScat.exe",
             input_values={
                 "Calculation_Type": "UTILITY",
                 "Application_Utility": "CnvMath",
@@ -141,7 +141,32 @@ def test_frontera_wrapper_passes_only_the_selected_utility_contract():
             "ePolyscat_Input_File",
             "BendOrient_Output",
         },
+        "ordered_input_names": (
+            "Calculation_Type",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "BendOrient_Output",
+        ),
     }
+
+
+def test_formal_frontera_entrypoint_is_recognized_as_the_portal_wrapper():
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/home1/06170/ampuser/apps/ePolyScat/ePolyScat",
+        input_values={
+            "Calculation_Type": "UTILITY",
+            "Application_Utility": "Cube2igor",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "Cube_Output": "airavata-dp://cube",
+        },
+    )
+
+    assert policy["ordered_input_names"] == (
+        "Calculation_Type",
+        "Application_Utility",
+        "ePolyscat_Input_File",
+        "Cube_Output",
+    )
 
 
 def test_frontera_wrapper_supports_workflow_analysis_utility_contract():
@@ -165,7 +190,58 @@ def test_frontera_wrapper_supports_workflow_analysis_utility_contract():
             "ePolyscat_Input_File",
             "DumpOut",
         },
+        "ordered_input_names": (
+            "Calculation_Type",
+            "Application_Workflow",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "DumpOut",
+        ),
     }
+
+
+def test_wrapper_policy_reorders_molden_merge_arguments_after_the_control_file():
+    application_inputs = [
+        SimpleNamespace(
+            name=name,
+            inputOrder=input_order,
+            requiredToAddedToCommandLine=False,
+        )
+        for input_order, name in enumerate(
+            (
+                "Calculation_Type",
+                "Application_Utility",
+                "molden.dat",
+                "ePolyscat_Input_File",
+            )
+        )
+    ]
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/home1/06170/ampuser/apps/ePolyScat/ePolyScat",
+        input_values={
+            "Calculation_Type": "UTILITY",
+            "Application_Utility": "MoldenMerge",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "molden.dat": ["airavata-dp://first", "airavata-dp://second"],
+        },
+    )
+
+    remote_launch_contract.apply_command_line_policy(application_inputs, policy)
+
+    selected_inputs = sorted(
+        (
+            input_data
+            for input_data in application_inputs
+            if input_data.requiredToAddedToCommandLine
+        ),
+        key=lambda input_data: input_data.inputOrder,
+    )
+    assert [input_data.name for input_data in selected_inputs] == [
+        "Calculation_Type",
+        "Application_Utility",
+        "ePolyscat_Input_File",
+        "molden.dat",
+    ]
 
 
 def test_frontera_wrapper_rejects_incomplete_utility_contract():

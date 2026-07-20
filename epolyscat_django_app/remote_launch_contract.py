@@ -28,7 +28,9 @@ def _is_controller_entrypoint(executable_path):
 
 def _is_portal_wrapper_entrypoint(executable_path):
     basename = os.path.basename(str(executable_path or "")).lower()
-    return "epolyscat" in basename and "wrapper" in basename
+    return basename == "epolyscat" or (
+        "epolyscat" in basename and "wrapper" in basename
+    )
 
 
 def _utility_run_details(input_values):
@@ -71,16 +73,19 @@ def resolve_command_line_policy(
             utility_id,
             input_values,
         )
-        input_names = utility_runtime_contracts.resolve_utility_argument_input_names(
+        utility_input_order = utility_runtime_contracts.resolve_utility_argument_input_order(
             utility_id,
             input_values,
         )
-        input_names.update({"Calculation_Type", "Application_Utility"})
+        selector_order = ["Calculation_Type"]
         if mode == "WORKFLOW":
-            input_names.add("Application_Workflow")
+            selector_order.append("Application_Workflow")
+        selector_order.append("Application_Utility")
+        ordered_input_names = tuple(selector_order) + utility_input_order
         return {
             "exclusive": True,
-            "input_names": input_names,
+            "input_names": set(ordered_input_names),
+            "ordered_input_names": ordered_input_names,
         }
 
     if mode == "UTILITY":
@@ -110,12 +115,20 @@ def resolve_command_line_policy(
 def apply_command_line_policy(application_inputs, policy):
     input_names = set(policy.get("input_names") or ())
     exclusive = bool(policy.get("exclusive"))
+    input_order = {
+        input_name: position
+        for position, input_name in enumerate(
+            policy.get("ordered_input_names") or ()
+        )
+    }
     for input_data in application_inputs or ():
         input_name = _value(input_data, "name")
         if exclusive:
             input_data.requiredToAddedToCommandLine = input_name in input_names
         elif input_name in input_names:
             input_data.requiredToAddedToCommandLine = True
+        if input_name in input_order:
+            input_data.inputOrder = input_order[input_name]
 
 
 def find_deployment_executable_path(

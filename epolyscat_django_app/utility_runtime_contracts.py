@@ -102,6 +102,30 @@ def resolve_utility_argument_input_names(utility_id, input_values):
     return input_names
 
 
+def resolve_utility_argument_input_order(utility_id, input_values):
+    contract = get_utility_contract(utility_id)
+    selected_names = resolve_utility_argument_input_names(
+        utility_id,
+        input_values,
+    )
+    ordered_names = []
+
+    for input_name in contract["control_input_names"]:
+        if input_name in selected_names:
+            ordered_names.append(input_name)
+            break
+
+    for input_name in contract["data_input_names"]:
+        if input_name in selected_names:
+            ordered_names.append(input_name)
+
+    for input_name in GENERIC_UTILITY_DATA_INPUT_NAMES:
+        if input_name in selected_names:
+            ordered_names.append(input_name)
+
+    return tuple(ordered_names)
+
+
 def validate_utility_input_values(utility_id, input_values):
     contract = get_utility_contract(utility_id)
     argument_input_names = resolve_utility_argument_input_names(

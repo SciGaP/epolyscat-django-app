@@ -8,6 +8,8 @@ launcher=${EPOLYSCAT_LAUNCHER-}
 utility_bin_dir=${EPOLYSCAT_UTILITY_BIN_DIR:-/home1/06170/ampuser/apps/ePolyScat/epolyscat/bin/expanseintelmkl}
 created_input=0
 created_fort10=0
+created_fort21=0
+created_fort22=0
 
 fail() {
     echo "Frontera ePolyScat wrapper: $1" >&2
@@ -20,6 +22,12 @@ cleanup() {
     fi
     if [ "$created_fort10" -eq 1 ]; then
         rm -f ./fort.10
+    fi
+    if [ "$created_fort21" -eq 1 ]; then
+        rm -f ./fort.21
+    fi
+    if [ "$created_fort22" -eq 1 ]; then
+        rm -f ./fort.22
     fi
 }
 
@@ -99,6 +107,9 @@ run_utility() {
         [ -f "$data_file" ] && [ -r "$data_file" ] || \
             fail "utility data file is missing or unreadable: $data_file" 66
     done
+    if [ "$utility_name" = "NRFPAD" ] && [ "$#" -gt 2 ]; then
+        fail "NRFPAD accepts one FLNNuLP file and one optional HNu file"
+    fi
 
     utility_executable="$utility_bin_dir/$(utility_executable_name "$utility_name")"
     [ -x "$utility_executable" ] || \
@@ -107,9 +118,41 @@ run_utility() {
 
     trap cleanup EXIT HUP INT TERM
     if [ "$utility_name" = "Cube2igor" ]; then
-        [ ! -e ./fort.10 ] || fail "refusing to overwrite an existing fort.10" 73
-        ln -s "$1" ./fort.10 || fail "failed to stage Cube2igor input as fort.10" 73
-        created_fort10=1
+        case "$1" in
+        fort.10|./fort.10)
+            ;;
+        *)
+            [ ! -e ./fort.10 ] || fail "refusing to overwrite an existing fort.10" 73
+            ln -s "$1" ./fort.10 || fail "failed to stage Cube2igor input as fort.10" 73
+            created_fort10=1
+            ;;
+        esac
+    fi
+    if [ "$utility_name" = "NRFPAD" ]; then
+        nrfpad_fln_file=$1
+        case "$nrfpad_fln_file" in
+        fort.21|./fort.21)
+            ;;
+        *)
+            [ ! -e ./fort.21 ] || fail "refusing to overwrite an existing fort.21" 73
+            ln -s "$nrfpad_fln_file" ./fort.21 || \
+                fail "failed to stage NRFPAD FLNNuLP input as fort.21" 73
+            created_fort21=1
+            ;;
+        esac
+        if [ "$#" -eq 2 ]; then
+            nrfpad_hnu_file=$2
+            case "$nrfpad_hnu_file" in
+            fort.22|./fort.22)
+                ;;
+            *)
+                [ ! -e ./fort.22 ] || fail "refusing to overwrite an existing fort.22" 73
+                ln -s "$nrfpad_hnu_file" ./fort.22 || \
+                    fail "failed to stage NRFPAD HNu input as fort.22" 73
+                created_fort22=1
+                ;;
+            esac
+        fi
     fi
 
     if "$utility_executable" < "$control_file" > "$utility_output" 2>&1; then
@@ -120,6 +163,11 @@ run_utility() {
     cat "$utility_output"
     [ "$utility_status" -eq 0 ] || \
         fail "$utility_name exited with status $utility_status; inspect $utility_output" "$utility_status"
+    if LC_ALL=C grep -Eiq \
+        'ABSTOP|Abnormal Ending|forrtl: severe|Segmentation fault|Floating point exception' \
+        "$utility_output"; then
+        fail "$utility_name reported a scientific runtime failure; inspect $utility_output" 70
+    fi
 }
 
 run_type=${1-}

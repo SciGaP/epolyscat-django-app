@@ -9,6 +9,90 @@ the old small surface: enum objects with ``.name``/``.value``, ``user_storage``,
 from types import SimpleNamespace
 
 
+_LEGACY_FIELD_NAMES = {
+    "application_interface_id": "applicationInterfaceId",
+    "application_inputs": "applicationInputs",
+    "application_modules": "applicationModules",
+    "application_outputs": "applicationOutputs",
+    "app_module_id": "appModuleId",
+    "compute_host_id": "computeHostId",
+    "computational_resource_scheduling": "computationalResourceScheduling",
+    "email_addresses": "emailAddresses",
+    "execution_id": "executionId",
+    "executable_path": "executablePath",
+    "experiment_id": "experimentId",
+    "experiment_inputs": "experimentInputs",
+    "experiment_name": "experimentName",
+    "experiment_outputs": "experimentOutputs",
+    "experiment_status": "experimentStatus",
+    "gateway_id": "gatewayId",
+    "group_resource_profile_id": "groupResourceProfileId",
+    "host_name": "hostName",
+    "input_order": "inputOrder",
+    "is_required": "isRequired",
+    "job_id": "jobId",
+    "job_state": "jobState",
+    "product_uri": "productUri",
+    "project_id": "projectId",
+    "required_to_added_to_command_line": "requiredToAddedToCommandLine",
+    "resource_host_id": "resourceHostId",
+    "share_experiment_publicly": "shareExperimentPublicly",
+    "time_of_state_change": "timeOfStateChange",
+    "total_cpu_count": "totalCPUCount",
+    "total_physical_memory": "totalPhysicalMemory",
+    "user_configuration_data": "userConfigurationData",
+    "user_name": "userName",
+    "wall_time_limit": "wallTimeLimit",
+}
+
+
+def _camel_case(name):
+    if name in _LEGACY_FIELD_NAMES:
+        return _LEGACY_FIELD_NAMES[name]
+    head, *tail = name.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+def model_field(message, name):
+    """Read a protobuf field while keeping local legacy-model tests usable."""
+    if hasattr(message, name):
+        return getattr(message, name)
+    return getattr(message, _camel_case(name))
+
+
+def set_model_field(message, name, value):
+    field_name = name if hasattr(message, name) else _camel_case(name)
+    setattr(message, field_name, value)
+
+
+def replace_model_list(message, name, values):
+    field_name = name if hasattr(message, name) else _camel_case(name)
+    target = getattr(message, field_name, None)
+    if hasattr(target, "extend") and not isinstance(target, list):
+        del target[:]
+        target.extend(values)
+    else:
+        setattr(message, field_name, list(values))
+
+
+def copy_model_field(message, name, value):
+    field_name = name if hasattr(message, name) else _camel_case(name)
+    target = getattr(message, field_name, None)
+    if hasattr(target, "CopyFrom"):
+        target.CopyFrom(value)
+    else:
+        setattr(message, field_name, value)
+
+
+def create_model(model_class, **fields):
+    try:
+        return model_class(**fields)
+    except TypeError:
+        return model_class(
+            **{_camel_case(name): value for name, value in fields.items()}
+        )
+
+
 class _EnumMember:
     def __init__(self, name, value):
         self.name = name

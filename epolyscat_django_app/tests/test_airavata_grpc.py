@@ -1,7 +1,26 @@
 from enum import IntEnum
 from unittest import TestCase
 
-from epolyscat_django_app.airavata_grpc import _thrift_enum_compat
+from epolyscat_django_app.airavata_grpc import (
+    _thrift_enum_compat,
+    replace_model_list,
+)
+
+
+class _RepeatedValues:
+    def __init__(self, values):
+        self.values = list(values)
+
+    def __delitem__(self, key):
+        del self.values[key]
+
+    def extend(self, values):
+        self.values.extend(values)
+
+
+class _MessageWithRepeatedValues:
+    def __init__(self, values):
+        self.email_addresses = _RepeatedValues(values)
 
 
 class ThriftEnumCompatibilityTests(TestCase):
@@ -30,3 +49,19 @@ class ThriftEnumCompatibilityTests(TestCase):
         self.assertEqual(0, compat.CREATED)
         self.assertEqual("COMPLETED", compat(7).name)
         self.assertEqual(7, compat.Value("COMPLETED"))
+
+
+class ProtobufFieldHelpersTests(TestCase):
+    def test_replace_model_list_clears_existing_repeated_values(self):
+        message = _MessageWithRepeatedValues(["old@example.org"])
+
+        replace_model_list(
+            message,
+            "email_addresses",
+            ["new@example.org"],
+        )
+
+        self.assertEqual(
+            message.email_addresses.values,
+            ["new@example.org"],
+        )

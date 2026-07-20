@@ -5,7 +5,13 @@ from typing import Union
 from django.db import models
 from .airavata_grpc import Project as AiravataProject
 from .airavata_grpc import ExperimentModel, ExperimentState
-from .airavata_grpc import django_user, experiment_util, user_storage
+from .airavata_grpc import (
+    create_model,
+    django_user,
+    experiment_util,
+    model_field,
+    user_storage,
+)
 from django.conf import settings
 from django.db.models import Q
 
@@ -33,13 +39,15 @@ class Project(models.Model):
         unique_together = ["name", "owner"]
 
     def create_airavata_project(self, request):
-        airavata_project = AiravataProject(
+        airavata_project = create_model(
+            AiravataProject,
             owner=request.user.username,
-            gatewayId=settings.GATEWAY_ID,
+            gateway_id=settings.GATEWAY_ID,
             name="Runs for experiment (epolyscat): " + self.name,
         )
-        airavata_project_id = request.airavata_client.createProject(
-            request.authz_token, settings.GATEWAY_ID, airavata_project
+        airavata_project_id = request.airavata.research.create_project(
+            settings.GATEWAY_ID,
+            airavata_project,
         )
         self.airavata_project_id = airavata_project_id
 
@@ -68,13 +76,15 @@ class Experiment(models.Model):
         unique_together = ["name", "owner"]
 
     def create_airavata_project(self, request):
-        airavata_project = AiravataProject(
+        airavata_project = create_model(
+            AiravataProject,
             owner=request.user.username,
-            gatewayId=settings.GATEWAY_ID,
+            gateway_id=settings.GATEWAY_ID,
             name="Runs for experiment (ePolyScat): " + self.name,
         )
-        airavata_project_id = request.airavata_client.createProject(
-            request.authz_token, settings.GATEWAY_ID, airavata_project
+        airavata_project_id = request.airavata.research.create_project(
+            settings.GATEWAY_ID,
+            airavata_project,
         )
         self.airavata_project_id = airavata_project_id
 
@@ -379,11 +389,11 @@ class RemoteExecution(models.Model):
 
     def get_job_id(self, request):
         if self.job_id is None and self.airavata_experiment_id is not None:
-            jobs = request.airavata_client.getJobDetails(
-                request.authz_token, self.airavata_experiment_id
+            jobs = request.airavata.research.get_job_details(
+                self.airavata_experiment_id
             )
             if len(jobs) > 0:
-                self.job_id = jobs[0].jobId
+                self.job_id = model_field(jobs[0], "job_id")
                 self.save()
         return self.job_id
 
@@ -394,8 +404,8 @@ class RemoteExecution(models.Model):
             return self.airavata_experiment_status
         else:
             logger.debug(f"getExperimentStatus({self.airavata_experiment_id})")
-            current_status = request.airavata_client.getExperimentStatus(
-                request.authz_token, self.airavata_experiment_id
+            current_status = request.airavata.research.get_experiment_status(
+                self.airavata_experiment_id
             )
             self.airavata_experiment_status = ExperimentState(
                 current_status.state
@@ -410,19 +420,23 @@ class RemoteExecution(models.Model):
 
     def get_application_specific_status(self, request) -> Union[str, None]:
         output_name = "ePolyScat_Standard-Out"
-        experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-            request.authz_token, self.airavata_experiment_id
+        experiment_model: ExperimentModel = request.airavata.research.get_experiment(
+            self.airavata_experiment_id
         )
         stdout_dp = None
-        if experiment_model.experimentStatus[-1].state == ExperimentState.COMPLETED:
-            for output in experiment_model.experimentOutputs:
+        experiment_statuses = model_field(experiment_model, "experiment_status")
+        if (
+            experiment_statuses
+            and experiment_statuses[-1].state == ExperimentState.COMPLETED
+        ):
+            for output in model_field(experiment_model, "experiment_outputs"):
                 if (
                     output.name == output_name
                     and output.value
                     and output.value.startswith("airavata-dp://")
                 ):
-                    stdout_dp = request.airavata_client.getDataProduct(
-                        request.authz_token, output.value
+                    stdout_dp = request.airavata.research.get_data_product(
+                        output.value
                     )
         else:
             can_fetch = (
@@ -446,7 +460,9 @@ class RemoteExecution(models.Model):
 
                 ident = re.compile(r"^ ===  done")
                 items = list(filter(ident.match, stdout))
-                if items or stdout[-1].find(" *** further output on") != -1:
+                if items or (
+                    stdout and stdout[-1].find(" *** further output on") != -1
+                ):
                     return "* - Completed"
 
                 ident = re.compile(r"^ ===  TIME PROPAGATION")
@@ -481,8 +497,9 @@ class RemoteExecution(models.Model):
         return self.resource_name.split(".")[0]
 
     def cancel(self, request):
-        request.airavata_client.terminateExperiment(
-            request.authz_token, self.airavata_experiment_id, settings.GATEWAY_ID
+        request.airavata.research.terminate_experiment(
+            self.airavata_experiment_id,
+            settings.GATEWAY_ID,
         )
 
     def is_cancelable(self, request) -> bool:

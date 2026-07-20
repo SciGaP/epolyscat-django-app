@@ -16,7 +16,17 @@ from .airavata_grpc import DataType
 from .airavata_grpc import ExperimentModel, UserConfigurationDataModel
 from .airavata_grpc import ComputationalResourceSchedulingModel
 from .airavata_grpc import ExperimentState
-from .airavata_grpc import django_user, experiment_util, remoteapi, user_storage
+from .airavata_grpc import (
+    copy_model_field,
+    create_model,
+    django_user,
+    experiment_util,
+    model_field,
+    remoteapi,
+    replace_model_list,
+    set_model_field,
+    user_storage,
+)
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -418,7 +428,7 @@ def _save_run_user_file(request, run, file, name, content_type):
             files=files,
         )
         product_uri = resp.json()["uploaded"]["productUri"]
-        return request.airavata_client.getDataProduct(request.authz_token, product_uri)
+        return request.airavata.research.get_data_product(product_uri)
     return user_storage.save(
         request,
         run.directory,
@@ -1354,8 +1364,8 @@ class RunViewSet(viewsets.ModelViewSet):
 
         def fetch_runtime_data(label, method_name):
             try:
-                method = getattr(request.airavata_client, method_name)
-                return method(request.authz_token, settings.GATEWAY_ID)
+                method = getattr(request.airavata.research, method_name)
+                return method(settings.GATEWAY_ID)
             except Exception as error:
                 logger.exception("Failed to audit ePolyScat %s", label)
                 errors.append({"section": label, "message": str(error)})
@@ -1363,12 +1373,12 @@ class RunViewSet(viewsets.ModelViewSet):
 
         audit = runtime_audit_domain.audit_runtime_configuration(
             application_module_id=app_module_id,
-            modules=fetch_runtime_data("modules", "getAllAppModules"),
+            modules=fetch_runtime_data("modules", "get_all_app_modules"),
             interfaces=fetch_runtime_data(
-                "interfaces", "getAllApplicationInterfaces"
+                "interfaces", "get_all_application_interfaces"
             ),
             deployments=fetch_runtime_data(
-                "deployments", "getAllApplicationDeployments"
+                "deployments", "get_all_application_deployments"
             ),
             errors=errors,
         )
@@ -1389,16 +1399,31 @@ class RunViewSet(viewsets.ModelViewSet):
         if not run.are_all_executions_finished(request):
             raise Exception("Run already has a currently running execution")
 
-        # create experiment
-        experiment = ExperimentModel()
         run_label = f"{run.root.root}/{run.number}" if run.root else run.name
-        experiment.experimentName = f"{run_label} execution number {run.executions.count() + 1}"
-        application_interface = request.airavata_client.getApplicationInterface(
-            request.authz_token, app_interface_id
+        application_interface = request.airavata.research.get_application_interface(
+            app_interface_id
         )
-        experiment.experimentInputs = application_interface.applicationInputs.copy()
-        experiment.experimentOutputs = application_interface.applicationOutputs.copy()
-        for interface_input in experiment.experimentInputs:
+        experiment = create_model(
+            ExperimentModel,
+            experiment_name=(
+                f"{run_label} execution number {run.executions.count() + 1}"
+            ),
+            execution_id=app_interface_id,
+            gateway_id=settings.GATEWAY_ID,
+            user_name=request.user.username,
+        )
+        replace_model_list(
+            experiment,
+            "experiment_inputs",
+            model_field(application_interface, "application_inputs"),
+        )
+        replace_model_list(
+            experiment,
+            "experiment_outputs",
+            model_field(application_interface, "application_outputs"),
+        )
+        experiment_inputs = model_field(experiment, "experiment_inputs")
+        for interface_input in experiment_inputs:
             value = input_values.get(interface_input.name)
             if (
                 interface_input.type == DataType.URI
@@ -1413,40 +1438,37 @@ class RunViewSet(viewsets.ModelViewSet):
                         )
                     }
                 )
-        experiment.executionId = app_interface_id
         if run.experiment is not None:
             if run.experiment.airavata_project_id is None:
                 run.experiment.create_airavata_project(request)
                 run.experiment.save()
-            experiment.projectId = run.experiment.airavata_project_id
-        else:
-            experiment.projectId = run.airavata_project_id
-        experiment.gatewayId = settings.GATEWAY_ID
-        experiment.userName = request.user.username
-        #ucd = UserConfigurationDataModel()
-        #ucd.groupResourceProfileId = run.group_resource_profile_id
-        #ucd.shareExperimentPublicly=is_tutorial
-
-        #experiment.userConfigurationData = ucd
-        experiment.userConfigurationData = UserConfigurationDataModel(
-            groupResourceProfileId=run.group_resource_profile_id,
-            shareExperimentPublicly=is_tutorial,
-            computationalResourceScheduling=ComputationalResourceSchedulingModel(
-                resourceHostId=run.compute_resource_id,
-                totalCPUCount=run.core_count,
-                nodeCount=run.node_count,
-                wallTimeLimit=run.walltime_limit,
-                queueName=run.queue_name,
-                totalPhysicalMemory=run.total_physical_memory,
+            set_model_field(
+                experiment,
+                "project_id",
+                run.experiment.airavata_project_id,
             )
+        else:
+            set_model_field(experiment, "project_id", run.airavata_project_id)
+        scheduling = create_model(
+            ComputationalResourceSchedulingModel,
+            resource_host_id=run.compute_resource_id,
+            total_cpu_count=run.core_count,
+            node_count=run.node_count,
+            wall_time_limit=run.walltime_limit,
+            queue_name=run.queue_name,
+            total_physical_memory=run.total_physical_memory,
         )
-        #crs = ComputationalResourceSchedulingModel()
-        #crs.resourceHostId = run.compute_resource_id
-        #crs.totalCPUCount = run.core_count
-        #crs.nodeCount = run.node_count
-        #crs.wallTimeLimit = run.walltime_limit
-        #crs.queueName = run.queue_name
-        #experiment.userConfigurationData.computationalResourceScheduling = crs
+        user_configuration = create_model(
+            UserConfigurationDataModel,
+            group_resource_profile_id=run.group_resource_profile_id,
+            share_experiment_publicly=is_tutorial,
+            computational_resource_scheduling=scheduling,
+        )
+        copy_model_field(
+            experiment,
+            "user_configuration_data",
+            user_configuration,
+        )
 
         command_line_input_names = _command_line_input_names(input_values)
         try:
@@ -1465,34 +1487,38 @@ class RunViewSet(viewsets.ModelViewSet):
         except ValueError as error:
             raise exceptions.ValidationError(str(error)) from error
         command_line_policy["input_names"] = _add_registered_utility_input_aliases(
-            experiment.experimentInputs,
+            experiment_inputs,
             input_values,
             command_line_policy.get("input_names"),
         )
         remote_launch_contract.apply_command_line_policy(
-            experiment.experimentInputs,
+            experiment_inputs,
             command_line_policy,
         )
-        for inp in experiment.experimentInputs:
+        for inp in experiment_inputs:
             if inp.name in input_values:
                 inp.value = input_values[inp.name]
             elif inp.type in (DataType.URI, DataType.URI_COLLECTION) and not inp.value:
-                inp.isRequired = False
+                set_model_field(inp, "is_required", False)
 
         # Save experiment
-        experiment_id = request.airavata_client.createExperiment(
-            request.authz_token, settings.GATEWAY_ID, experiment
+        experiment_id = request.airavata.research.create_experiment(
+            settings.GATEWAY_ID,
+            experiment,
         )
         remote_execution = run.executions.create(
             airavata_experiment_id=experiment_id,
         )
         # launch experiment
-        experiment_util.launch(request, experiment_id)
-
-        compute_resource = request.airavata_client.getComputeResource(
-            request.authz_token, run.compute_resource_id
+        request.airavata.research.launch_experiment(
+            experiment_id,
+            settings.GATEWAY_ID,
         )
-        remote_execution.resource_name = compute_resource.hostName
+
+        compute_resource = request.airavata.compute.get_compute_resource(
+            run.compute_resource_id
+        )
+        remote_execution.resource_name = model_field(compute_resource, "host_name")
         remote_execution.save(update_fields=["resource_name", "updated"])
         return remote_execution
     @action(detail=True, methods=["PATCH"])
@@ -1504,16 +1530,21 @@ class RunViewSet(viewsets.ModelViewSet):
 
         execution = run.latest_execution
 
-        experiment = request.airavata_client.getExperiment(
-            request.authz_token, execution.airavata_experiment_id
+        experiment = request.airavata.research.get_experiment(
+            execution.airavata_experiment_id
         )
         if run.is_email_notification_on:
-            experiment.emailAddresses = [request.user.email]
+            replace_model_list(
+                experiment,
+                "email_addresses",
+                [request.user.email],
+            )
         else:
-            experiment.emailAddresses = []
+            replace_model_list(experiment, "email_addresses", [])
 
-        request.airavata_client.updateExperiment(
-            request.authz_token, execution.airavata_experiment_id, experiment
+        request.airavata.research.update_experiment(
+            execution.airavata_experiment_id,
+            experiment,
         )
 
         return Response(serializer.data)
@@ -1531,17 +1562,26 @@ class RunViewSet(viewsets.ModelViewSet):
 
 
     def _get_app_interface_id_for_module(self, request, app_module_id):
-        all_app_interfaces = request.airavata_client.getAllApplicationInterfaces(
-            request.authz_token, settings.GATEWAY_ID
+        all_app_interfaces = (
+            request.airavata.research.get_all_application_interfaces(
+                settings.GATEWAY_ID
+            )
         )
         app_interfaces = []
         for app_interface in all_app_interfaces:
-            if not app_interface.applicationModules:
+            application_modules = model_field(
+                app_interface,
+                "application_modules",
+            )
+            if not application_modules:
                 continue
-            if app_module_id in app_interface.applicationModules:
+            if app_module_id in application_modules:
                 app_interfaces.append(app_interface)
         if len(app_interfaces) == 1:
-            app_interface_id = app_interfaces[0].applicationInterfaceId
+            app_interface_id = model_field(
+                app_interfaces[0],
+                "application_interface_id",
+            )
         else:
             raise Exception(
                 f"Could not figure out the applicationInterfaceId for app module {app_module_id}"
@@ -1573,9 +1613,8 @@ class RunViewSet(viewsets.ModelViewSet):
         return self._get_app_interface_id_for_module(request, app_module_id)
 
     def _get_run_deployment_executable_path(self, request, run):
-        deployments = request.airavata_client.getAllApplicationDeployments(
-            request.authz_token,
-            settings.GATEWAY_ID,
+        deployments = request.airavata.research.get_all_application_deployments(
+            settings.GATEWAY_ID
         )
         try:
             return remote_launch_contract.find_deployment_executable_path(
@@ -2105,8 +2144,8 @@ def user_run_file_exists(request, run, filename):
         experiment_state = ExperimentState[status_name].value
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
-            experiment_model = request.airavata_client.getExperiment(
-                request.authz_token, execution.airavata_experiment_id
+            experiment_model = request.airavata.research.get_experiment(
+                execution.airavata_experiment_id
             )
             break
     if experiment_model is None:
@@ -2115,7 +2154,7 @@ def user_run_file_exists(request, run, filename):
     # Load the Modl_RunID file to find location of files
     # TODO: cache this information
     modl_runid_output = None
-    for output in experiment_model.experimentOutputs:
+    for output in model_field(experiment_model, "experiment_outputs"):
         if output.name == "Modl_RunID":
             modl_runid_output = output
     if modl_runid_output is None or not user_storage.exists(
@@ -2136,7 +2175,7 @@ def user_run_file_exists(request, run, filename):
     data_product_uri = user_storage.user_file_exists(
         request,
         os.path.join("ARCHIVE", model, run_id, filename),
-        experiment_id=experiment_model.experimentId,
+        experiment_id=model_field(experiment_model, "experiment_id"),
     )
     return data_product_uri
 
@@ -2178,19 +2217,19 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     else:
         return None
 
-    experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-        request.authz_token, most_recent_execution.airavata_experiment_id
+    experiment_model: ExperimentModel = request.airavata.research.get_experiment(
+        most_recent_execution.airavata_experiment_id
     )
     # Find the output by data type
     output = None
-    for output in experiment_model.experimentOutputs:
+    for output in model_field(experiment_model, "experiment_outputs"):
         output_type_name = DataType(output.type).name
         if output_type_name == data_type:
             output = output
             break
     # If experiment is finished, see if there is an experimentOutput available
     if most_recent_execution.is_airavata_experiment_finished(request):
-        if output is not None or user_storage.exists(
+        if output is not None and user_storage.exists(
             request, data_product_uri=output.value
         ):
             return output.value
@@ -2206,7 +2245,7 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
         if len(data_products) == 1 and user_storage.exists(
             request, data_product=data_products[0]
         ):
-            return data_products[0].productUri
+            return model_field(data_products[0], "product_uri")
         else:
             return None
 
@@ -2889,8 +2928,8 @@ def user_run_file_exists(request, run, filename):
         experiment_state = ExperimentState[status_name].value
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
-            experiment_model = request.airavata_client.getExperiment(
-                request.authz_token, execution.airavata_experiment_id
+            experiment_model = request.airavata.research.get_experiment(
+                execution.airavata_experiment_id
             )
             break
     if experiment_model is None:
@@ -2899,7 +2938,7 @@ def user_run_file_exists(request, run, filename):
     # Load the Modl_RunID file to find location of files
     # TODO: cache this information
     modl_runid_output = None
-    for output in experiment_model.experimentOutputs:
+    for output in model_field(experiment_model, "experiment_outputs"):
         if output.name == "Modl_RunID":
             modl_runid_output = output
             break
@@ -2920,7 +2959,7 @@ def user_run_file_exists(request, run, filename):
 
     try:
         _directories, files = user_storage.list_experiment_dir(
-            request, experiment_model.experimentId
+            request, model_field(experiment_model, "experiment_id")
         )
         for file_data in files:
             if file_data["name"] == filename:
@@ -2930,7 +2969,7 @@ def user_run_file_exists(request, run, filename):
     except Exception:
         logger.debug(
             "Failed to list experiment directory for %s",
-            experiment_model.experimentId,
+            model_field(experiment_model, "experiment_id"),
             exc_info=True,
         )
 
@@ -2938,7 +2977,7 @@ def user_run_file_exists(request, run, filename):
     return user_storage.user_file_exists(
         request,
         os.path.join("ARCHIVE", model, run_id, filename),
-        experiment_id=experiment_model.experimentId,
+        experiment_id=model_field(experiment_model, "experiment_id"),
     )
 
 
@@ -2951,19 +2990,19 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     else:
         return None
 
-    experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-        request.authz_token, most_recent_execution.airavata_experiment_id
+    experiment_model: ExperimentModel = request.airavata.research.get_experiment(
+        most_recent_execution.airavata_experiment_id
     )
     # Find the output by data type
     output = None
-    for output in experiment_model.experimentOutputs:
+    for output in model_field(experiment_model, "experiment_outputs"):
         output_type_name = DataType(output.type).name
         if output_type_name == data_type:
             output = output
             break
     # If experiment is finished, see if there is an experimentOutput available
     if most_recent_execution.is_airavata_experiment_finished(request):
-        if output is not None or user_storage.exists(
+        if output is not None and user_storage.exists(
             request, data_product_uri=output.value
         ):
             return output.value
@@ -2979,6 +3018,6 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
         if len(data_products) == 1 and user_storage.exists(
             request, data_product=data_products[0]
         ):
-            return data_products[0].productUri
+            return model_field(data_products[0], "product_uri")
         else:
             return None

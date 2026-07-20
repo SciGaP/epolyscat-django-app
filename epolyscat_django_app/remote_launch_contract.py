@@ -22,6 +22,21 @@ def _value(instance, *names):
     return ""
 
 
+def _set_value(instance, value, *names):
+    for name in names:
+        if isinstance(instance, dict):
+            if name in instance:
+                instance[name] = value
+                return
+        elif hasattr(instance, name):
+            setattr(instance, name, value)
+            return
+    if isinstance(instance, dict):
+        instance[names[0]] = value
+    else:
+        setattr(instance, names[0], value)
+
+
 def _is_controller_entrypoint(executable_path):
     return "controller" in os.path.basename(str(executable_path or "")).lower()
 
@@ -124,11 +139,26 @@ def apply_command_line_policy(application_inputs, policy):
     for input_data in application_inputs or ():
         input_name = _value(input_data, "name")
         if exclusive:
-            input_data.requiredToAddedToCommandLine = input_name in input_names
+            _set_value(
+                input_data,
+                input_name in input_names,
+                "required_to_added_to_command_line",
+                "requiredToAddedToCommandLine",
+            )
         elif input_name in input_names:
-            input_data.requiredToAddedToCommandLine = True
+            _set_value(
+                input_data,
+                True,
+                "required_to_added_to_command_line",
+                "requiredToAddedToCommandLine",
+            )
         if input_name in input_order:
-            input_data.inputOrder = input_order[input_name]
+            _set_value(
+                input_data,
+                input_order[input_name],
+                "input_order",
+                "inputOrder",
+            )
 
 
 def find_deployment_executable_path(

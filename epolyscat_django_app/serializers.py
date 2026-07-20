@@ -4,7 +4,15 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from .airavata_grpc import Project, django_user, experiment_util, user_storage
+from .airavata_grpc import (
+    ExperimentState,
+    Project,
+    create_model,
+    django_user,
+    experiment_util,
+    model_field,
+    user_storage,
+)
 from django.apps import apps
 from django.db import transaction
 from django.db.models import Q
@@ -114,29 +122,50 @@ class RunSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context["request"]
 
-        projects = request.airavata_client.getUserProjects(
-            request.authz_token,
+        projects = request.airavata.research.get_user_projects(
             settings.GATEWAY_ID,
             request.user.username,
             -1,
             0
         )
-        epolyscat_project_choices = ([p for p in projects if "EPOLYSCAT_app_project" in p.projectID] or
-            [p for p in projects if "Default_Project" in p.projectID] or
-            [p for p in projects if "Default" in p.projectID] or
-            [p for p in projects if "default" in p.projectID])
+        epolyscat_project_choices = (
+            [
+                project
+                for project in projects
+                if "EPOLYSCAT_app_project"
+                in model_field(project, "project_id")
+            ]
+            or [
+                project
+                for project in projects
+                if "Default_Project" in model_field(project, "project_id")
+            ]
+            or [
+                project
+                for project in projects
+                if "Default" in model_field(project, "project_id")
+            ]
+            or [
+                project
+                for project in projects
+                if "default" in model_field(project, "project_id")
+            ]
+        )
 
         if len(epolyscat_project_choices) > 0:
-            airavata_project_id = epolyscat_project_choices[0].projectID
+            airavata_project_id = model_field(
+                epolyscat_project_choices[0],
+                "project_id",
+            )
         else:
-            new_project = Project(
+            new_project = create_model(
+                Project,
                 owner=request.user.username,
-                gatewayId=settings.GATEWAY_ID,
+                gateway_id=settings.GATEWAY_ID,
                 name="EPOLYSCAT app project",
             )
 
-            airavata_project_id = request.airavata_client.createProject(
-                request.authz_token,
+            airavata_project_id = request.airavata.research.create_project(
                 settings.GATEWAY_ID,
                 new_project
             )
@@ -1023,24 +1052,12 @@ class RunSerializer(serializers.ModelSerializer):
                 #     request, experiment, "bsr_prep.log"
                 # )
 
-                application_status = request.airavata_client.getExperimentStatus(
-                    request.authz_token, latest_execution.airavata_experiment_id
+                application_status = request.airavata.research.get_experiment_status(
+                    latest_execution.airavata_experiment_id
                 )
 
                 if application_status is not None:
-                    state = application_status.state
-                    status = "CREATED" if state == 0 else (
-                        "VALIDATED" if state == 1 else
-                        "SCHEDULED"     if state == 2 else
-                        "LAUNCHED"      if state == 3 else
-                        "EXECUTING"     if state == 4 else
-                        "CANCELING"     if state == 5 else
-                        "CANCELED"      if state == 6 else
-                        "COMPLETED"     if state == 7 else
-                        "FAILED"
-                    )
-
-                    return status
+                    return ExperimentState(application_status.state).name
 
             return latest_execution.get_airavata_experiment_status(request)
 
@@ -1060,16 +1077,25 @@ class RunSerializer(serializers.ModelSerializer):
             latest_execution: models.RemoteExecution = run_instance.latest_execution
 
             try:
-                job_statuses = request.airavata_client.getJobStatuses(
-                    request.authz_token, latest_execution.airavata_experiment_id
+                job_status_response = request.airavata.research.get_job_statuses(
+                    latest_execution.airavata_experiment_id
                 )
-        
-                job_statuses_list = list(job_statuses.values());
+                job_statuses = model_field(
+                    job_status_response,
+                    "job_statuses",
+                )
+                job_statuses_list = list(job_statuses.values())
             
                 if len(job_statuses_list) > 0:
                     # gets the most recent status
-                    job_statuses_list.sort(key=lambda status: status.timeOfStateChange, reverse=True)
-                    state = job_statuses_list[0].jobState
+                    job_statuses_list.sort(
+                        key=lambda status: model_field(
+                            status,
+                            "time_of_state_change",
+                        ),
+                        reverse=True,
+                    )
+                    state = model_field(job_statuses_list[0], "job_state")
 
                     status = "SUBMITTED"    if state == 0 else (
                         "QUEUED"            if state == 1 else

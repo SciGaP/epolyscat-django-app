@@ -17,10 +17,18 @@ const axiosInstance = axios.create({
         'Accept': '*/*',
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': "*",
-        'Origin': '*',
-        'x-csrftoken': utils.FetchUtils.getCSRFToken()
+        'Origin': '*'
     }
 })
+
+axiosInstance.interceptors.request.use(config => {
+    const csrfToken = utils.FetchUtils.getCSRFToken();
+    if (csrfToken) {
+        config.headers = config.headers || {};
+        config.headers["X-CSRFToken"] = csrfToken;
+    }
+    return config;
+});
 
 const appBaseUrl = "/epolyscat_django_app/api/";
 

@@ -1,5 +1,5 @@
 <template>
-    <b-modal size="xl" :id="id" scrollable :title="title" @show="fetchData" body-class="p-0">
+    <b-modal no-fade size="xl" :id="id" scrollable :title="title" @show="fetchData" body-class="p-0">
         <b-breadcrumb class="my-3 ml-4">
             <b-breadcrumb-item 
                 v-for="(directory, i) in path" v-bind:key="directory" 

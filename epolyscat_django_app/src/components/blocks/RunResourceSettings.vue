@@ -259,7 +259,6 @@
 
     <div class="native-resource-selectors" aria-hidden="true">
       <adpf-queue-settings-editor
-          v-on:input="onQueueSettingEditor"
           :queue-name="queueName"
           :node-count="nodeCount"
           :total-cpu-count="coreCount"
@@ -1018,17 +1017,6 @@ export default {
               this.maxNodeCount || Number.MAX_SAFE_INTEGER
           );
         }
-      }
-    },
-    onQueueSettingEditor(evt) {
-      if (evt.detail && evt.detail.length > 0 && evt.detail[0]) {
-        this.updateRunResources({
-          queueName: evt.detail[0].queueName,
-          coreCount: evt.detail[0].totalCPUCount,
-          nodeCount: evt.detail[0].nodeCount,
-          wallTimeLimit: evt.detail[0].wallTimeLimit,
-          totalPhysicalMemory: evt.detail[0].totalPhysicalMemory,
-        });
       }
     },
     async refreshResourceSelection() {

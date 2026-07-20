@@ -342,11 +342,16 @@
             Select file from storage
           </b-button>
           <span class="input-file-or">OR</span>
-          <label class="input-file-computer-button" for="new-run-input-file-computer">
+          <b-button
+              variant="outline-primary"
+              class="input-file-computer-button"
+              v-on:click="openInputComputerFilePicker"
+          >
             Select file from computer
-          </label>
+          </b-button>
           <input
               id="new-run-input-file-computer"
+              ref="inputComputerFile"
               class="input-file-computer-input"
               type="file"
               :multiple="activeInputAllowsMultiple"
@@ -863,7 +868,10 @@ import {
   updateEPolyScatSequenceContinuationRow,
   updateEPolyScatSequenceNodeArguments,
 } from "@/utils/epolyscat-input-script";
-import { buildWorkflowOutputInputBinding } from "@/utils/workflow-file-linking";
+import {
+  buildEPolyScatInputDataSelectionValues,
+  buildWorkflowOutputInputBinding,
+} from "@/utils/workflow-file-linking";
 import {
   addAnalysisApplication,
   moveAnalysisApplication,
@@ -888,6 +896,7 @@ export default {
     return {
       experimentId: null,
       viewIds: [],
+      workflowParentPresentation: null,
       showDescriptions: storedShowDescriptions == null ? true : storedShowDescriptions,
       showWorkflowStepGuardModal: false,
       workflowStepGuardPendingScroll: false,
@@ -1706,10 +1715,60 @@ export default {
       if (application && application.localOnly) {
         return;
       }
+      if (this.isWorkflowChildEdit && applicationId !== this.selectedApplicationId) {
+        const workflowStageRoute = this.workflowChildStageRoute(applicationId);
+        if (workflowStageRoute) {
+          router.push(workflowStageRoute);
+        }
+        return;
+      }
       this.rememberWorkflowStageSelection();
       this.selectedApplicationId = applicationId;
       this.selectedWorkflowApplicationId = this.getWorkflowStageSelection(applicationId);
       this.applySelectedRunConfiguration();
+    },
+    workflowChildStageRoute(applicationId) {
+      const stages = this.workflowParentPresentation && this.workflowParentPresentation.stages;
+      if (!Array.isArray(stages)) {
+        return null;
+      }
+
+      const stageIndex = stages.findIndex(stage => stage.id === applicationId);
+      const stage = stages[stageIndex];
+      if (!stage || stage.local_only || !stage.child_run_id) {
+        return null;
+      }
+
+      const currentChildRunId = parseInt(this.workflowChildRunId);
+      if (
+          stage.child_run_id === currentChildRunId
+          || (stage.child_run_ids || []).includes(currentChildRunId)
+      ) {
+        return null;
+      }
+
+      const previousStagesComplete = stages.slice(0, stageIndex).every(previousStage => (
+        previousStage.state === "complete"
+        || previousStage.status === "complete"
+        || previousStage.status === "imported"
+        || previousStage.status === "not_included"
+      ));
+      if ((stage.status || "pending") === "pending" && previousStagesComplete) {
+        const query = [
+          `workflowChildRunId=${stage.child_run_id}`,
+          `workflowParentRunId=${this.workflowParentRunId}`,
+        ];
+        const previousStage = stages
+            .slice(0, stageIndex)
+            .reverse()
+            .find(item => item.child_run_id);
+        if (previousStage) {
+          query.push(`withOutputsFrom=${previousStage.child_run_id}`);
+        }
+        return `/runs/new?${query.join("&")}`;
+      }
+
+      return `/runs/${stage.child_run_id}`;
     },
     selectWorkflowApplication(applicationId) {
       this.selectedWorkflowApplicationId = applicationId;
@@ -1811,8 +1870,10 @@ export default {
     applySelectedRunConfiguration({ replaceExisting = false } = {}) {
       this.syncRequiredInputFiles();
       this.$store.commit("input/SET_PATH", { path: this.selectedRunPath });
-      this.syncGeneratedInpcContent();
-      this.syncAllGeneratedInputFiles({ replaceExisting });
+      if (this.isEPolyScatScriptInput) {
+        this.syncGeneratedInpcContent();
+        this.syncAllGeneratedInputFiles({ replaceExisting });
+      }
     },
     syncRequiredInputFiles() {
       this.inputFiles = this.activeRequiredFiles.map(file => ({
@@ -1977,6 +2038,11 @@ export default {
 
       await this.addFilesToActiveInput(selectedFiles);
     },
+    openInputComputerFilePicker() {
+      if (this.$refs.inputComputerFile) {
+        this.$refs.inputComputerFile.click();
+      }
+    },
     async onInputComputerFilesSelected(event) {
       const selectedFiles = Array.from(event.target.files || []).map(file => {
         file.isFromComputer = true;
@@ -1994,18 +2060,21 @@ export default {
 
       const allowsMultiple = this.activeInputAllowsMultiple;
       const filesToAdd = allowsMultiple ? files : files.slice(0, 1);
-      const existingFiles = this.uploadedRequiredFiles(inputFileName);
+      const hasExistingFile = Boolean(
+          this.activeInputDefinition
+          && this.activeInputDefinition.files.some(file => !file.deleted)
+      );
 
       const preparedFiles = await Promise.all(filesToAdd.map(async (file, index) => {
         const preparedFile = file.isFromComputer ? file : { ...file };
 
         Object.assign(preparedFile, {
-          replaceCurrent: !allowsMultiple && (existingFiles.length > 0 || index > 0),
+          replaceCurrent: !allowsMultiple && (hasExistingFile || index > 0),
           deleted: false,
           unchanged: false,
         });
 
-        if (inputFileName === "ePolyscat_Input_File") {
+        if (this.isEPolyScatScriptInput) {
           const contents = await this.readInputFileContents(file);
           if (contents != null) {
             preparedFile.contents = normalizeEPolyScatInputContents(contents);
@@ -2022,8 +2091,14 @@ export default {
         });
       });
 
-      if (inputFileName === "ePolyscat_Input_File") {
+      if (this.isEPolyScatScriptInput) {
         await this.loadInpcContentFromFile(preparedFiles[0]);
+      }
+
+      if (inputFileName === "ePolyScat_Input_Data") {
+        this.syncEPolyScatInputDataReference(preparedFiles[0]);
+      } else if (this.isEPolyScatScriptInput) {
+        this.syncEPolyScatInputDataReference(this.currentEPolyScatInputDataFile());
       }
     },
     addWorkflowOutputToInput(inputFileName, outputFile) {
@@ -2042,6 +2117,46 @@ export default {
           replaceCurrent: existingFiles.length > 0,
         },
       });
+    },
+    currentEPolyScatInputDataFile() {
+      const { inputFiles } = this.$store.getters["input/getInputs"]({
+        customPath: this.selectedRunPath,
+        removeDeleted: false,
+      });
+      const inputData = inputFiles.ePolyScat_Input_Data;
+
+      return inputData
+          ? inputData.files.find(file => !file.deleted && !file.generatedByNewRun) || null
+          : null;
+    },
+    syncEPolyScatInputDataReference(file) {
+      if (!file || !this.activeExecutionApplication || this.activeExecutionApplication.id !== "ePolyScat") {
+        return;
+      }
+
+      const linkedValues = buildEPolyScatInputDataSelectionValues(file);
+      if (!linkedValues.convertSource) {
+        return;
+      }
+
+      Object.assign(this.dataEntryValues, linkedValues);
+      this.inpcContentType = "text";
+      this.inpcContent = patchEPolyScatInputScript(
+          this.inpcContent || this.buildInpcContent(),
+          this.dataEntryValues,
+          this.outputDefinitions,
+          { changedKeys: Object.keys(linkedValues) },
+      );
+
+      const scriptInput = this.inputFiles.find(
+          inputFile => inputFile.inputFileName === "ePolyscat_Input_File",
+      );
+      if (scriptInput) {
+        this.syncInpcContentToInputFile({
+          inputFileName: scriptInput.inputFileName,
+          generatedFileName: scriptInput.generatedFileName,
+        });
+      }
     },
     workflowApplicationIdFromRun(run) {
       return run
@@ -2148,13 +2263,12 @@ export default {
         return;
       }
 
-      const inputFileName = this.activeInputFile.inputFileName;
       this.$store.commit("input/REMOVE_FILE", {
         filename: file.name,
         inputFileName: this.activeInputFile.inputFileName,
       });
 
-      if (inputFileName === "ePolyscat_Input_File") {
+      if (this.isEPolyScatScriptInput) {
         this.resetDataEntryValuesToDefaults();
         this.inpcContent = this.buildEPolyScatInputScript();
         this.syncInpcContentToActiveInputFile();
@@ -2180,8 +2294,6 @@ export default {
       this.selectedInputFile = fileId;
       if (this.isEPolyScatScriptInput) {
         await this.loadInpcContentFromActiveInputFile();
-      } else {
-        this.syncGeneratedInpcContent();
       }
     },
     selectDataEntryViewMode(mode) {
@@ -2477,7 +2589,6 @@ export default {
     },
     patchInpcContentFromTableValues(changedKeys = []) {
       if (!this.isEPolyScatScriptInput) {
-        this.syncGeneratedInpcContent();
         return;
       }
 
@@ -2611,23 +2722,36 @@ export default {
       this.syncInpcContentToActiveInputFile({ replaceExisting });
     },
     syncInpcContentToActiveInputFile({ replaceExisting = true } = {}) {
+      if (!this.isEPolyScatScriptInput) return;
+
+      this.syncInpcContentToInputFile({
+        inputFileName: this.generatedInputFileName,
+        generatedFileName: this.generatedInputDisplayName,
+        replaceExisting,
+      });
+    },
+    syncInpcContentToInputFile({
+      inputFileName,
+      generatedFileName,
+      replaceExisting = true,
+    }) {
       const { inputFiles } = this.$store.getters["input/getInputs"]({
         customPath: this.selectedRunPath
       });
-      const inputFile = inputFiles[this.generatedInputFileName];
+      const inputFile = inputFiles[inputFileName];
 
-      if (!inputFile || this.inpcContent == null || !this.isEPolyScatScriptInput) return;
+      if (!inputFile || this.inpcContent == null) return;
 
       const existingFile = inputFile.files.find(file =>
           !file.deleted &&
           !file.generatedByNewRun &&
-          (file.isFromComputer || file.dataProductURI || file.name !== this.generatedInputDisplayName)
+          (file.isFromComputer || file.dataProductURI || file.name !== generatedFileName)
       ) || inputFile.files.find(file => !file.deleted && file.generatedByNewRun);
 
       const hasExistingFile = inputFile.files.some(file => !file.deleted);
       const file = {
         ...(existingFile || {}),
-        name: existingFile ? existingFile.name : this.generatedInputDisplayName,
+        name: existingFile ? existingFile.name : generatedFileName,
         contents: this.inpcContent,
         isFromComputer: existingFile ? !!existingFile.isFromComputer : false,
         generatedByNewRun: existingFile ? !!existingFile.generatedByNewRun : true,
@@ -2637,7 +2761,7 @@ export default {
       };
 
       this.$store.commit("input/ADD_TO_INPUT_FILE", {
-        inputFileName: this.generatedInputFileName,
+        inputFileName,
         file
       });
     },
@@ -2651,9 +2775,6 @@ export default {
           this.applyInpcContentToDataEntryValues(this.inpcContent);
         }
         this.syncInpcContentToActiveInputFile();
-      } else {
-        this.syncGeneratedInpcContent();
-        this.syncAllGeneratedInputFiles();
       }
       this.makeFormVisited();
 
@@ -2664,6 +2785,7 @@ export default {
       try {
         const runPayload = {
           ...this.run,
+          inputs: null,
           runMode: this.selectedRunMode,
           moduleApplication: this.selectedModuleApplication,
           workflowStage: this.selectedWorkflowStage,
@@ -2713,7 +2835,9 @@ export default {
       await this.$store.dispatch("input/fetchPathLabels");
       this.applySelectedRunConfiguration({ replaceExisting: false });
       await this.fetchURLData();
-      this.syncAllGeneratedInputFiles({ replaceExisting: false });
+      if (this.isEPolyScatScriptInput) {
+        await this.loadInpcContentFromActiveInputFile();
+      }
     },
     applyWorkflowChildRun(sourceRun) {
       const stageId = sourceRun.workflowStage || "ePolyScat_Run";
@@ -2750,8 +2874,18 @@ export default {
         const workflowChildRunId = parseInt(this.workflowChildRunId);
         const sourceRun = await this.$store.dispatch("run/fetchRun", { runId: workflowChildRunId });
 
+        if (this.workflowParentRunId) {
+          const workflowParentRun = await this.$store.dispatch("run/fetchRun", {
+            runId: parseInt(this.workflowParentRunId),
+          });
+          this.workflowParentPresentation = workflowParentRun.presentation || null;
+        }
+
         this.applyWorkflowChildRun(sourceRun);
         await this.$store.dispatch("run/loadInputs", { runId: workflowChildRunId });
+        if (this.isEPolyScatScriptInput) {
+          await this.loadInpcContentFromActiveInputFile();
+        }
 
         if (this.outputsRunId) {
           const outputsRunId = parseInt(this.outputsRunId);

@@ -17,6 +17,7 @@ const debug = true;
 
 export default new Vuex.Store({
     modules: {
+        "experiment": experimentStore,
         "run": RunStore,
         "view": ViewStore,
         "input": InputStore,

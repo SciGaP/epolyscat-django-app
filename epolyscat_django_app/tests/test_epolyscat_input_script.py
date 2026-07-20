@@ -1114,7 +1114,10 @@ def test_workflow_output_binding_uses_manual_specific_file_flow():
         const moduleObject = { exports: {} };
         new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
 
-        const { buildWorkflowOutputInputBinding } = moduleObject.exports;
+        const {
+          buildEPolyScatInputDataSelectionValues,
+          buildWorkflowOutputInputBinding,
+        } = moduleObject.exports;
 
         function assertEqual(name, actual, expected) {
           if (actual !== expected) {
@@ -1145,6 +1148,18 @@ def test_workflow_output_binding_uses_manual_specific_file_flow():
         assertEqual("OpenMolcas input", molcasBinding.outputFile.name, "molden.dat");
         assertEqual("OpenMolcas convert source", molcasBinding.dataEntryValues.convertSource, "$pt/molden.dat");
         assertEqual("OpenMolcas convert format", molcasBinding.dataEntryValues.convertFormat, "molden");
+
+        const uploadedMoldenValues = buildEPolyScatInputDataSelectionValues({
+          name: "/Users/researcher/inputs/ch4-target.molden",
+        });
+        assertEqual("Uploaded Molden source", uploadedMoldenValues.convertSource, "$pt/ch4-target.molden");
+        assertEqual("Uploaded Molden format", uploadedMoldenValues.convertFormat, "molden");
+
+        const uploadedGaussianValues = buildEPolyScatInputDataSelectionValues({
+          name: "methane-gaussian.log",
+        });
+        assertEqual("Uploaded Gaussian source", uploadedGaussianValues.convertSource, "$pt/methane-gaussian.log");
+        assertEqual("Uploaded Gaussian format", uploadedGaussianValues.convertFormat, "gaussian");
 
         const noCnvLinFullBinding = buildWorkflowOutputInputBinding({
           outputFiles: [

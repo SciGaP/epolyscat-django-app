@@ -58,12 +58,20 @@ SETTINGS_STORE = (
     / "modules"
     / "settings.store.js"
 )
+INPUT_STORE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "store"
+    / "modules"
+    / "input-storage.store.js"
+)
 INPUT_SCRIPT = (
     Path(__file__).resolve().parents[1]
     / "src"
     / "utils"
     / "epolyscat-input-script.js"
 )
+FRONTEND_STORE = Path(__file__).resolve().parents[1] / "src" / "store" / "index.js"
 
 
 def _source():
@@ -88,6 +96,33 @@ def _input_script_source():
     return INPUT_SCRIPT.read_text()
 
 
+def _input_store_source():
+    return INPUT_STORE.read_text()
+
+
+def _frontend_store_source():
+    return FRONTEND_STORE.read_text()
+
+
+def test_frontend_store_registers_experiment_module_used_by_create_run():
+    source = _frontend_store_source()
+
+    assert re.search(
+        r'^\s*"experiment": experimentStore,?\s*$',
+        source,
+        re.MULTILINE,
+    )
+
+
+def test_persisted_input_replaces_same_named_generated_placeholder():
+    source = _input_store_source()
+
+    assert "const replacesGeneratedPlaceholder" in source
+    assert "existingFile.generatedByNewRun" in source
+    assert "!file.generatedByNewRun" in source
+    assert "file.replaceCurrent || existingFile.deleted || replacesGeneratedPlaceholder" in source
+
+
 def _view_run_source():
     return VIEW_RUN.read_text()
 
@@ -100,8 +135,25 @@ def _user_storage_source():
     return USER_STORAGE.read_text()
 
 
+def test_user_storage_modal_disables_conflicting_bootstrap_fade_transition():
+    source = _user_storage_source()
+    opening_tag = re.search(r"<b-modal\b(?P<attributes>[^>]*)>", source, re.DOTALL)
+
+    assert opening_tag, "UserStorage b-modal is missing"
+    assert "no-fade" in opening_tag.group("attributes")
+
+
 def _epolyscat_service_source():
     return EPOLYSCAT_SERVICE.read_text()
+
+
+def test_epolyscat_service_reads_current_csrf_token_for_every_request():
+    source = _epolyscat_service_source()
+
+    assert "'x-csrftoken': utils.FetchUtils.getCSRFToken()" not in source
+    assert "axiosInstance.interceptors.request.use" in source
+    assert "const csrfToken = utils.FetchUtils.getCSRFToken();" in source
+    assert 'config.headers["X-CSRFToken"] = csrfToken;' in source
 
 
 def _route_block(path):
@@ -184,6 +236,15 @@ def test_create_run_hides_file_sections_when_selection_has_no_required_files():
 
     for hook in expected_hooks:
         assert hook in source
+
+
+def test_create_run_local_file_picker_uses_an_accessible_button():
+    source = _source()
+
+    assert 'v-on:click="openInputComputerFilePicker"' in source
+    assert 'ref="inputComputerFile"' in source
+    assert "openInputComputerFilePicker()" in source
+    assert '<label class="input-file-computer-button"' not in source
 
 
 def test_create_run_catalog_maps_module_utility_workflow_to_required_files():
@@ -1006,6 +1067,39 @@ def test_create_run_can_edit_existing_workflow_child_step():
         assert hook in service_source
 
 
+def test_workflow_child_stepper_navigates_between_child_runs_without_resetting_form_state():
+    source = _source()
+
+    expected_hooks = [
+        "workflowParentPresentation: null",
+        "workflowChildStageRoute(applicationId)",
+        "this.isWorkflowChildEdit && applicationId !== this.selectedApplicationId",
+        "router.push(workflowStageRoute)",
+        "this.workflowParentPresentation.stages",
+        "stage.child_run_id",
+        "workflowChildRunId=${stage.child_run_id}",
+        "workflowParentRunId=${this.workflowParentRunId}",
+        "withOutputsFrom=${previousStage.child_run_id}",
+        "this.workflowParentPresentation = workflowParentRun.presentation || null",
+    ]
+
+    for hook in expected_hooks:
+        assert hook in source
+
+
+def test_workflow_child_save_prepares_live_input_store_instead_of_reusing_api_inputs():
+    source = _source()
+    run_payload = re.search(
+        r"const runPayload = \{(?P<body>.*?)\n\s*\};",
+        source,
+        re.DOTALL,
+    )
+
+    assert run_payload, "CreateRun runPayload is missing"
+    assert "...this.run," in run_payload.group("body")
+    assert "inputs: null," in run_payload.group("body")
+
+
 def test_view_run_plot_panel_uses_plot_service_not_static_svg():
     source = _view_run_source()
 
@@ -1257,12 +1351,22 @@ def test_create_run_reuses_existing_input_store_binding():
     assert 'generatedFileName: "input_file.inp"' in source
 
 
-def test_input_file_tabs_sync_all_required_old_input_files_before_save():
+def test_epolyscat_script_selection_syncs_all_generated_input_files():
     source = _source()
+    apply_selection_method = re.search(
+        r"applySelectedRunConfiguration\([^)]*\) \{(?P<body>.*?)\n    \},\n    syncRequiredInputFiles",
+        source,
+        re.DOTALL,
+    )
 
+    assert apply_selection_method, "applySelectedRunConfiguration method is missing"
     assert "syncAllGeneratedInputFiles" in source
     assert "this.inputFiles.forEach" in source
-    assert "this.syncAllGeneratedInputFiles();" in source
+    assert "if (this.isEPolyScatScriptInput)" in apply_selection_method.group("body")
+    assert (
+        "this.syncAllGeneratedInputFiles({ replaceExisting });"
+        in apply_selection_method.group("body")
+    )
 
 
 def test_workflow_file_inputs_expose_upload_and_gateway_storage_actions():
@@ -1606,6 +1710,97 @@ def test_uploaded_input_file_contents_seed_data_entry_table():
         assert hook in input_script_source
 
 
+def test_existing_epolyscat_input_is_loaded_after_run_inputs_are_restored():
+    source = _source()
+    initialize_method = re.search(
+        r"async initializeInputBinding\(\) \{(?P<body>.*?)\n    \},\n    applyWorkflowChildRun",
+        source,
+        re.DOTALL,
+    )
+
+    assert initialize_method, "initializeInputBinding method is missing"
+    body = initialize_method.group("body")
+    assert "await this.loadInpcContentFromActiveInputFile()" in body
+    fetch_position = body.index("await this.fetchURLData()")
+    load_position = body.index("await this.loadInpcContentFromActiveInputFile()")
+
+    assert "if (this.isEPolyScatScriptInput)" in body
+    assert load_position > fetch_position
+    assert "syncAllGeneratedInputFiles" not in body
+
+
+def test_utility_control_upload_is_preserved_as_an_opaque_file():
+    source = _source()
+    add_files_method = re.search(
+        r"async addFilesToActiveInput\(files\) \{(?P<body>.*?)\n    \},\n    addWorkflowOutputToInput",
+        source,
+        re.DOTALL,
+    )
+
+    assert add_files_method, "addFilesToActiveInput method is missing"
+    body = add_files_method.group("body")
+    assert "if (this.isEPolyScatScriptInput)" in body
+    assert 'inputFileName === "ePolyscat_Input_File"' not in body
+
+
+def test_epolyscat_input_data_filename_updates_the_convert_record():
+    source = _source()
+    add_files_method = re.search(
+        r"async addFilesToActiveInput\(files\) \{(?P<body>.*?)\n    \},\n    addWorkflowOutputToInput",
+        source,
+        re.DOTALL,
+    )
+
+    assert add_files_method, "addFilesToActiveInput method is missing"
+    body = add_files_method.group("body")
+    assert "buildEPolyScatInputDataSelectionValues" in source
+    assert 'inputFileName === "ePolyScat_Input_Data"' in body
+    assert "this.syncEPolyScatInputDataReference(preparedFiles[0])" in body
+    assert "syncEPolyScatInputDataReference(file)" in source
+
+
+def test_non_epolyscat_selection_does_not_generate_default_script_files():
+    source = _source()
+    apply_selection_method = re.search(
+        r"applySelectedRunConfiguration\([^)]*\) \{(?P<body>.*?)\n    \},\n    syncRequiredInputFiles",
+        source,
+        re.DOTALL,
+    )
+    save_method = re.search(
+        r"async onSave\(submit = false\) \{(?P<body>.*?)\n    \},\n    async initializeInputBinding",
+        source,
+        re.DOTALL,
+    )
+
+    assert apply_selection_method, "applySelectedRunConfiguration method is missing"
+    assert save_method, "onSave method is missing"
+    assert "if (this.isEPolyScatScriptInput)" in apply_selection_method.group("body")
+    assert "syncGeneratedInpcContent" not in save_method.group("body")
+    assert "syncAllGeneratedInputFiles" not in save_method.group("body")
+
+
+def test_workflow_output_values_patch_the_restored_script_not_defaults():
+    source = _source()
+    fetch_method = re.search(
+        r"async fetchURLData\(\) \{(?P<body>.*?)\n    \},\n    async refreshData",
+        source,
+        re.DOTALL,
+    )
+
+    assert fetch_method, "fetchURLData method is missing"
+    body = fetch_method.group("body")
+    assert "await this.loadInpcContentFromActiveInputFile()" in body
+    load_inputs_position = body.index(
+        'await this.$store.dispatch("run/loadInputs", { runId: workflowChildRunId })'
+    )
+    load_script_position = body.index("await this.loadInpcContentFromActiveInputFile()")
+    inherit_outputs_position = body.index(
+        "await this.loadWorkflowPreviousOutputsIntoActiveInputs(outputsRunId, outputSourceRun)"
+    )
+
+    assert load_inputs_position < load_script_position < inherit_outputs_position
+
+
 def test_uploaded_computer_files_keep_blob_identity_for_file_reader():
     source = _source()
     add_files_method = re.search(
@@ -1625,6 +1820,24 @@ def test_uploaded_computer_files_keep_blob_identity_for_file_reader():
     assert "Object.assign(preparedFile, {" in add_files_method.group("body")
     assert "file instanceof Blob" in service_source
     assert "file.downloadURL" in service_source
+
+
+def test_single_file_upload_replaces_generated_placeholder_and_store_duplicates():
+    source = _source()
+    store_source = _input_store_source()
+    add_files_method = re.search(
+        r"async addFilesToActiveInput\(files\) \{(?P<body>.*?)\n    \},\n    removeInputFile",
+        source,
+        re.DOTALL,
+    )
+
+    assert add_files_method, "addFilesToActiveInput method is missing"
+    body = add_files_method.group("body")
+    assert "this.activeInputDefinition.files.some(file => !file.deleted)" in body
+    assert "replaceCurrent: !allowsMultiple && (hasExistingFile || index > 0)" in body
+    assert "if (!inputFile.isMultiFileInput && file.replaceCurrent)" in store_source
+    assert "otherFile.deleted = true" in store_source
+    assert "otherFile.unchanged = false" in store_source
 
 
 def test_uploaded_computer_file_reading_preserves_blob_identity():
@@ -1921,6 +2134,15 @@ def test_queue_switch_button_and_core_node_lock_follow_old_queue_editor():
 
     assert "arrow-repeat" not in source
     assert "selectNextQueue" not in source
+
+
+def test_hidden_queue_editor_cannot_overwrite_visible_resource_values():
+    source = _resource_settings_source()
+
+    assert '<adpf-queue-settings-editor' in source
+    assert 'v-on:input="onQueueSettingEditor"' not in source
+    assert "onQueueSettingEditor(evt)" not in source
+    assert "applyQueueDefaults(queueDefault)" in source
 
 
 def test_create_run_preserves_required_validation_messages():

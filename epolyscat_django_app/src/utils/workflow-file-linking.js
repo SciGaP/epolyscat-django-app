@@ -76,6 +76,17 @@ function isCubeOutput(file) {
   return name.endsWith(".cube") || name.endsWith(".cub");
 }
 
+export function buildEPolyScatInputDataSelectionValues(file, sourceApplicationId = "") {
+  const sourceApplication = String(sourceApplicationId || "");
+  const useGaussianFormat = sourceApplication === "Gaussian16"
+      || (!sourceApplication && isGaussianConvertOutput(file));
+
+  return {
+    convertSource: stagedInputReference(file),
+    convertFormat: useGaussianFormat ? "gaussian" : "molden",
+  };
+}
+
 function buildInputBinding(inputFileName, outputFile, dataEntryValues = null) {
   if (!inputFileName || !outputFile) {
     return null;
@@ -102,10 +113,11 @@ function buildEPolyScatInputDataBinding(outputFiles, sourceApplicationId) {
     return null;
   }
 
-  return buildInputBinding("ePolyScat_Input_Data", outputFile, {
-    convertSource: stagedInputReference(outputFile),
-    convertFormat: sourceIsGaussian ? "gaussian" : "molden",
-  });
+  return buildInputBinding(
+      "ePolyScat_Input_Data",
+      outputFile,
+      buildEPolyScatInputDataSelectionValues(outputFile, sourceApplication),
+  );
 }
 
 function buildAnalysisBinding(outputFiles, targetApplicationId, requiredFileName) {

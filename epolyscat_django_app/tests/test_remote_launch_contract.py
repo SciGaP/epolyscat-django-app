@@ -22,6 +22,55 @@ def test_controller_deployment_keeps_interface_command_line_contract():
     }
 
 
+def test_controller_utility_uses_ordered_runtime_contract():
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/opt/epolyscat/bin/epolyscat_controller.sh",
+        input_values={
+            "Calculation_Type": "UTILITY",
+            "Application_Utility": "CnvLinFull",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "DumpOut": "airavata-dp://dump",
+        },
+    )
+
+    assert policy == {
+        "exclusive": True,
+        "input_names": {
+            "Calculation_Type",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "DumpOut",
+        },
+        "ordered_input_names": (
+            "Calculation_Type",
+            "Application_Utility",
+            "ePolyscat_Input_File",
+            "DumpOut",
+        ),
+    }
+
+
+def test_controller_workflow_analysis_uses_ordered_runtime_contract():
+    policy = remote_launch_contract.resolve_command_line_policy(
+        executable_path="/opt/epolyscat/bin/epolyscat_controller.sh",
+        input_values={
+            "Calculation_Type": "WORKFLOW",
+            "Application_Workflow": "Analysis",
+            "Application_Utility": "Cube2igor",
+            "ePolyscat_Input_File": "airavata-dp://control",
+            "Cube_Output": "airavata-dp://cube",
+        },
+    )
+
+    assert policy["ordered_input_names"] == (
+        "Calculation_Type",
+        "Application_Workflow",
+        "Application_Utility",
+        "ePolyscat_Input_File",
+        "Cube_Output",
+    )
+
+
 @pytest.mark.parametrize(
     "input_values",
     [

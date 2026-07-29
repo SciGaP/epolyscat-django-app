@@ -1,10 +1,14 @@
 """Collect and verify scientific outputs for one portal run."""
 
+import copy
+import hashlib
 import logging
 import os
 import re
 
-from .airavata_grpc import user_storage
+from airavata_django_portal_sdk import user_storage
+from django.core.cache import cache
+
 from . import (
     models,
     output_presentation_contracts,
@@ -18,6 +22,8 @@ logger = logging.getLogger(__name__)
 SCIENTIFIC_LOG_HEAD_BYTES = 256 * 1024
 SCIENTIFIC_LOG_TAIL_BYTES = 768 * 1024
 TERMINAL_SCHEDULER_STATUSES = {"COMPLETED", "FAILED", "CANCELED"}
+RUNNING_OUTPUT_CACHE_SECONDS = 5
+TERMINAL_OUTPUT_CACHE_SECONDS = 5 * 60
 
 
 def _is_epolyscat_run(run):
@@ -69,7 +75,30 @@ def epolyscat_output_declarations(request, run):
     return declarations
 
 
+def _output_cache_key(run, execution):
+    identity = (
+        f"{run.pk}:"
+        f"{execution.pk}:"
+        f"{execution.airavata_experiment_id}:"
+        f"{execution.created.isoformat()}:"
+        f"{execution.updated.isoformat()}"
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
+    return f"epolyscat:output-files:v1:{digest}"
+
+
 def output_files_for_run(request, run):
+    latest_execution = run.latest_execution
+    cache_key = (
+        _output_cache_key(run, latest_execution)
+        if latest_execution is not None
+        else None
+    )
+    if cache_key is not None:
+        cached_output_files = cache.get(cache_key)
+        if cached_output_files is not None:
+            return copy.deepcopy(cached_output_files)
+
     output_files = []
     seen_file_names = set()
     seen_directories = set()
@@ -140,17 +169,31 @@ def output_files_for_run(request, run):
                     depth=depth + 1,
                 )
 
-    latest_execution = run.latest_execution
     if latest_execution is not None:
         experiment_id = latest_execution.airavata_experiment_id
         append_experiment_directory_files(experiment_id)
         append_experiment_directory_files(experiment_id, path="ARCHIVE")
 
     declared_file_types = epolyscat_output_declarations(request, run)
-    return output_presentation_contracts.annotate_output_files(
+    annotated_output_files = output_presentation_contracts.annotate_output_files(
         output_files,
         declared_file_types=declared_file_types,
     )
+    if cache_key is not None:
+        execution_status = str(
+            latest_execution.airavata_experiment_status or ""
+        ).upper()
+        cache_timeout = (
+            TERMINAL_OUTPUT_CACHE_SECONDS
+            if execution_status in TERMINAL_SCHEDULER_STATUSES
+            else RUNNING_OUTPUT_CACHE_SECONDS
+        )
+        cache.set(
+            cache_key,
+            copy.deepcopy(annotated_output_files),
+            timeout=cache_timeout,
+        )
+    return annotated_output_files
 
 
 def _chunk_bytes(value):

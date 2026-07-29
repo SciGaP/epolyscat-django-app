@@ -625,16 +625,10 @@ export default {
   methods: {
     async refreshRun() {
       try {
-        const [run, presentation] = await Promise.all([
-          RunService.fetchRun({ runId: this.runId }),
-          RunService.fetchRunPresentation({ runId: this.runId }),
-        ]);
-        this.run = run;
-        this.presentation = this.normalizePresentation(presentation);
-        await Promise.all([
-          this.loadRunFileCatalog(),
-          this.loadWorkflowContinuation(),
-        ]);
+        this.run = await RunService.fetchRun({ runId: this.runId });
+        this.presentation = this.normalizePresentation(this.run.presentation);
+        await this.loadRunFileCatalog();
+        await this.loadWorkflowContinuation();
         this.initializePlotForm();
 
         const nextSelectedFile = (this.visualizationMode && this.plotForm.file)
@@ -728,15 +722,14 @@ export default {
       }
     },
     async loadRunFileCatalog() {
-      const [viewables, inputFiles, outputFiles] = await Promise.all([
-        PlotService.getViewables({ runId: this.fileCatalogRunId }).catch(() => []),
+      const [inputFiles, outputFiles] = await Promise.all([
         PlotService.getInputFiles({ runId: this.fileCatalogRunId }).catch(() => []),
         InputService.fetchOutputs(this.fileCatalogRunId).catch(() => []),
       ]);
 
-      this.viewables = viewables || [];
       this.inputFiles = inputFiles || [];
       this.outputFiles = outputFiles || [];
+      this.viewables = this.outputFiles.filter(file => file.viewable);
     },
     initializePlotForm() {
       const currentOutput = this.plottableOutputFileForName(this.plotForm.file || this.presentation.plot.file);

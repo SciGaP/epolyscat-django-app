@@ -3,13 +3,42 @@ from types import SimpleNamespace
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import RequestFactory, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from rest_framework import exceptions
 
 from epolyscat_django_app import models, serializers, views
 
 
 class RunViewSetBackendTests(TestCase):
+    def attach_airavata_client(self, request, **methods):
+        request.authz_token = getattr(request, "authz_token", object())
+        request.airavata_client = SimpleNamespace(**methods)
+        return request.airavata_client
+
+    def attach_execution_client(
+        self,
+        request,
+        application_inputs=None,
+        application_outputs=None,
+        experiment_id="experiment-id",
+        host_name="cluster",
+    ):
+        return self.attach_airavata_client(
+            request,
+            getApplicationInterface=mock.Mock(
+                return_value=SimpleNamespace(
+                    applicationInputs=list(application_inputs or []),
+                    applicationOutputs=list(application_outputs or []),
+                )
+            ),
+            createExperiment=mock.Mock(return_value=experiment_id),
+            getComputeResource=mock.Mock(
+                return_value=SimpleNamespace(hostName=host_name)
+            ),
+        )
+
     def create_run(self, user):
         experiment = models.Experiment.objects.create(
             name="experiment",
@@ -24,6 +53,279 @@ class RunViewSetBackendTests(TestCase):
             number="0001",
             experiment=experiment,
         )
+
+    def test_run_list_summary_uses_cached_status_without_remote_calls(self):
+        user = get_user_model().objects.create_user(
+            username="cached-list-status"
+        )
+        request = RequestFactory().get("/epolyscat_django_app/api/runs/")
+        request.user = user
+        client = self.attach_airavata_client(
+            request,
+            getExperimentStatus=mock.Mock(),
+            getJobStatuses=mock.Mock(),
+            getJobDetails=mock.Mock(),
+        )
+        run = self.create_run(user)
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="experiment-id",
+            airavata_experiment_status="COMPLETED",
+            job_id="job-id",
+        )
+
+        data = serializers.RunSerializer(
+            run,
+            context={
+                "request": request,
+                "refresh_remote_status": False,
+            },
+        ).data
+
+        self.assertEqual(data["status"], "COMPLETED")
+        self.assertEqual(data["job_status"], "COMPLETED")
+        self.assertEqual(data["job_id"], "job-id")
+        client.getExperimentStatus.assert_not_called()
+        client.getJobStatuses.assert_not_called()
+        client.getJobDetails.assert_not_called()
+
+    def test_latest_execution_uses_prefetched_executions_without_query(self):
+        user = get_user_model().objects.create_user(
+            username="prefetched-latest-execution"
+        )
+        run = self.create_run(user)
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="experiment-1",
+        )
+        expected = models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="experiment-2",
+        )
+        prefetched_run = models.Run.objects.prefetch_related(
+            "executions"
+        ).get(pk=run.pk)
+
+        with self.assertNumQueries(0):
+            actual = prefetched_run.latest_execution
+
+        self.assertEqual(actual.pk, expected.pk)
+
+    def test_run_list_serialization_has_bounded_queries(self):
+        user = get_user_model().objects.create_user(
+            username="bounded-list-queries"
+        )
+        first_run = self.create_run(user)
+        runs = [first_run]
+        for index in range(2, 6):
+            runs.append(
+                models.Run.objects.create(
+                    name=f"run-{index}",
+                    owner=user,
+                    root=first_run.root,
+                    number=f"{index:04}",
+                    experiment=first_run.experiment,
+                )
+            )
+        for index, run in enumerate(runs, start=1):
+            input_instance = models.Input.objects.create(
+                run=run,
+                type="files",
+                name="Input_File",
+            )
+            models.File.objects.create(
+                input=input_instance,
+                name=f"input-{index}.inp",
+                data_product_uri=f"airavata-dp://input-{index}",
+            )
+            models.RemoteExecution.objects.create(
+                run=run,
+                airavata_experiment_id=f"experiment-{index}",
+                airavata_experiment_status="COMPLETED",
+                job_id=f"job-{index}",
+            )
+
+        request = SimpleNamespace(
+            user=user,
+            query_params={},
+        )
+        client = self.attach_airavata_client(
+            request,
+            getExperimentStatus=mock.Mock(),
+            getJobStatuses=mock.Mock(),
+            getJobDetails=mock.Mock(),
+        )
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.action = "list"
+
+        with CaptureQueriesContext(connection) as captured:
+            data = serializers.RunSerializer(
+                viewset.get_queryset(),
+                many=True,
+                context={
+                    "request": request,
+                    "refresh_remote_status": False,
+                    "tutorial_view_id": None,
+                },
+            ).data
+
+        self.assertEqual(len(data), 5)
+        self.assertLessEqual(len(captured), 10)
+        client.getExperimentStatus.assert_not_called()
+        client.getJobStatuses.assert_not_called()
+        client.getJobDetails.assert_not_called()
+
+    def test_workflow_run_detail_serialization_has_bounded_queries(self):
+        user = get_user_model().objects.create_user(
+            username="bounded-detail-queries"
+        )
+        parent = self.create_run(user)
+        parent.run_mode = "workflow"
+        parent.save(update_fields=["run_mode"])
+        for index, stage in enumerate(
+            ("Data_Gen", "ePolyScat_Run", "Analysis"),
+            start=1,
+        ):
+            child = models.Run.objects.create(
+                name=f"workflow-step-{index}",
+                owner=user,
+                root=parent.root,
+                number=f"0001-{index}",
+                experiment=parent.experiment,
+                run_mode="workflow",
+                workflow_stage=stage,
+                parent_run=parent,
+                workflow_step_order=index,
+            )
+            input_instance = models.Input.objects.create(
+                run=child,
+                type="files",
+                name="Input_File",
+            )
+            models.File.objects.create(
+                input=input_instance,
+                name=f"input-{index}.inp",
+                data_product_uri=f"airavata-dp://detail-input-{index}",
+            )
+            models.RemoteExecution.objects.create(
+                run=child,
+                airavata_experiment_id=f"detail-experiment-{index}",
+                airavata_experiment_status="COMPLETED",
+            )
+
+        request = SimpleNamespace(
+            user=user,
+            query_params={},
+        )
+        viewset = views.RunViewSet()
+        viewset.request = request
+        viewset.action = "retrieve"
+
+        with CaptureQueriesContext(connection) as captured:
+            run = viewset.get_queryset().get(pk=parent.pk)
+            data = serializers.RunSerializer(
+                run,
+                context={
+                    "request": request,
+                    "refresh_remote_status": False,
+                    "tutorial_view_id": None,
+                },
+            ).data
+
+        self.assertEqual(data["id"], parent.pk)
+        self.assertLessEqual(len(captured), 10)
+
+    def test_run_status_refreshes_remote_experiment_once(self):
+        user = get_user_model().objects.create_user(
+            username="single-status-refresh"
+        )
+        run = self.create_run(user)
+        models.RemoteExecution.objects.create(
+            run=run,
+            airavata_experiment_id="single-status-experiment",
+            airavata_experiment_status="EXECUTING",
+        )
+        request = SimpleNamespace(user=user)
+        client = self.attach_airavata_client(
+            request,
+            getExperimentStatus=mock.Mock(
+                return_value=SimpleNamespace(
+                    state=models.ExperimentState.EXECUTING,
+                )
+            ),
+        )
+
+        status = serializers.RunSerializer(
+            context={"request": request}
+        ).get_status(run)
+
+        self.assertEqual(status, "EXECUTING")
+        client.getExperimentStatus.assert_called_once_with(
+            request.authz_token,
+            "single-status-experiment"
+        )
+
+    def test_view_list_summary_does_not_serialize_nested_runs(self):
+        user = get_user_model().objects.create_user(
+            username="view-list-summary"
+        )
+        run = self.create_run(user)
+        view = models.View.objects.create(
+            name="Selected",
+            owner=user,
+            type="user-defined",
+        )
+        view.runs.add(run)
+        request = RequestFactory().get("/epolyscat_django_app/api/views/")
+        request.user = user
+
+        with mock.patch(
+            "epolyscat_django_app.serializers.RunSerializer"
+        ) as run_serializer:
+            data = serializers.ViewSerializer(
+                view,
+                context={
+                    "request": request,
+                    "include_runs": False,
+                },
+            ).data
+
+        self.assertEqual(data["runs"], [])
+        self.assertEqual(data["run_count"], 1)
+        run_serializer.assert_not_called()
+
+    def test_view_detail_serializes_nested_runs_only_once(self):
+        user = get_user_model().objects.create_user(
+            username="view-detail-runs-once"
+        )
+        run = self.create_run(user)
+        view = models.View.objects.create(
+            name="Selected",
+            owner=user,
+            type="user-defined",
+        )
+        view.runs.add(run)
+        request = RequestFactory().get(
+            f"/epolyscat_django_app/api/views/{view.pk}/"
+        )
+        request.user = user
+
+        with mock.patch(
+            "epolyscat_django_app.serializers.RunSerializer"
+        ) as run_serializer:
+            run_serializer.return_value.data = [{"id": run.pk}]
+            data = serializers.ViewSerializer(
+                view,
+                context={
+                    "request": request,
+                    "include_runs": True,
+                },
+            ).data
+
+        self.assertEqual(data["runs"], [{"id": run.pk}])
+        self.assertEqual(data["run_count"], 1)
+        self.assertEqual(run_serializer.call_count, 1)
 
     @mock.patch("epolyscat_django_app.views.user_storage.delete")
     def test_update_single_file_input_replaces_stale_file(self, mock_delete):
@@ -577,16 +879,14 @@ class RunViewSetBackendTests(TestCase):
             "uploaded": {"productUri": "airavata-dp://saved"}
         }
         request = RequestFactory().post("/epolyscat_django_app/api/runs/")
-        request.airavata = SimpleNamespace(
-            research=SimpleNamespace(
-                get_data_product=mock.Mock(
-                    return_value=SimpleNamespace(
-                        product_uri="airavata-dp://saved"
-                    )
+        client = self.attach_airavata_client(
+            request,
+            getDataProduct=mock.Mock(
+                return_value=SimpleNamespace(
+                    productUri="airavata-dp://saved"
                 )
             )
         )
-        request.authz_token = object()
         run = models.Run(name="run", directory="EPOLYSCAT_Runs/Run_1")
 
         views._save_run_user_file(
@@ -600,6 +900,10 @@ class RunViewSetBackendTests(TestCase):
         _, kwargs = mock_call.call_args
         self.assertNotIn("data", kwargs)
         self.assertEqual(kwargs["path_params"], {"path": "EPOLYSCAT_Runs/Run_1"})
+        client.getDataProduct.assert_called_once_with(
+            request.authz_token,
+            "airavata-dp://saved",
+        )
 
     def test_save_file_rejects_storage_file_without_data_product_uri(self):
         user = get_user_model().objects.create_user(
@@ -698,46 +1002,6 @@ class RunViewSetBackendTests(TestCase):
 
         self.assertEqual(result, [newer_workflow, older_run])
 
-    def test_run_and_view_lists_accept_gateway_user_objects(self):
-        user = get_user_model().objects.create_user(
-            username="gateway-user@example.com",
-            password="password",
-        )
-        gateway_user = SimpleNamespace(
-            username=user.username,
-            email=user.email,
-            first_name="",
-            last_name="",
-        )
-        run = models.Run.objects.create(
-            name="gateway run",
-            owner=user,
-            run_mode="module",
-            module_application="ePolyScat",
-        )
-        view = models.View.objects.create(
-            name="Gateway View",
-            owner=user,
-            type="default",
-        )
-
-        runs_request = RequestFactory().get("/epolyscat_django_app/api/runs/")
-        runs_request.user = gateway_user
-        runs_request.query_params = runs_request.GET
-        runs_viewset = views.RunViewSet()
-        runs_viewset.request = runs_request
-        runs_viewset.action = "list"
-
-        views_request = RequestFactory().get("/epolyscat_django_app/api/views/")
-        views_request.user = gateway_user
-        views_request.query_params = views_request.GET
-        views_viewset = views.ViewsViewSet()
-        views_viewset.request = views_request
-        views_viewset.action = "list"
-
-        self.assertIn(run, runs_viewset.get_queryset())
-        self.assertIn(view, views_viewset.get_queryset())
-
     def test_show_viewable_route_allows_dotted_file_names(self):
         action = next(
             action
@@ -746,6 +1010,45 @@ class RunViewSetBackendTests(TestCase):
         )
 
         self.assertEqual(action.url_path, r"viewables/(?P<filename>[^/]+)")
+
+    @mock.patch("epolyscat_django_app.views.open_run_file")
+    @mock.patch("epolyscat_django_app.views.user_storage.open_file")
+    def test_show_viewable_opens_listed_output_data_product_directly(
+        self,
+        mock_open_file,
+        mock_open_run_file,
+    ):
+        user = get_user_model().objects.create_user(username="output-viewer")
+        request = RequestFactory().get(
+            "/epolyscat_django_app/api/runs/1/viewables/ePolyScat.stderr/"
+        )
+        request.user = user
+        run = self.create_run(user)
+        viewset = views.RunViewSet()
+        viewset.get_object = mock.Mock(return_value=run)
+        viewset._output_files_for_run = mock.Mock(
+            return_value=[
+                {
+                    "name": "ePolyScat.stderr",
+                    "data-product-uri": "airavata-dp://stderr",
+                }
+            ]
+        )
+        mock_open_file.return_value = BytesIO(b"remote stderr")
+        mock_open_run_file.return_value = BytesIO(b"legacy lookup")
+
+        result = viewset.show_viewable(
+            request,
+            pk=run.id,
+            filename="ePolyScat.stderr",
+        )
+
+        self.assertEqual(b"".join(result.streaming_content), b"remote stderr")
+        mock_open_file.assert_called_once_with(
+            request,
+            data_product_uri="airavata-dp://stderr",
+        )
+        mock_open_run_file.assert_not_called()
 
     @mock.patch("epolyscat_django_app.views.user_storage.open_file")
     @mock.patch("epolyscat_django_app.views.user_run_file_exists")
@@ -788,7 +1091,11 @@ class RunViewSetBackendTests(TestCase):
         )
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_create_remote_execution_includes_total_physical_memory(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_create_remote_execution_includes_total_physical_memory(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(
             username="user@example.com",
             password="password",
@@ -796,24 +1103,7 @@ class RunViewSetBackendTests(TestCase):
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
         request.authz_token = object()
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=[],
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
-        )
-        request.airavata = SimpleNamespace(
-            research=research,
-            compute=SimpleNamespace(
-                get_compute_resource=mock.Mock(
-                    return_value=SimpleNamespace(host_name="cluster")
-                )
-            ),
-        )
+        client = self.attach_execution_client(request)
         run = self.create_run(user)
         run.experiment.airavata_project_id = "project-id"
         run.experiment.save()
@@ -834,15 +1124,17 @@ class RunViewSetBackendTests(TestCase):
             is_tutorial=False,
         )
 
-        experiment_model = research.create_experiment.call_args.args[1]
+        experiment_model = client.createExperiment.call_args.args[2]
         scheduling = experiment_model.userConfigurationData.computationalResourceScheduling
         self.assertEqual(scheduling.totalPhysicalMemory, 4096)
-        research.launch_experiment.assert_called_once_with(
-            "experiment-id", "test-gateway"
-        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_gaussian_module_adds_staged_input_to_command_line(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_gaussian_module_adds_staged_input_to_command_line(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="gaussian-module")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
@@ -870,23 +1162,9 @@ class RunViewSetBackendTests(TestCase):
                 requiredToAddedToCommandLine=False,
             ),
         ]
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=application_inputs,
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
-        )
-        request.airavata = SimpleNamespace(
-            research=research,
-            compute=SimpleNamespace(
-                get_compute_resource=mock.Mock(
-                    return_value=SimpleNamespace(host_name="cluster")
-                )
-            ),
+        client = self.attach_execution_client(
+            request,
+            application_inputs=application_inputs,
         )
         run = self.create_run(user)
         run.run_mode = "module"
@@ -909,18 +1187,20 @@ class RunViewSetBackendTests(TestCase):
             is_tutorial=False,
         )
 
-        experiment = research.create_experiment.call_args.args[1]
+        experiment = client.createExperiment.call_args.args[2]
         gaussian_input = next(
             inp for inp in experiment.experimentInputs
             if inp.name == "Gaussian_Inputs"
         )
         self.assertTrue(gaussian_input.requiredToAddedToCommandLine)
-        research.launch_experiment.assert_called_once_with(
-            "experiment-id", "test-gateway"
-        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_gaussian_workflow_adds_application_and_input_to_command_line(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_gaussian_workflow_adds_application_and_input_to_command_line(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="gaussian-workflow")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
@@ -955,23 +1235,9 @@ class RunViewSetBackendTests(TestCase):
                 requiredToAddedToCommandLine=False,
             ),
         ]
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=application_inputs,
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
-        )
-        request.airavata = SimpleNamespace(
-            research=research,
-            compute=SimpleNamespace(
-                get_compute_resource=mock.Mock(
-                    return_value=SimpleNamespace(host_name="cluster")
-                )
-            ),
+        client = self.attach_execution_client(
+            request,
+            application_inputs=application_inputs,
         )
         run = self.create_run(user)
         run.run_mode = "workflow"
@@ -996,19 +1262,21 @@ class RunViewSetBackendTests(TestCase):
             is_tutorial=False,
         )
 
-        experiment = research.create_experiment.call_args.args[1]
+        experiment = client.createExperiment.call_args.args[2]
         command_line_flags = {
             inp.name: inp.requiredToAddedToCommandLine
             for inp in experiment.experimentInputs
         }
         self.assertTrue(command_line_flags["Data_Gen"])
         self.assertTrue(command_line_flags["Gaussian_Inputs"])
-        research.launch_experiment.assert_called_once_with(
-            "experiment-id", "test-gateway"
-        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_utility_specific_data_uses_registered_generic_interface_input(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_utility_specific_data_uses_registered_generic_interface_input(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="utility-interface")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
@@ -1028,23 +1296,10 @@ class RunViewSetBackendTests(TestCase):
                 ("ePolyScat_Input_Data", 3),
             )
         ]
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=application_inputs,
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
-        )
-        request.airavata = SimpleNamespace(
-            research=research,
-            compute=SimpleNamespace(
-                get_compute_resource=mock.Mock(
-                    return_value=SimpleNamespace(host_name="expanse")
-                )
-            ),
+        client = self.attach_execution_client(
+            request,
+            application_inputs=application_inputs,
+            host_name="expanse",
         )
         run = self.create_run(user)
         run.run_mode = "utility"
@@ -1075,7 +1330,7 @@ class RunViewSetBackendTests(TestCase):
             ),
         )
 
-        experiment = research.create_experiment.call_args.args[1]
+        experiment = client.createExperiment.call_args.args[2]
         command_line_flags = {
             inp.name: inp.requiredToAddedToCommandLine
             for inp in experiment.experimentInputs
@@ -1089,12 +1344,14 @@ class RunViewSetBackendTests(TestCase):
                 "ePolyScat_Input_Data": True,
             },
         )
-        research.launch_experiment.assert_called_once_with(
-            "experiment-id", "test-gateway"
-        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_single_uri_input_rejects_multiple_data_products_before_creation(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_single_uri_input_rejects_multiple_data_products_before_creation(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="single-uri-validation")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
@@ -1108,17 +1365,10 @@ class RunViewSetBackendTests(TestCase):
                 requiredToAddedToCommandLine=True,
             ),
         ]
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=application_inputs,
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
+        client = self.attach_execution_client(
+            request,
+            application_inputs=application_inputs,
         )
-        request.airavata = SimpleNamespace(research=research)
         run = self.create_run(user)
         run.experiment.airavata_project_id = "project-id"
         run.experiment.save()
@@ -1143,35 +1393,29 @@ class RunViewSetBackendTests(TestCase):
                 is_tutorial=False,
             )
 
-        research.create_experiment.assert_not_called()
-        research.launch_experiment.assert_not_called()
+        client.createExperiment.assert_not_called()
+        mock_launch.assert_not_called()
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_launch_failure_keeps_created_experiment_in_local_execution_history(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_launch_failure_keeps_created_experiment_in_local_execution_history(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="launch-bookkeeping")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
         request.authz_token = object()
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=[],
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(
-                return_value="created-before-launch-error"
-            ),
-            launch_experiment=mock.Mock(
-                side_effect=RuntimeError("launch failed")
-            ),
+        self.attach_execution_client(
+            request,
+            experiment_id="created-before-launch-error",
         )
-        request.airavata = SimpleNamespace(research=research)
         run = self.create_run(user)
         run.experiment.airavata_project_id = "project-id"
         run.experiment.save()
         run.group_resource_profile_id = "group-id"
         run.compute_resource_id = "compute-id"
+        mock_launch.side_effect = RuntimeError("launch failed")
 
         with self.assertRaisesRegex(RuntimeError, "launch failed"):
             views.RunViewSet()._create_remote_execution(
@@ -1188,13 +1432,17 @@ class RunViewSetBackendTests(TestCase):
             execution.airavata_experiment_id,
             "created-before-launch-error",
         )
-        research.launch_experiment.assert_called_once_with(
+        mock_launch.assert_called_once_with(
+            request,
             "created-before-launch-error",
-            "test-gateway",
         )
 
     @override_settings(GATEWAY_ID="test-gateway")
-    def test_direct_epolyscat_deployment_only_passes_command_input_file(self):
+    @mock.patch("epolyscat_django_app.views.experiment_util.launch")
+    def test_direct_epolyscat_deployment_only_passes_command_input_file(
+        self,
+        mock_launch,
+    ):
         user = get_user_model().objects.create_user(username="direct-epolyscat")
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
@@ -1229,23 +1477,10 @@ class RunViewSetBackendTests(TestCase):
                 requiredToAddedToCommandLine=True,
             ),
         ]
-        research = SimpleNamespace(
-            get_application_interface=mock.Mock(
-                return_value=SimpleNamespace(
-                    application_inputs=application_inputs,
-                    application_outputs=[],
-                )
-            ),
-            create_experiment=mock.Mock(return_value="experiment-id"),
-            launch_experiment=mock.Mock(),
-        )
-        request.airavata = SimpleNamespace(
-            research=research,
-            compute=SimpleNamespace(
-                get_compute_resource=mock.Mock(
-                    return_value=SimpleNamespace(host_name="frontera")
-                )
-            ),
+        client = self.attach_execution_client(
+            request,
+            application_inputs=application_inputs,
+            host_name="frontera",
         )
         run = self.create_run(user)
         run.run_mode = "module"
@@ -1271,7 +1506,7 @@ class RunViewSetBackendTests(TestCase):
             deployment_executable_path="/opt/epolyscat/bin/ePolyScat",
         )
 
-        experiment = research.create_experiment.call_args.args[1]
+        experiment = client.createExperiment.call_args.args[2]
         command_line_flags = {
             inp.name: inp.requiredToAddedToCommandLine
             for inp in experiment.experimentInputs
@@ -1285,9 +1520,7 @@ class RunViewSetBackendTests(TestCase):
                 "ePolyscat_Input_File": True,
             },
         )
-        research.launch_experiment.assert_called_once_with(
-            "experiment-id", "test-gateway"
-        )
+        mock_launch.assert_called_once_with(request, "experiment-id")
 
     @override_settings(
         GATEWAY_ID="test-gateway",
@@ -1307,21 +1540,20 @@ class RunViewSetBackendTests(TestCase):
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
         request.authz_token = object()
-        request.airavata = SimpleNamespace(
-            research=SimpleNamespace(
-                get_all_application_interfaces=mock.Mock(
+        self.attach_airavata_client(
+            request,
+            getAllApplicationInterfaces=mock.Mock(
                 return_value=[
                     SimpleNamespace(
-                        application_interface_id="epolyscat-interface",
-                        application_modules=["epolyscat-module"],
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
                     ),
                     SimpleNamespace(
-                        application_interface_id="gaussian-interface",
-                        application_modules=["gaussian-module"],
+                        applicationInterfaceId="gaussian-interface",
+                        applicationModules=["gaussian-module"],
                     ),
                 ]
-                )
-            )
+            ),
         )
         mock_open_file.return_value = StringIO("gaussian input")
         mock_save_input_file.return_value = SimpleNamespace(
@@ -1397,21 +1629,20 @@ class RunViewSetBackendTests(TestCase):
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
         request.authz_token = object()
-        request.airavata = SimpleNamespace(
-            research=SimpleNamespace(
-                get_all_application_interfaces=mock.Mock(
+        self.attach_airavata_client(
+            request,
+            getAllApplicationInterfaces=mock.Mock(
                 return_value=[
                     SimpleNamespace(
-                        application_interface_id="epolyscat-interface",
-                        application_modules=["epolyscat-module"],
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
                     ),
                     SimpleNamespace(
-                        application_interface_id="openmolcas-interface",
-                        application_modules=["openmolcas-module"],
+                        applicationInterfaceId="openmolcas-interface",
+                        applicationModules=["openmolcas-module"],
                     ),
                 ]
-                )
-            )
+            ),
         )
         mock_open_file.return_value = StringIO("openmolcas input")
         mock_save_input_file.return_value = SimpleNamespace(
@@ -1463,25 +1694,24 @@ class RunViewSetBackendTests(TestCase):
         request = RequestFactory().post("/epolyscat_django_app/api/runs/1/submit/")
         request.user = user
         request.authz_token = object()
-        request.airavata = SimpleNamespace(
-            research=SimpleNamespace(
-                get_all_application_interfaces=mock.Mock(
+        self.attach_airavata_client(
+            request,
+            getAllApplicationInterfaces=mock.Mock(
                 return_value=[
                     SimpleNamespace(
-                        application_interface_id="epolyscat-interface",
-                        application_modules=["epolyscat-module"],
+                        applicationInterfaceId="epolyscat-interface",
+                        applicationModules=["epolyscat-module"],
                     ),
                 ]
-                ),
-                get_all_application_deployments=mock.Mock(
+            ),
+            getAllApplicationDeployments=mock.Mock(
                 return_value=[
                     SimpleNamespace(
-                        app_module_id="epolyscat-module",
-                        compute_host_id="frontera",
-                        executable_path="/opt/epolyscat/bin/ePolyScat",
+                        appModuleId="epolyscat-module",
+                        computeHostId="frontera",
+                        executablePath="/opt/epolyscat/bin/ePolyScat",
                     ),
                 ]
-                ),
             ),
         )
         mock_open_file.return_value = StringIO("input")
@@ -1953,12 +2183,12 @@ class RunViewSetBackendTests(TestCase):
         )
         request.user = get_user_model().objects.create_user(username="audit-user")
         request.authz_token = "token"
-        research = SimpleNamespace(
-            get_all_app_modules=mock.Mock(return_value=[]),
-            get_all_application_interfaces=mock.Mock(return_value=[]),
-            get_all_application_deployments=mock.Mock(return_value=[]),
+        client = self.attach_airavata_client(
+            request,
+            getAllAppModules=mock.Mock(return_value=[]),
+            getAllApplicationInterfaces=mock.Mock(return_value=[]),
+            getAllApplicationDeployments=mock.Mock(return_value=[]),
         )
-        request.airavata = SimpleNamespace(research=research)
         viewset = views.RunViewSet()
         viewset.request = request
 
@@ -1976,7 +2206,10 @@ class RunViewSetBackendTests(TestCase):
                 "Cube2igor",
             ],
         )
-        research.get_all_app_modules.assert_called_once_with("gateway")
+        client.getAllAppModules.assert_called_once_with(
+            request.authz_token,
+            "gateway",
+        )
 
     def test_submit_normalizes_workflow_data_generation_inputs_for_airavata(self):
         user = get_user_model().objects.create_user(

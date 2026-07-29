@@ -76,32 +76,25 @@ def resolve_command_line_policy(
     *, executable_path, input_values, forced_input_names=None
 ):
     forced_input_names = set(forced_input_names or ())
+    mode, utility_id = _utility_run_details(input_values)
     if _is_controller_entrypoint(executable_path):
+        if utility_id:
+            return _utility_wrapper_policy(
+                mode=mode,
+                utility_id=utility_id,
+                input_values=input_values,
+            )
         return {
             "exclusive": False,
             "input_names": forced_input_names,
         }
 
-    mode, utility_id = _utility_run_details(input_values)
     if utility_id and _is_portal_wrapper_entrypoint(executable_path):
-        utility_runtime_contracts.validate_utility_input_values(
-            utility_id,
-            input_values,
+        return _utility_wrapper_policy(
+            mode=mode,
+            utility_id=utility_id,
+            input_values=input_values,
         )
-        utility_input_order = utility_runtime_contracts.resolve_utility_argument_input_order(
-            utility_id,
-            input_values,
-        )
-        selector_order = ["Calculation_Type"]
-        if mode == "WORKFLOW":
-            selector_order.append("Application_Workflow")
-        selector_order.append("Application_Utility")
-        ordered_input_names = tuple(selector_order) + utility_input_order
-        return {
-            "exclusive": True,
-            "input_names": set(ordered_input_names),
-            "ordered_input_names": ordered_input_names,
-        }
 
     if mode == "UTILITY":
         raise ValueError(
@@ -124,6 +117,29 @@ def resolve_command_line_policy(
     return {
         "exclusive": True,
         "input_names": command_inputs,
+    }
+
+
+def _utility_wrapper_policy(*, mode, utility_id, input_values):
+    utility_runtime_contracts.validate_utility_input_values(
+        utility_id,
+        input_values,
+    )
+    utility_input_order = (
+        utility_runtime_contracts.resolve_utility_argument_input_order(
+            utility_id,
+            input_values,
+        )
+    )
+    selector_order = ["Calculation_Type"]
+    if mode == "WORKFLOW":
+        selector_order.append("Application_Workflow")
+    selector_order.append("Application_Utility")
+    ordered_input_names = tuple(selector_order) + utility_input_order
+    return {
+        "exclusive": True,
+        "input_names": set(ordered_input_names),
+        "ordered_input_names": ordered_input_names,
     }
 
 

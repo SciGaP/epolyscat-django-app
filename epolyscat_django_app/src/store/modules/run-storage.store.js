@@ -3,6 +3,8 @@ import { RunService, InputService } from "@/service/epolyscat-service";
 
 const OUTPUTS = ["bound_tab", "H.DAT", "KMAT", "TMAT", "KMAT_keep", "TMAT_keep", "tr_nnn_nnn"];
 
+let pendingRunsRequest = null;
+
 const state = {
     //runListMap: {},
     //runListPaginationMap: {},
@@ -12,13 +14,29 @@ const state = {
 }
 
 const actions = {
-    async fetchRuns({commit}) {
-        const data = await RunService.fetchRuns();
-        const runs = data.results;
+    fetchRuns({commit}) {
+        if (pendingRunsRequest)
+            return pendingRunsRequest;
 
-        commit("SET_RUN_MAP", { runs });
+        const request = RunService.fetchRuns()
+            .then(data => {
+                const runs = data.results;
+                commit("SET_RUN_MAP", { runs });
+                return runs;
+            });
 
-        return runs;
+        pendingRunsRequest = request.then(
+            runs => {
+                pendingRunsRequest = null;
+                return runs;
+            },
+            error => {
+                pendingRunsRequest = null;
+                throw error;
+            }
+        );
+
+        return pendingRunsRequest;
     },
 
     /*

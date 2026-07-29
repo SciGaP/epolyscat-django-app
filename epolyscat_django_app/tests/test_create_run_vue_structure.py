@@ -72,6 +72,20 @@ INPUT_SCRIPT = (
     / "epolyscat-input-script.js"
 )
 FRONTEND_STORE = Path(__file__).resolve().parents[1] / "src" / "store" / "index.js"
+RUN_STORE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "store"
+    / "modules"
+    / "run-storage.store.js"
+)
+VIEW_STORE = (
+    Path(__file__).resolve().parents[1]
+    / "src"
+    / "store"
+    / "modules"
+    / "view-storage.store.js"
+)
 
 
 def _source():
@@ -102,6 +116,14 @@ def _input_store_source():
 
 def _frontend_store_source():
     return FRONTEND_STORE.read_text()
+
+
+def _run_store_source():
+    return RUN_STORE.read_text()
+
+
+def _view_store_source():
+    return VIEW_STORE.read_text()
 
 
 def test_frontend_store_registers_experiment_module_used_by_create_run():
@@ -841,7 +863,7 @@ def test_view_run_page_renders_module_and_workflow_read_models():
         "run-code-viewer",
         "plot-panel",
         "RunResource",
-        "fetchRunPresentation",
+        "this.run.presentation",
         "workflow-status-panel",
         "workflowStatusLabel",
         "activeWorkflowStage",
@@ -882,7 +904,6 @@ def test_view_run_fetches_real_file_catalogs_and_selected_file_content():
 
     expected_hooks = [
         "InputService.fetchOutputs",
-        "PlotService.getViewables",
         "PlotService.getInputFiles",
         "RunService.fetchViewableContent",
         "fetchSelectedFileContent",
@@ -903,6 +924,8 @@ def test_view_run_fetches_real_file_catalogs_and_selected_file_content():
             / "epolyscat-service.js"
         ).read_text()
 
+    assert "PlotService.getViewables" not in source
+
 
 def test_view_run_parent_workflow_uses_active_child_for_file_catalog():
     source = _view_run_source()
@@ -912,7 +935,6 @@ def test_view_run_parent_workflow_uses_active_child_for_file_catalog():
         'this.presentation.mode === "workflow"',
         "!this.isWorkflowChildRun",
         "this.activeWorkflowStage.child_run_id",
-        "PlotService.getViewables({ runId: this.fileCatalogRunId })",
         "PlotService.getInputFiles({ runId: this.fileCatalogRunId })",
         "InputService.fetchOutputs(this.fileCatalogRunId)",
         "runId: this.fileCatalogRunId",
@@ -921,6 +943,30 @@ def test_view_run_parent_workflow_uses_active_child_for_file_catalog():
 
     for hook in expected_hooks:
         assert hook in source
+
+
+def test_view_run_reuses_run_presentation_and_output_catalog():
+    source = _view_run_source()
+
+    assert "this.run.presentation" in source
+    assert "RunService.fetchRunPresentation" not in source
+    assert "PlotService.getViewables" not in source
+    assert source.index("await this.loadRunFileCatalog()") < source.index(
+        "await this.loadWorkflowContinuation()"
+    )
+
+
+def test_frontend_stores_coalesce_concurrent_list_requests():
+    run_source = _run_store_source()
+    view_source = _view_store_source()
+
+    assert "let pendingRunsRequest = null" in run_source
+    assert "if (pendingRunsRequest)" in run_source
+    assert "pendingRunsRequest = null" in run_source
+
+    assert "const pendingViewRequests = {}" in view_source
+    assert "pendingViewRequests[queryString]" in view_source
+    assert "delete pendingViewRequests[queryString]" in view_source
 
 
 def test_view_run_pending_workflow_step_links_to_configure_page():

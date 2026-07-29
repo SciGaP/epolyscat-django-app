@@ -4,15 +4,8 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from .airavata_grpc import (
-    ExperimentState,
-    Project,
-    create_model,
-    django_user,
-    experiment_util,
-    model_field,
-    user_storage,
-)
+from airavata.model.workspace.ttypes import Project
+from airavata_django_portal_sdk import user_storage
 from django.apps import apps
 from django.db import transaction
 from django.db.models import Q
@@ -37,9 +30,7 @@ class InputSerializer(serializers.ModelSerializer):
         fields = ['type', 'name', 'value', 'files']
 
     def get_files(self, input_instance):
-        files = models.File.objects.filter(input=input_instance)
-
-        return FileSerializer(files, many=True).data
+        return FileSerializer(input_instance.files.all(), many=True).data
 
 
 class UniqueToUserValidator(validators.UniqueValidator):
@@ -50,7 +41,7 @@ class UniqueToUserValidator(validators.UniqueValidator):
         super().__init__(queryset, message=message, lookup=lookup)
 
     def __call__(self, value, serializer_field):
-        self.user = django_user(serializer_field.context["request"])
+        self.user = serializer_field.context["request"].user
         return super().__call__(value, serializer_field)
 
     def filter_queryset(self, value, queryset, field_name):
@@ -62,7 +53,7 @@ class UniqueToUserValidator(validators.UniqueValidator):
 class ExperimentIdRelatedField(serializers.PrimaryKeyRelatedField):
     def get_queryset(self):
         request = self.context["request"]
-        return models.Experiment.objects.filter(owner=django_user(request), deleted=False)
+        return models.Experiment.objects.filter(owner=request.user, deleted=False)
 
 
 class RunSerializer(serializers.ModelSerializer):
@@ -122,7 +113,8 @@ class RunSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         request = self.context["request"]
 
-        projects = request.airavata.research.get_user_projects(
+        projects = request.airavata_client.getUserProjects(
+            request.authz_token,
             settings.GATEWAY_ID,
             request.user.username,
             -1,
@@ -133,39 +125,36 @@ class RunSerializer(serializers.ModelSerializer):
                 project
                 for project in projects
                 if "EPOLYSCAT_app_project"
-                in model_field(project, "project_id")
+                in project.projectID
             ]
             or [
                 project
                 for project in projects
-                if "Default_Project" in model_field(project, "project_id")
+                if "Default_Project" in project.projectID
             ]
             or [
                 project
                 for project in projects
-                if "Default" in model_field(project, "project_id")
+                if "Default" in project.projectID
             ]
             or [
                 project
                 for project in projects
-                if "default" in model_field(project, "project_id")
+                if "default" in project.projectID
             ]
         )
 
         if len(epolyscat_project_choices) > 0:
-            airavata_project_id = model_field(
-                epolyscat_project_choices[0],
-                "project_id",
-            )
+            airavata_project_id = epolyscat_project_choices[0].projectID
         else:
-            new_project = create_model(
-                Project,
+            new_project = Project(
                 owner=request.user.username,
-                gateway_id=settings.GATEWAY_ID,
+                gatewayId=settings.GATEWAY_ID,
                 name="EPOLYSCAT app project",
             )
 
-            airavata_project_id = request.airavata.research.create_project(
+            airavata_project_id = request.airavata_client.createProject(
+                request.authz_token,
                 settings.GATEWAY_ID,
                 new_project
             )
@@ -319,9 +308,32 @@ class RunSerializer(serializers.ModelSerializer):
             return None
     '''
     def get_inputs(self, run_instance: models.Run):
-        inputs = models.Input.objects.filter(run=run_instance)
+        return InputSerializer(run_instance.inputs.all(), many=True).data
 
-        return InputSerializer(inputs, many=True).data
+    def _refresh_remote_status(self):
+        return self.context.get("refresh_remote_status", True)
+
+    def _workflow_steps(self, run_instance):
+        prefetched = getattr(
+            run_instance,
+            "_prefetched_objects_cache",
+            {},
+        ).get("workflow_steps")
+        if prefetched is not None:
+            return sorted(
+                prefetched,
+                key=lambda run: (
+                    run.workflow_step_order is None,
+                    run.workflow_step_order or 0,
+                    run.pk,
+                ),
+            )
+        return list(
+            run_instance.workflow_steps.order_by(
+                "workflow_step_order",
+                "id",
+            )
+        )
 
     def get_presentation(self, run_instance: models.Run):
         mode = run_instance.run_mode or "module"
@@ -409,9 +421,7 @@ class RunSerializer(serializers.ModelSerializer):
         stages = self._cached_workflow_child_stages(run_instance)
         progress = self._workflow_progress(run_instance, stages)
         remote_stages = [stage for stage in stages if not stage.get("local_only")]
-        child_runs = list(
-            run_instance.workflow_steps.order_by("workflow_step_order", "id")
-        )
+        child_runs = self._workflow_steps(run_instance)
 
         if remote_stages and all(
             self._workflow_stage_is_complete(stage) for stage in remote_stages
@@ -476,7 +486,11 @@ class RunSerializer(serializers.ModelSerializer):
 
     def _run_file_names(self, run_instance: models.Run, input_type):
         names = []
-        inputs = models.Input.objects.filter(run=run_instance, type=input_type)
+        inputs = [
+            input_instance
+            for input_instance in run_instance.inputs.all()
+            if input_instance.type == input_type
+        ]
         for input_instance in inputs:
             names.extend(file.name for file in input_instance.files.all())
         return names
@@ -490,7 +504,7 @@ class RunSerializer(serializers.ModelSerializer):
         if run_instance.run_mode != "workflow" or run_instance.parent_run_id is not None:
             return run_instance
 
-        children = list(run_instance.workflow_steps.order_by("workflow_step_order", "id"))
+        children = self._workflow_steps(run_instance)
         if not children:
             return run_instance
 
@@ -746,7 +760,7 @@ class RunSerializer(serializers.ModelSerializer):
         if run_instance.parent_run_id is not None:
             return self._workflow_child_stages(run_instance.parent_run)
 
-        child_runs = list(run_instance.workflow_steps.order_by("workflow_step_order", "id"))
+        child_runs = self._workflow_steps(run_instance)
         if not child_runs:
             return []
 
@@ -915,6 +929,8 @@ class RunSerializer(serializers.ModelSerializer):
         return child_run.workflow_step_status or "pending"
 
     def _workflow_child_report(self, child_run):
+        if not self._refresh_remote_status():
+            return None
         request = self.context.get("request")
         if not request or not child_run.executions.exists():
             return None
@@ -1010,10 +1026,20 @@ class RunSerializer(serializers.ModelSerializer):
 
     def get_is_tutorial(self, run_instance: models.Run):
         request = self.context["request"]
-            
+        if "tutorial_view_id" in self.context:
+            tutorial_view_id = self.context["tutorial_view_id"]
+            return bool(
+                tutorial_view_id
+                and any(
+                    view.pk == tutorial_view_id
+                    for view in run_instance.views.all()
+                )
+            )
+
         tutorial_view = models.View.tutorial_view()
-            
-        return tutorial_view in run_instance.views.all() and django_user(request) != tutorial_view.owner
+        if tutorial_view is None:
+            return False
+        return tutorial_view in run_instance.views.all() and request.user != tutorial_view.owner
             
 #    def get_status(self, instance: models.Run):
 #        request = self.context["request"]
@@ -1037,29 +1063,13 @@ class RunSerializer(serializers.ModelSerializer):
             return workflow_summary["status"]
 
         request = self.context["request"]
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return "UNSUBMITTED"
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
-            # If not finished, try to get application specific status
-            if not latest_execution.is_airavata_experiment_finished(request):
-                # experiment: ExperimentModel = request.airavata_client.getExperiment(
-                #     request.authz_token, latest_execution.airavata_experiment_id
-                # )
+        if not self._refresh_remote_status():
+            return latest_execution.airavata_experiment_status
 
-                # application_status = experiment_util.intermediate_output.get_intermediate_output_process_status(
-                #     request, experiment, "bsr_prep.log"
-                # )
-
-                application_status = request.airavata.research.get_experiment_status(
-                    latest_execution.airavata_experiment_id
-                )
-
-                if application_status is not None:
-                    return ExperimentState(application_status.state).name
-
-            return latest_execution.get_airavata_experiment_status(request)
+        return latest_execution.get_airavata_experiment_status(request)
 
 
 
@@ -1069,60 +1079,51 @@ class RunSerializer(serializers.ModelSerializer):
             return workflow_summary["job_status"]
 
         request = self.context["request"]
-            
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return "UNSUBMITTED"
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
+        if not self._refresh_remote_status():
+            return latest_execution.airavata_experiment_status
 
-            try:
-                job_status_response = request.airavata.research.get_job_statuses(
-                    latest_execution.airavata_experiment_id
+        try:
+            job_statuses = request.airavata_client.getJobStatuses(
+                request.authz_token,
+                latest_execution.airavata_experiment_id
+            )
+            job_statuses_list = list(job_statuses.values())
+
+            if len(job_statuses_list) > 0:
+                # gets the most recent status
+                job_statuses_list.sort(
+                    key=lambda status: status.timeOfStateChange,
+                    reverse=True,
                 )
-                job_statuses = model_field(
-                    job_status_response,
-                    "job_statuses",
+                state = job_statuses_list[0].jobState
+
+                status = "SUBMITTED"    if state == 0 else (
+                    "QUEUED"            if state == 1 else
+                    "ACTIVE"            if state == 2 else
+                    "COMPLETED"         if state == 3 else
+                    "CANCELED"          if state == 4 else
+                    "FAILED"            if state == 5 else
+                    "SUSPENDED"         if state == 6 else
+                    "UNKNOWN"           if state == 7 else
+                    "NON_CRITICAL_FAIL"     if state == 8 else "UNKNOWN_"
                 )
-                job_statuses_list = list(job_statuses.values())
-            
-                if len(job_statuses_list) > 0:
-                    # gets the most recent status
-                    job_statuses_list.sort(
-                        key=lambda status: model_field(
-                            status,
-                            "time_of_state_change",
-                        ),
-                        reverse=True,
-                    )
-                    state = model_field(job_statuses_list[0], "job_state")
 
-                    status = "SUBMITTED"    if state == 0 else (
-                        "QUEUED"            if state == 1 else
-                        "ACTIVE"            if state == 2 else
-                        "COMPLETED"         if state == 3 else
-                        "CANCELED"          if state == 4 else
-                        "FAILED"            if state == 5 else
-                        "SUSPENDED"         if state == 6 else
-                        "UNKNOWN"           if state == 7 else
-                        "NON_CRITICAL_FAIL"     if state == 8 else "UNKNOWN_"
-                    )
-
-                    return status
-                else:
-                    return "NO STATUS"
-            except:
-                return "---"
+                return status
+            return "NO STATUS"
+        except Exception:
+            return "---"
 
     def get_job_id(self, run_instance: models.Run):
         request = self.context["request"]
-
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return None
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
-            return latest_execution.get_job_id(request)
+        if not self._refresh_remote_status():
+            return latest_execution.job_id
+        return latest_execution.get_job_id(request)
 
 
 
@@ -1131,13 +1132,10 @@ class RunSerializer(serializers.ModelSerializer):
         if workflow_summary is not None:
             return workflow_summary["resource"]
 
-        request = self.context["request"]
-        if not instance.executions.exists():
+        latest_execution = instance.latest_execution
+        if latest_execution is None:
             return ""
-        else:
-            # get the last execution and return it's status
-            latest_execution = instance.latest_execution
-            return latest_execution.resource_name
+        return latest_execution.resource_name
 
     def get_resource_short(self, instance):
         request = self.context["request"]
@@ -1256,7 +1254,7 @@ class ExperimentSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         experiment = models.Experiment.objects.create(
             **validated_data,
-            owner=django_user(request),
+            owner=request.user,
         )
         try:
             experiment.create_airavata_project(request)
@@ -1326,7 +1324,7 @@ class PlotParametersSerializer(serializers.ModelSerializer):
         request = self.context["request"]
         plot_parameters, created = models.PlotParameters.objects.get_or_create(
             **validated_data,
-            owner=django_user(request),
+            owner=request.user,
         )
         return plot_parameters
 
@@ -1388,21 +1386,38 @@ class ViewSerializer(serializers.ModelSerializer):
         #read_only_fields = ("owner", "created", "updated", "deleted", "type")
 
     def get_runs(self, view_instance: models.View):
-        runs = filter(
-            lambda run: any(map(lambda view: view==view_instance,run.views.all())),
-            models.Run.objects.all()
-        )
-
-        return RunSerializer(runs, many=True, context={'request': self.context['request']}).data
+        if not self.context.get("include_runs", True):
+            return []
+        return RunSerializer(
+            view_instance.runs.all(),
+            many=True,
+            context=self.context,
+        ).data
 
     def get_run_count(self, view_instance: models.View):
-        return len(self.get_runs(view_instance))
+        annotated_count = getattr(
+            view_instance,
+            "serialized_run_count",
+            None,
+        )
+        if annotated_count is not None:
+            return annotated_count
+        return view_instance.runs.count()
 
 #//    def get_run_count(self, obj):
 #//        return obj.runs.exclude(experiment__owner=None).count()
 
     def get_active_run_count(self, obj):
-        return obj.runs.exclude(experiment__owner=None).filter(Q(deleted=False)).count()
+        annotated_count = getattr(
+            obj,
+            "serialized_active_run_count",
+            None,
+        )
+        if annotated_count is not None:
+            return annotated_count
+        return obj.runs.exclude(experiment__owner=None).filter(
+            Q(deleted=False)
+        ).count()
 
     @transaction.atomic
     def create(self, validated_data):
@@ -1410,7 +1425,7 @@ class ViewSerializer(serializers.ModelSerializer):
         view = models.View.objects.create(
             **validated_data,
             type="user-defined",
-            owner=django_user(request),
+            owner=request.user,
         )
         view.save()
         return view

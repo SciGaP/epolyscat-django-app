@@ -1,0 +1,12 @@
+load "@molden_file" FILTER "NOSORT";
+set antialiasDisplay true;
+background white;
+select all;
+wireframe 0.12;
+spacefill 20%;
+@rotate
+mo HOMO;
+write PNG "@output_dir/orbital_homo@dir.png";
+mo LUMO;
+write PNG "@output_dir/orbital_lumo@dir.png";
+exit;

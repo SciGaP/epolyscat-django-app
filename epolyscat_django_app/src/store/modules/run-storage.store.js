@@ -12,8 +12,10 @@ const state = {
 }
 
 const actions = {
-    async fetchRuns({commit}) {
-        const data = await RunService.fetchRuns();
+    async fetchRuns({commit}, {experimentId = null} = {}) {
+        const data = experimentId
+            ? await RunService.fetchAllRuns({ experimentId })
+            : await RunService.fetchRuns();
         const runs = data.results;
 
         commit("SET_RUN_MAP", { runs });
@@ -239,13 +241,13 @@ const actions = {
     },
     async createRun({dispatch, commit, rootGetters}, {
         name, groupResourceProfileId, computeResourceId, coreCount,
-        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, viewIds, description
+        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, viewIds, description, experimentId
     }) {
         const inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: true });
 
         const data = await RunService.createRun({
             name, inputs, groupResourceProfileId, computeResourceId,
-            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description
+            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description, experimentId
         }, false);
 
         await dispatch("view/insertIntoViews", { viewIds, run: data }, { root: true });

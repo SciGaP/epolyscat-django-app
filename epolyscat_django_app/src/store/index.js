@@ -22,12 +22,8 @@ export default new Vuex.Store({
         "input": InputStore,
         "settings": SettingsStore,
         "loading": LoadingStore,
-        "plotParameters": PlotParameters
-
-        //"experiment": experimentStore,
-        //"run": runStore,
-        //"view": viewStore,
-        //settings: settingsStore,
+        "plotParameters": PlotParameters,
+        "experiment": experimentStore
     },
     strict: debug,
     plugins: debug ? [createLogger()]: [],

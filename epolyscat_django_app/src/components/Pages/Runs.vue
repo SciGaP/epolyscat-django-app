@@ -77,7 +77,6 @@
                   {{ experiment.description }}
                 </div>
               </div>
-              <b-badge v-if="!!experiment">{{ experiment.status }}</b-badge>
             </div>
             <div class="pl-3" v-if="!view || !view.readonly">
                  <div v-show="!isTutorials && numberOfRunsSelected >= 1" class="mx-1" style="width: 0.1px; height: 50%; border: 0.5px solid black;">
@@ -347,21 +346,19 @@ export default {
                 return (this.isTutorials) ? -1 :
                     ("viewId" in this.$route.params) ? this.$route.params.viewId : null;
     },
-
-    //experimentId() {
-    //  return this.$route.query.experimentId
-    //},
-    //viewId() {
-    //  return this.$route.query.viewId
-    //}, 
-    //experiment() {
-    //  return this.$store.getters["experiment/getExperiment"]({experimentId: this.experimentId});
-    //},
-    //view() {
-    //  return this.$store.getters["view/getView"]({viewId: this.viewId});
-    //},
+    experimentId() {
+                return ("experimentId" in this.$route.query) ? this.$route.query.experimentId : null;
+    },
+    experiment() {
+                return (this.experimentId != null) ?
+                    this.$store.getters["experiment/getExperiment"]({experimentId: this.experimentId}) : null;
+    },
     runs() {
-         let runs = (this.view == null) ? this.$store.getters["run/getRuns"]() : this.view.runs;
+         // NOTE: loose == on experimentId is intentional; the route query param
+         // is a string while run.experimentId is a number.
+         let runs = (this.experimentId != null)
+             ? this.$store.getters["run/getRuns"]().filter(run => run.experimentId == this.experimentId)
+             : (this.view == null) ? this.$store.getters["run/getRuns"]() : this.view.runs;
 
          return runs.filter(run => run.name.includes(this.filterText)).map(run => {
                     run.isSelectable = !this.isTutorials;
@@ -379,14 +376,17 @@ export default {
 //        });
 //      }
 //    }, 
-    newRunLink() {  
-        return (this.viewId != null) ? `/runs/new?viewId=${this.viewId}` : `/runs/new`;
+    newRunLink() {
+        return (this.experimentId != null) ? `/runs/new?experimentId=${this.experimentId}` :
+            (this.viewId != null) ? `/runs/new?viewId=${this.viewId}` : `/runs/new`;
     },
     loadingOverlayName() {
                 return (this.viewId == null) ? "runs" : `viewRuns${this.viewId}`
     },
     pageName() {
-                return (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name
+                return (this.experimentId != null) ?
+                    ((this.experiment == null) ? `Loading Experiment...` : this.experiment.name) :
+                    (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name
     },
     pageIsLoading() {
                 return this.$store.getters['loading/getMessages'](this.loadingOverlayName).length > 0
@@ -528,12 +528,17 @@ export default {
                     } catch (error) {
                         eventBus.$emit("error", { name: `Error while trying to fetch view with id: ${this.viewId}`, error });
                     }   
-         } else {    
+         } else {
                     try {
-                        await this.$store.dispatch("run/fetchRuns", {});
-                    } catch (error) { 
-                        eventBus.$emit("error", { name: `Error while trying to fetch the runs`, error }); 
-                    }       
+                        await this.$store.dispatch("run/fetchRuns", { experimentId: this.experimentId });
+
+                        if (this.experimentId != null) {
+                            // populate the experiment name/description header
+                            await this.$store.dispatch("experiment/fetchExperiment", { experimentId: this.experimentId });
+                        }
+                    } catch (error) {
+                        eventBus.$emit("error", { name: `Error while trying to fetch the runs`, error });
+                    }
          }
             
          this.$store.commit("loading/STOP", { key: this.loadingOverlayName, message: "Fetching Runs" });

@@ -829,15 +829,16 @@ export const RunService = {
     //async createRun({root, experimentId, directedit, inputTable, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, viewIds, description}, submit = false) {
     //async createRun({ root, experimentId, directedit, inputTable, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, viewIds, description
 
-    async createRun({ 
-        name, inputs, groupResourceProfileId, computeResourceId, coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description
+    async createRun({
+        name, inputs, groupResourceProfileId, computeResourceId, coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description, experimentId
     }) {
         let data = {
             "name": name,
             "description": description,
-            "inputs_data": inputs, // prevent collision with "inputs" field on the Run serializer       
+            "inputs_data": inputs, // prevent collision with "inputs" field on the Run serializer
+            // undefined when creating outside an experiment; JSON.stringify drops it
+            "experiment": experimentId,
             //"root": root,
-            //"experiment": experimentId,
             //"directedit": directedit,
             //"input_table": inputTable,
             "group_resource_profile_id": groupResourceProfileId,

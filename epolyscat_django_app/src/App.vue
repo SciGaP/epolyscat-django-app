@@ -50,6 +50,17 @@ export default {
             } catch (error) {
                 eventBus.$emit("error", { name: `Error while trying to fetch the views`, error });
             }
+        },
+        async refreshExperiments() {
+            this.$store.commit("loading/START", { key: "experiments", message: "Fetching Experiments" });
+
+            try {
+                await this.$store.dispatch("experiment/fetchExperiments");
+
+                this.$store.commit("loading/STOP", { key: "experiments", message: "Fetching Experiments" });
+            } catch (error) {
+                eventBus.$emit("error", { name: `Error while trying to fetch the experiments`, error });
+            }
         }
   },
 
@@ -67,6 +78,7 @@ export default {
 
         this.refreshRuns();
         this.refreshViews();
+        this.refreshExperiments();
   }
 };
 </script>

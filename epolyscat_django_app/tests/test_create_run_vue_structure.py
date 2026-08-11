@@ -129,11 +129,12 @@ def _view_store_source():
 def test_frontend_store_registers_experiment_module_used_by_create_run():
     source = _frontend_store_source()
 
-    assert re.search(
+    registrations = re.findall(
         r'^\s*"experiment": experimentStore,?\s*$',
         source,
         re.MULTILINE,
     )
+    assert len(registrations) == 1
 
 
 def test_persisted_input_replaces_same_named_generated_placeholder():
@@ -1144,6 +1145,18 @@ def test_workflow_child_save_prepares_live_input_store_instead_of_reusing_api_in
     assert run_payload, "CreateRun runPayload is missing"
     assert "...this.run," in run_payload.group("body")
     assert "inputs: null," in run_payload.group("body")
+
+
+def test_create_run_preserves_experiment_association_from_query_string():
+    source = _source()
+    run_payload = re.search(
+        r"const runPayload = \{(?P<body>.*?)\n\s*\};",
+        source,
+        re.DOTALL,
+    )
+
+    assert run_payload, "CreateRun runPayload is missing"
+    assert "experimentId: this.experimentId," in run_payload.group("body")
 
 
 def test_view_run_plot_panel_uses_plot_service_not_static_svg():

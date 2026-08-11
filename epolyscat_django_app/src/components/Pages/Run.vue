@@ -516,11 +516,21 @@ export default {
 
             if (this.runViewType == "creating") {
                 try {
+                    const experimentId = this.$route.query.experimentId;
+
                     this.run = await this.$store.dispatch("run/createRun", {
-                        ...this.run, viewIds: this.viewIds
+                        ...this.run, viewIds: this.viewIds, experimentId
                     });
 
-                    if (!this.userLeftPage && setURL) router.push(`/runs/${this.run.id}`)
+                    if (!this.userLeftPage && setURL) {
+                        // When created from inside an experiment, land back on
+                        // that experiment's run list; otherwise open the run.
+                        if (experimentId != null) {
+                            router.push(`/runs?experimentId=${experimentId}`)
+                        } else {
+                            router.push(`/runs/${this.run.id}`)
+                        }
+                    }
                 } catch (error) {
                     eventBus.$emit("error", { name: `Error while trying to create the run`, error });
                 }

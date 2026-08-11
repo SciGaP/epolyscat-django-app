@@ -2799,6 +2799,7 @@ export default {
             analysisApplications: [...this.workflowAnalysisApplications],
             plannedStageIds: ["Data_Gen", "ePolyScat_Run", "Analysis", "Visualization"],
           },
+          experimentId: this.experimentId,
           viewIds: this.viewIds
         };
 

@@ -1110,15 +1110,16 @@ export const RunService = {
 
     async createRun({
         name, inputs, groupResourceProfileId, computeResourceId, coreCount, nodeCount, wallTimeLimit, queueName,
-        totalPhysicalMemory, viewIds, description, runMode = "module", moduleApplication = "",
+        totalPhysicalMemory, viewIds, description, experimentId, runMode = "module", moduleApplication = "",
         workflowStage = "", workflowApplication = "", utilityApplication = "", workflowMetadata = {}
     }) {
         let data = {
             "name": name,
             "description": description,
-            "inputs_data": inputs, // prevent collision with "inputs" field on the Run serializer       
+            "inputs_data": inputs, // prevent collision with "inputs" field on the Run serializer
+            // undefined when creating outside an experiment; JSON.stringify drops it
+            "experiment": experimentId,
             //"root": root,
-            //"experiment": experimentId,
             //"directedit": directedit,
             //"input_table": inputTable,
             "group_resource_profile_id": groupResourceProfileId,

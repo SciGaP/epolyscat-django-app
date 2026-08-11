@@ -14,16 +14,23 @@ const state = {
 }
 
 const actions = {
-    fetchRuns({commit}) {
-        if (pendingRunsRequest)
-            return pendingRunsRequest;
+    fetchRuns({commit}, {experimentId = null} = {}) {
+        if (!experimentId) {
+            if (pendingRunsRequest)
+                return pendingRunsRequest;
+        }
 
-        const request = RunService.fetchRuns()
+        const request = (experimentId
+            ? RunService.fetchAllRuns({ experimentId })
+            : RunService.fetchRuns())
             .then(data => {
                 const runs = data.results;
                 commit("SET_RUN_MAP", { runs });
                 return runs;
             });
+
+        if (experimentId)
+            return request;
 
         pendingRunsRequest = request.then(
             runs => {
@@ -258,7 +265,7 @@ const actions = {
         name, groupResourceProfileId, computeResourceId, coreCount,
         totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, viewIds, description,
         inputs, runMode, moduleApplication, workflowStage, workflowApplication,
-        utilityApplication, workflowMetadata
+        utilityApplication, workflowMetadata, experimentId
     }) {
         if (inputs == null) {
             inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: true });
@@ -268,7 +275,7 @@ const actions = {
             name, inputs, groupResourceProfileId, computeResourceId,
             coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description,
             runMode, moduleApplication, workflowStage, workflowApplication,
-            utilityApplication, workflowMetadata
+            utilityApplication, workflowMetadata, experimentId
         }, false);
 
         await dispatch("view/insertIntoViews", { viewIds, run: data }, { root: true });

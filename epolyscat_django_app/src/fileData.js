@@ -1,4 +1,5 @@
 import store from "./store";
+import { createLegacyEPolyScatTableObject } from "@/utils/epolyscat-input-script";
 
 export const descriptions = {
     "MODULE": "Individual Steps in the ePolyScat workflow",
@@ -15,7 +16,8 @@ export const descriptions = {
     "WORKFLOW": "Pre-constructed sequences of modules and utilities designed to carry out entire processes",
         "Data_Gen": "Data_Generation",
         "ePolyScat_Run": "ePolyScat_Run",
-        "Analysis": "Analysis",
+        "Analysis": "Post-processing utilities consume selected ePolyScat outputs",
+        "Visualization": "View text outputs and plot supported result data locally",
         "BOUND": "Does bound state calculations, produces bound_tab file",
         "OSCPOL": "OSCPOL",
         "STGF": "STGF",
@@ -1589,7 +1591,12 @@ export const tableObjects = {
             }
         }]
     }
-}
+};
+
+tableObjects.ePolyscat_Input_File = createLegacyEPolyScatTableObject({
+    getContents: () => store.getters["input/getContentsOfFile"](),
+    setContents: contents => store.dispatch("input/setContents", { contents }),
+});
 
 const parametersData = (parameter) => ({
     "cross section units": {

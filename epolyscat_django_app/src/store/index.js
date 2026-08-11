@@ -17,13 +17,13 @@ const debug = true;
 
 export default new Vuex.Store({
     modules: {
+        "experiment": experimentStore,
         "run": RunStore,
         "view": ViewStore,
         "input": InputStore,
         "settings": SettingsStore,
         "loading": LoadingStore,
-        "plotParameters": PlotParameters,
-        "experiment": experimentStore
+        "plotParameters": PlotParameters
     },
     strict: debug,
     plugins: debug ? [createLogger()]: [],

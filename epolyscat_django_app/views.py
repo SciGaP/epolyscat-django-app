@@ -13,16 +13,21 @@ from copy import deepcopy
 from pathlib import Path
 
 from airavata.model.application.io.ttypes import DataType
-from airavata.model.experiment.ttypes import ExperimentModel, UserConfigurationDataModel
-from airavata.model.scheduling.ttypes import ComputationalResourceSchedulingModel
+from airavata.model.experiment.ttypes import (
+    ExperimentModel,
+    UserConfigurationDataModel,
+)
+from airavata.model.scheduling.ttypes import (
+    ComputationalResourceSchedulingModel,
+)
 from airavata.model.status.ttypes import ExperimentState
-from airavata_django_portal_sdk import experiment_util, user_storage
+from airavata_django_portal_sdk import experiment_util, remoteapi, user_storage
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
-from django.db.models import Count, Max, Q, Sum
+from django.db.models import Count, Max, Prefetch, Q, Sum
 from django.db.models.functions import Coalesce
 from django.http import FileResponse
 from django.shortcuts import render
@@ -38,11 +43,397 @@ from rest_framework import (
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from epolyscat_django_app import models, serializers
+from epolyscat_django_app import (
+    models,
+    output_presentation_contracts,
+    remote_launch_contract,
+    runtime_audit as runtime_audit_domain,
+    scientific_output_service,
+    serializers,
+    utility_runtime_contracts,
+    workflow_continuation as workflow_continuation_domain,
+    workflow_output_contracts,
+)
 from epolyscat_django_app.epolyscat_utils import Linp, is_empty
 
 BASE_DIR = Path(os.path.dirname(os.path.abspath(__file__)))
 logger = logging.getLogger(__name__)
+RUN_SELECTOR_INPUT_NAMES = (
+    "Calculation_Type",
+    "EPOLYSCAT_Application_Module",
+    "Application_Workflow",
+    "Data_Gen",
+    "Application_Utility",
+    "Workflow_Application",
+)
+KNOWN_URI_COLLECTION_INPUT_NAMES = {
+    "molden.dat",
+}
+RUN_MODE_INPUT_VALUES = {
+    "module": "MODULE",
+    "MODULE": "MODULE",
+    "workflow": "WORKFLOW",
+    "WORKFLOW": "WORKFLOW",
+    "utility": "UTILITY",
+    "UTILITY": "UTILITY",
+}
+WORKFLOW_STAGE_INPUT_VALUES = {
+    "data-generation": "Data_Gen",
+    "Data_Generation": "Data_Gen",
+    "Data_Gen": "Data_Gen",
+    "bound": "ePolyScat_Run",
+    "epolyscat-dmat": "ePolyScat_Run",
+    "ePolyScat_Run": "ePolyScat_Run",
+    "analysis": "Analysis",
+    "Analysis": "Analysis",
+}
+WORKFLOW_STAGE_LABELS = {
+    "Data_Gen": "Data Generation",
+    "ePolyScat_Run": "ePolyScat Run",
+    "Analysis": "Post-processing",
+    "Visualization": "Visualization",
+}
+INPUT_NAME_COMPATIBILITY_ALIASES = (
+    ("Gaussian_Input", "Gaussian_Inputs"),
+    ("Molcas_Input", "Molcas_Inputs"),
+    ("ePolyscat_Input_Data", "ePolyScat_Input_Data"),
+)
+UTILITY_FILE_INPUT_NAMES = {
+    "CnvMath": "BendOrient_Output",
+    "CnvMatLab": "BendOrient_Output",
+    "CnvLinFull": "DumpOut",
+    "NRFPAD": "Cross_Section_Input_File",
+    "Cube2igor": "Cube_Output",
+}
+GENERIC_POSTPROCESSING_INPUT_NAMES = (
+    "ePolyscat_Input_Data",
+    "ePolyScat_Input_Data",
+)
+DATA_GENERATION_FILE_INPUT_NAMES = {
+    "Gaussian16": "Gaussian_Inputs",
+    "OpenMolcas": "Molcas_Inputs",
+}
+DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID = (
+    "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
+)
+DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID = (
+    "Gaussian16_4971a157-cad4-45cd-9aba-a994273c5046"
+)
+DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID = (
+    "OpenMolcas_a47aae08-dca8-45fc-8a43-0b396c8ee2a2"
+)
+
+
+def _first_nonblank(*values):
+    for value in values:
+        if value is not None and value != "":
+            return value
+    return None
+
+
+def _normalize_run_mode(value):
+    return RUN_MODE_INPUT_VALUES.get(value, str(value or "module").upper())
+
+
+def _normalize_workflow_stage(value):
+    return WORKFLOW_STAGE_INPUT_VALUES.get(value, value or "ePolyScat_Run")
+
+
+def _add_input_name_compatibility_aliases(input_values):
+    for first_name, second_name in INPUT_NAME_COMPATIBILITY_ALIASES:
+        first_value = input_values.get(first_name)
+        second_value = input_values.get(second_name)
+        if first_value and not second_value:
+            input_values[second_name] = first_value
+        elif second_value and not first_value:
+            input_values[first_name] = second_value
+
+
+def _add_utility_file_input_compatibility(input_values, utility_application):
+    source_input_name = UTILITY_FILE_INPUT_NAMES.get(utility_application)
+    if not source_input_name or not input_values.get(source_input_name):
+        return
+
+    data_product_uris = []
+    for input_name in (*GENERIC_POSTPROCESSING_INPUT_NAMES, source_input_name):
+        for data_product_uri in str(input_values.get(input_name) or "").split(","):
+            if data_product_uri and data_product_uri not in data_product_uris:
+                data_product_uris.append(data_product_uri)
+
+    collection_value = ",".join(data_product_uris)
+    for input_name in GENERIC_POSTPROCESSING_INPUT_NAMES:
+        input_values[input_name] = collection_value
+
+
+def _command_line_input_names(input_values):
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    application = ""
+    command_line_input_names = set()
+
+    is_workflow_analysis = (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Analysis"
+    )
+    if mode == "UTILITY" or is_workflow_analysis:
+        utility_application = str(
+            input_values.get("Application_Utility") or ""
+        )
+        if not utility_application:
+            return command_line_input_names
+        command_line_input_names.update(
+            utility_runtime_contracts.resolve_utility_argument_input_names(
+                utility_application,
+                input_values,
+            )
+        )
+        command_line_input_names.update(
+            {"Calculation_Type", "Application_Utility"}
+        )
+        if is_workflow_analysis:
+            command_line_input_names.add("Application_Workflow")
+        return command_line_input_names
+
+    if mode == "MODULE":
+        application = input_values.get("EPOLYSCAT_Application_Module") or ""
+    elif (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Data_Gen"
+    ):
+        command_line_input_names.add("Data_Gen")
+        application = input_values.get("Data_Gen") or ""
+
+    file_input_name = DATA_GENERATION_FILE_INPUT_NAMES.get(application)
+    if file_input_name and input_values.get(file_input_name):
+        command_line_input_names.add(file_input_name)
+
+    return command_line_input_names
+
+
+def _add_registered_utility_input_aliases(
+    application_inputs,
+    input_values,
+    command_line_input_names,
+):
+    command_line_input_names = set(command_line_input_names or ())
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    if mode != "UTILITY":
+        return command_line_input_names
+
+    utility_application = str(input_values.get("Application_Utility") or "")
+    if not utility_application:
+        return command_line_input_names
+
+    contract = utility_runtime_contracts.get_utility_contract(
+        utility_application
+    )
+    registered_names = {
+        interface_input.name for interface_input in application_inputs or ()
+    }
+    registered_command_names = command_line_input_names.intersection(
+        registered_names
+    )
+
+    data_input_names = set(contract["data_input_names"]).union(
+        utility_runtime_contracts.GENERIC_UTILITY_DATA_INPUT_NAMES
+    )
+    if not registered_command_names.intersection(data_input_names):
+        generic_input_name = next(
+            (
+                input_name
+                for input_name in utility_runtime_contracts.GENERIC_UTILITY_DATA_INPUT_NAMES
+                if input_name in registered_names and input_values.get(input_name)
+            ),
+            None,
+        )
+        if generic_input_name:
+            command_line_input_names.add(generic_input_name)
+
+    return command_line_input_names
+
+
+def _validate_utility_run_inputs(input_values):
+    mode = str(input_values.get("Calculation_Type") or "").upper()
+    is_utility_run = mode == "UTILITY" or (
+        mode == "WORKFLOW"
+        and input_values.get("Application_Workflow") == "Analysis"
+    )
+    if not is_utility_run:
+        return
+
+    utility_application = str(input_values.get("Application_Utility") or "")
+    try:
+        utility_runtime_contracts.validate_utility_input_values(
+            utility_application,
+            input_values,
+        )
+    except ValueError as error:
+        raise exceptions.ValidationError(str(error)) from error
+
+
+def _uses_dedicated_gaussian_interface(run):
+    if getattr(run, "run_mode", "") == "module":
+        return getattr(run, "module_application", "") == "Gaussian16"
+    return (
+        getattr(run, "run_mode", "") == "workflow"
+        and _normalize_workflow_stage(getattr(run, "workflow_stage", ""))
+        == "Data_Gen"
+        and getattr(run, "workflow_application", "") == "Gaussian16"
+    )
+
+
+def _uses_dedicated_openmolcas_interface(run):
+    if getattr(run, "run_mode", "") == "module":
+        return getattr(run, "module_application", "") == "OpenMolcas"
+    return (
+        getattr(run, "run_mode", "") == "workflow"
+        and _normalize_workflow_stage(getattr(run, "workflow_stage", ""))
+        == "Data_Gen"
+        and getattr(run, "workflow_application", "") == "OpenMolcas"
+    )
+
+
+def _application_input_values(run, input_values):
+    if _uses_dedicated_openmolcas_interface(run):
+        openmolcas_input = input_values.get("Molcas_Inputs") or input_values.get(
+            "Molcas_Input"
+        )
+        if not openmolcas_input:
+            return {}
+        return {
+            "OpenMolcas input file": str(openmolcas_input).split(",", 1)[0]
+        }
+
+    if _uses_dedicated_gaussian_interface(run):
+        gaussian_input = input_values.get("Gaussian_Inputs") or input_values.get(
+            "Gaussian_Input"
+        )
+        if not gaussian_input:
+            return {}
+        return {"Input_File": str(gaussian_input).split(",", 1)[0]}
+
+    return input_values
+
+
+def build_airavata_input_values(run, input_values):
+    normalized_inputs = dict(input_values or {})
+    _add_input_name_compatibility_aliases(normalized_inputs)
+
+    mode = _normalize_run_mode(
+        _first_nonblank(getattr(run, "run_mode", ""), normalized_inputs.get("Calculation_Type"))
+    )
+    normalized_inputs["Calculation_Type"] = mode
+
+    if mode == "MODULE":
+        module_application = _first_nonblank(
+            getattr(run, "module_application", ""),
+            normalized_inputs.get("EPOLYSCAT_Application_Module"),
+            "ePolyScat",
+        )
+        normalized_inputs["EPOLYSCAT_Application_Module"] = module_application
+        for selector in ("Application_Workflow", "Data_Gen", "Application_Utility", "Workflow_Application"):
+            normalized_inputs.pop(selector, None)
+        return normalized_inputs
+
+    normalized_inputs.pop("EPOLYSCAT_Application_Module", None)
+
+    if mode == "WORKFLOW":
+        workflow_application = _first_nonblank(
+            getattr(run, "workflow_application", ""),
+            normalized_inputs.get("Data_Gen"),
+            normalized_inputs.get("Workflow_Application"),
+            "OpenMolcas",
+        )
+        workflow_stage = _normalize_workflow_stage(
+            _first_nonblank(
+                getattr(run, "workflow_stage", ""),
+                normalized_inputs.get("Application_Workflow"),
+                "ePolyScat_Run",
+            )
+        )
+        normalized_inputs["Application_Workflow"] = workflow_stage
+        normalized_inputs.pop("Workflow_Application", None)
+        if workflow_stage == "Data_Gen":
+            normalized_inputs["Data_Gen"] = workflow_application
+            normalized_inputs.pop("Application_Utility", None)
+        elif workflow_stage == "Analysis":
+            # Analysis remains a workflow child in the portal, but the remote
+            # controller must dispatch it through the utility entrypoint.
+            normalized_inputs["Calculation_Type"] = "UTILITY"
+            normalized_inputs.pop("Application_Workflow", None)
+            normalized_inputs.pop("Data_Gen", None)
+            utility_application = _first_nonblank(
+                getattr(run, "utility_application", ""),
+                normalized_inputs.get("Application_Utility"),
+                "CnvMath",
+            )
+            normalized_inputs["Application_Utility"] = utility_application
+            _add_utility_file_input_compatibility(
+                normalized_inputs,
+                utility_application,
+            )
+        else:
+            normalized_inputs.pop("Data_Gen", None)
+            normalized_inputs.pop("Application_Utility", None)
+        return normalized_inputs
+
+    normalized_inputs.pop("Application_Workflow", None)
+    normalized_inputs.pop("Data_Gen", None)
+    normalized_inputs.pop("Workflow_Application", None)
+
+    if mode == "UTILITY":
+        utility_application = _first_nonblank(
+            getattr(run, "utility_application", ""),
+            normalized_inputs.get("Application_Utility"),
+            "CnvMath",
+        )
+        normalized_inputs["Application_Utility"] = utility_application
+        _add_utility_file_input_compatibility(
+            normalized_inputs,
+            utility_application,
+        )
+
+    return normalized_inputs
+
+
+def _create_run_user_dir(request, run):
+    if remoteapi.is_remote_api_configured():
+        resp = remoteapi.call(
+            request,
+            "/user-storage/~/{path}",
+            path_params={"path": run.directory},
+            method="post",
+        )
+        data = resp.json()
+        return None, data.get("path", run.directory)
+    return user_storage.create_user_dir(request, dir_names=run.directory.split("/"))
+
+
+def _save_run_user_file(request, run, file, name, content_type):
+    if remoteapi.is_remote_api_configured():
+        files = {
+            "file": (name, file, content_type)
+            if content_type is not None
+            else (name, file)
+        }
+        resp = remoteapi.call(
+            request,
+            "/user-storage/~/{path}",
+            path_params={"path": run.directory},
+            method="post",
+            files=files,
+        )
+        product_uri = resp.json()["uploaded"]["productUri"]
+        return request.airavata_client.getDataProduct(
+            request.authz_token,
+            product_uri,
+        )
+    return user_storage.save(
+        request,
+        run.directory,
+        file,
+        name=name,
+        content_type=content_type,
+    )
 
 # Create your views here.
 
@@ -156,10 +547,26 @@ class RunViewSet(viewsets.ModelViewSet):
         "STDERR": "stderr",
     }
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.action == "list":
+            context["refresh_remote_status"] = False
+            context["tutorial_view_id"] = (
+                models.View.objects.filter(
+                    type="tutorial",
+                    owner=None,
+                )
+                .values_list("pk", flat=True)
+                .first()
+            )
+        return context
+
     def get_queryset(self):
         request = self.request
         _queryset = models.Run.filter_by_user(request)
         _queryset = _queryset.filter(deleted=False)
+        if self.action == "list":
+            _queryset = _queryset.filter(parent_run__isnull=True)
 
         if self.request.query_params.get("experiment"):
             _queryset = _queryset.filter(
@@ -185,7 +592,122 @@ class RunViewSet(viewsets.ModelViewSet):
         if self.action == "list" and not show_tutorial_runs:
             _queryset = _queryset.exclude(owner=None)
 
+        if self.action in ("list", "retrieve"):
+            executions = models.RemoteExecution.objects.order_by(
+                "created",
+                "id",
+            )
+            workflow_steps = (
+                models.Run.objects.select_related("workflow_source_run")
+                .prefetch_related(
+                    Prefetch("executions", queryset=executions),
+                )
+                .order_by("workflow_step_order", "id")
+            )
+            _queryset = (
+                _queryset.select_related(
+                    "experiment",
+                    "root",
+                    "workflow_source_run",
+                )
+                .prefetch_related(
+                    "views",
+                    Prefetch(
+                        "inputs",
+                        queryset=models.Input.objects.prefetch_related(
+                            "files"
+                        ),
+                    ),
+                    Prefetch("executions", queryset=executions),
+                    Prefetch(
+                        "workflow_steps",
+                        queryset=workflow_steps,
+                    ),
+                    Prefetch(
+                        "workflow_source_run__executions",
+                        queryset=executions,
+                    ),
+                )
+            )
+            if self.action == "list":
+                _queryset = _queryset.order_by("-updated", "-id")
+
         return _queryset
+
+    def _output_files_for_run(self, request, run):
+        return scientific_output_service.output_files_for_run(request, run)
+
+    def _listed_output_data_product_uri(self, request, run, filename):
+        requested_name = os.path.basename(str(filename or ""))
+        for file_data in self._output_files_for_run(request, run):
+            if not isinstance(file_data, dict):
+                continue
+            listed_name = os.path.basename(
+                str(
+                    file_data.get("name")
+                    or file_data.get("filename")
+                    or file_data.get("fileName")
+                    or ""
+                )
+            )
+            if listed_name != requested_name:
+                continue
+            return _first_nonblank(
+                file_data.get("data-product-uri"),
+                file_data.get("dataProductURI"),
+                file_data.get("data_product_uri"),
+                file_data.get("productUri"),
+                file_data.get("product_uri"),
+            )
+        return None
+
+    def _scientific_output_report(self, request, run, output_files=None):
+        return scientific_output_service.build_report(
+            request,
+            run,
+            output_files=output_files,
+        )
+
+    def _continuation_eligibility(self, request, run):
+        eligibility = workflow_continuation_domain.continuation_eligibility(
+            run,
+            request,
+        )
+        if not eligibility.get("source_application"):
+            return eligibility
+
+        report = self._scientific_output_report(request, run)
+        verification = report["scientific_verification"]
+        eligibility["scientific_verification"] = verification
+        if not eligibility["eligible"]:
+            return eligibility
+
+        if verification["status"] == "verified":
+            eligibility["next_stage_preview"] = (
+                workflow_output_contracts.resolve_next_stage_preview(
+                    output_manifest=report["files"],
+                    source_application=eligibility["source_application"],
+                    next_stage=eligibility["next_stage"],
+                )
+            )
+            return eligibility
+
+        reason_by_status = {
+            "failed": "scientific_verification_failed",
+            "incomplete": "scientific_output_incomplete",
+            "unverified": "scientific_verification_unavailable",
+        }
+        eligibility.update(
+            {
+                "eligible": False,
+                "reason": reason_by_status.get(
+                    verification["status"],
+                    "scientific_verification_unavailable",
+                ),
+                "message": verification["message"],
+            }
+        )
+        return eligibility
 
         '''
         tutorial_view_id = models.View.tutorial_view().id
@@ -242,7 +764,7 @@ class RunViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         run = serializer.save(owner=request.user)
 
-        user_storage.create_user_dir(request, dir_names=run.directory.split("/"))
+        _create_run_user_dir(request, run)
 
         for input in request.data["inputs_data"]:
             self._create_input(request, run, input)
@@ -258,6 +780,10 @@ class RunViewSet(viewsets.ModelViewSet):
                 else:
                     view = models.View.objects.get(pk=int(viewId))
                     run.views.add(view)
+
+        if self._is_workflow_parent_run(run):
+            self._ensure_workflow_child_runs(run)
+            serializer = self.get_serializer(run)
    
         return Response(serializer.data)
     @transaction.atomic
@@ -292,9 +818,9 @@ class RunViewSet(viewsets.ModelViewSet):
                 self._save_file(request, run_instance, file_data, new_input)
         else:
             # Ensures that if a run type is previously defined as something else, it gets overidden when updated
-            if input["name"] in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"]:
+            if input["name"] in RUN_SELECTOR_INPUT_NAMES:
                 matching_inputs = list(filter(lambda input:
-                    input.name in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"],
+                    input.name in RUN_SELECTOR_INPUT_NAMES,
                     run_instance.inputs.all()
                 ));
 
@@ -321,7 +847,37 @@ class RunViewSet(viewsets.ModelViewSet):
             old_input = matching_inputs[0]
 
             if updated_input["type"] == "files":
-                for updated_file in updated_input["files"]:
+                updated_files = updated_input.get("files", [])
+                is_multi_file_input = updated_input.get(
+                    "isMultiFileInput",
+                    updated_input.get("is_multi_file_input"),
+                )
+                if is_multi_file_input is None:
+                    is_multi_file_input = (
+                        updated_input["name"] in KNOWN_URI_COLLECTION_INPUT_NAMES
+                    )
+                else:
+                    is_multi_file_input = (
+                        is_multi_file_input is True
+                        or str(is_multi_file_input).lower() == "true"
+                    )
+
+                active_updates = [
+                    file_data
+                    for file_data in updated_files
+                    if not file_data.get("deleted", False)
+                ]
+                if not is_multi_file_input and len(active_updates) > 1:
+                    raise exceptions.ValidationError(
+                        {
+                            updated_input["name"]: (
+                                "This input accepts a single file. Remove the extra "
+                                "selection before saving."
+                            )
+                        }
+                    )
+
+                for updated_file in updated_files:
                     matching_files = list(filter(lambda file:
                         file.name == updated_file["name"],
                         old_input.files.all()
@@ -346,6 +902,15 @@ class RunViewSet(viewsets.ModelViewSet):
 
                         if not updated_file["deleted"]:
                             self._save_file(request, run_instance, updated_file, old_input)
+
+                if not is_multi_file_input:
+                    stored_files = list(old_input.files.order_by("-id"))
+                    for stale_file in stored_files[1:]:
+                        user_storage.delete(
+                            request,
+                            data_product_uri=stale_file.data_product_uri,
+                        )
+                        stale_file.delete()
             else:
                 old_input.value = updated_input["value"]
 
@@ -356,6 +921,10 @@ class RunViewSet(viewsets.ModelViewSet):
             if "contents" not in file_data or file_data["contents"] == None:
                 if not "dataProductURI" in file_data and "data-product-uri" in file_data:
                     file_data["dataProductURI"] = file_data["data-product-uri"]
+                if not file_data.get("dataProductURI"):
+                    raise exceptions.ValidationError(
+                        f"Input file '{file_data.get('name', input.name)}' is missing a data product URI"
+                    )
                 file = user_storage.open_file(
                     request, data_product_uri=file_data["dataProductURI"]
                 )
@@ -369,9 +938,9 @@ class RunViewSet(viewsets.ModelViewSet):
                 file = io.BytesIO(base64.b64decode(file_data["contents"]))
                 content_type = ""
 
-            saved_file = user_storage.save(
+            saved_file = _save_run_user_file(
                 request,
-                run_instance.directory,
+                run_instance,
                 file,
                 name=file_data["name"],
                 content_type=content_type
@@ -432,9 +1001,34 @@ class RunViewSet(viewsets.ModelViewSet):
         if run.owner != request.user:
             raise Exception("You can only submit a run that you own")
 
-        # change to api call
-        app_interface_id = self._get_eployscat_app_interface_id(request)
+        if self._is_workflow_parent_run(run):
+            self._submit_workflow_run(
+                request,
+                run,
+                is_tutorial=serializer.data["is_tutorial"],
+            )
+            serializer = self.get_serializer(run)
+            return Response(serializer.data)
 
+        self._validate_workflow_child_can_submit(request, run)
+        self._submit_single_run(
+            request,
+            run,
+            is_tutorial=serializer.data["is_tutorial"],
+        )
+
+        serializer = self.get_serializer(run)
+        return Response(serializer.data)
+
+    def _is_workflow_parent_run(self, run):
+        metadata = run.workflow_metadata or {}
+        return (
+            run.run_mode == "workflow"
+            and run.parent_run_id is None
+            and (not run.workflow_stage or metadata.get("isWorkflowPlan") is True)
+        )
+
+    def _submit_single_run(self, request, run, is_tutorial):
         inputs = {};
 
         for input in run.inputs.all():
@@ -454,10 +1048,232 @@ class RunViewSet(viewsets.ModelViewSet):
             else:
                 inputs[input.name] = input.value
 
-        self._create_remote_execution(request, run, inputs, app_interface_id, inputs, serializer.data["is_tutorial"])
+        input_values = build_airavata_input_values(run, inputs)
+        _validate_utility_run_inputs(input_values)
+        input_values = _application_input_values(run, input_values)
+        app_interface_id = self._get_run_app_interface_id(request, run)
+        execution_options = {}
+        if not (
+            _uses_dedicated_gaussian_interface(run)
+            or _uses_dedicated_openmolcas_interface(run)
+        ):
+            execution_options["deployment_executable_path"] = (
+                self._get_run_deployment_executable_path(request, run)
+            )
+        self._create_remote_execution(
+            request,
+            run,
+            input_values,
+            app_interface_id,
+            input_values,
+            is_tutorial,
+            **execution_options,
+        )
 
-        serializer = self.get_serializer(run)
-        return Response(serializer.data)
+        return run
+
+    def _submit_workflow_run(self, request, run, is_tutorial):
+        child_runs = self._ensure_workflow_child_runs(run)
+        executable_child = self._next_executable_workflow_child(request, child_runs)
+        workflow_metadata = dict(run.workflow_metadata or {})
+
+        if executable_child is None:
+            workflow_metadata["workflow_state"] = "waiting"
+            run.workflow_metadata = workflow_metadata
+            run.save(update_fields=["workflow_metadata"])
+            return run
+
+        self._submit_single_run(request, executable_child, is_tutorial=is_tutorial)
+        executable_child.workflow_step_status = "submitted"
+        executable_child.save(update_fields=["workflow_step_status"])
+        workflow_metadata["workflow_state"] = "running"
+        workflow_metadata["active_child_run_id"] = executable_child.id
+        run.workflow_metadata = workflow_metadata
+        run.save(update_fields=["workflow_metadata"])
+        return run
+
+    def _next_executable_workflow_child(self, request, child_runs):
+        for index, child_run in enumerate(child_runs):
+            if child_run.executions.exists():
+                continue
+            previous_children = child_runs[:index]
+            previous_finished = all(
+                self._workflow_child_is_complete(request, previous_child)
+                for previous_child in previous_children
+            )
+            if previous_finished:
+                return child_run
+            return None
+        return None
+
+    def _validate_workflow_child_can_submit(self, request, run):
+        if run.parent_run_id is None or run.workflow_step_order is None:
+            return
+
+        previous_children = run.parent_run.workflow_steps.filter(
+            workflow_step_order__lt=run.workflow_step_order
+        ).order_by("workflow_step_order", "id")
+        for previous_child in previous_children:
+            if self._workflow_child_is_complete(request, previous_child):
+                continue
+
+            label = WORKFLOW_STAGE_LABELS.get(
+                previous_child.workflow_stage,
+                previous_child.workflow_stage or f"step {previous_child.workflow_step_order}",
+            )
+            raise exceptions.ValidationError(
+                {
+                    "detail": (
+                        f"Please complete {label} before submitting this workflow step."
+                    )
+                }
+            )
+
+    def _workflow_child_is_complete(self, request, child_run):
+        return (
+            child_run.workflow_step_status == "complete"
+            or scientific_output_service.is_verified_complete(request, child_run)
+        )
+
+    def _ensure_workflow_child_runs(self, run):
+        child_runs = list(run.workflow_steps.order_by("workflow_step_order", "id"))
+        if not child_runs:
+            child_runs = [
+                self._create_workflow_child_run(run, spec)
+                for spec in self._workflow_child_specs(run)
+            ]
+            if child_runs:
+                self._copy_run_inputs(run, child_runs[0])
+
+        self._sync_workflow_child_resources(run, child_runs)
+        return list(run.workflow_steps.order_by("workflow_step_order", "id"))
+
+    def _workflow_child_specs(self, run):
+        metadata = run.workflow_metadata or {}
+        data_generation_application = _first_nonblank(
+            metadata.get("dataGenerationApplication"),
+            metadata.get("data_generation_application"),
+            run.workflow_application,
+            "OpenMolcas",
+        )
+        analysis_applications = (
+            metadata.get("analysisApplications")
+            or metadata.get("analysis_applications")
+            or ([run.utility_application] if run.utility_application else ["CnvMath"])
+        )
+        if isinstance(analysis_applications, str):
+            analysis_applications = [analysis_applications]
+        analysis_applications = [
+            application for application in analysis_applications if application
+        ] or ["CnvMath"]
+
+        specs = [
+            {
+                "order": 1,
+                "stage": "Data_Gen",
+                "workflow_application": data_generation_application,
+                "module_application": "",
+                "utility_application": "",
+            },
+            {
+                "order": 2,
+                "stage": "ePolyScat_Run",
+                "workflow_application": "",
+                "module_application": "ePolyScat",
+                "utility_application": "",
+            },
+        ]
+        for analysis_index, application in enumerate(analysis_applications, start=3):
+            specs.append(
+                {
+                    "order": analysis_index,
+                    "stage": "Analysis",
+                    "workflow_application": "",
+                    "module_application": "",
+                    "utility_application": application,
+                }
+            )
+        imported_source = metadata.get("importedSource") or {}
+        imported_stage = imported_source.get("stage")
+        if run.workflow_source_run_id and imported_stage in workflow_continuation_domain.WORKFLOW_STAGES:
+            imported_order = workflow_continuation_domain.WORKFLOW_STAGES.index(imported_stage) + 1
+            specs = [spec for spec in specs if spec["order"] > imported_order]
+        return specs
+
+    def _create_workflow_child_run(self, parent_run, spec):
+        label = WORKFLOW_STAGE_LABELS.get(spec["stage"], spec["stage"])
+        child_name = f"{parent_run.name} / {spec['order']} {label}"[:100]
+        child_run = models.Run.objects.create(
+            name=child_name,
+            owner=parent_run.owner,
+            description=parent_run.description,
+            airavata_project_id=parent_run.airavata_project_id,
+            root=parent_run.root,
+            experiment=parent_run.experiment,
+            parent_run=parent_run,
+            run_mode="workflow",
+            workflow_stage=spec["stage"],
+            workflow_application=spec["workflow_application"],
+            module_application=spec["module_application"],
+            utility_application=spec["utility_application"],
+            workflow_step_order=spec["order"],
+            workflow_step_status="pending",
+            group_resource_profile_id=parent_run.group_resource_profile_id,
+            compute_resource_id=parent_run.compute_resource_id,
+            queue_name=parent_run.queue_name,
+            core_count=parent_run.core_count,
+            node_count=parent_run.node_count,
+            walltime_limit=parent_run.walltime_limit,
+            total_physical_memory=parent_run.total_physical_memory,
+            workflow_metadata={
+                "parent_run_id": parent_run.id,
+                "stage": spec["stage"],
+                "application": (
+                    spec["workflow_application"]
+                    or spec["module_application"]
+                    or spec["utility_application"]
+                ),
+            },
+        )
+        child_run.views.set(parent_run.views.all())
+        return child_run
+
+    def _sync_workflow_child_resources(self, parent_run, child_runs):
+        resource_fields = [
+            "group_resource_profile_id",
+            "compute_resource_id",
+            "queue_name",
+            "core_count",
+            "node_count",
+            "walltime_limit",
+            "total_physical_memory",
+        ]
+        for child_run in child_runs:
+            changed_fields = []
+            for field in resource_fields:
+                parent_value = getattr(parent_run, field)
+                if getattr(child_run, field) != parent_value:
+                    setattr(child_run, field, parent_value)
+                    changed_fields.append(field)
+            if changed_fields:
+                child_run.save(update_fields=changed_fields)
+
+    def _copy_run_inputs(self, source_run, target_run):
+        if target_run.inputs.exists():
+            return
+        for source_input in source_run.inputs.all():
+            target_input = models.Input.objects.create(
+                run=target_run,
+                type=source_input.type,
+                name=source_input.name,
+                value=source_input.value,
+            )
+            for source_file in source_input.files.all():
+                models.File.objects.create(
+                    input=target_input,
+                    name=source_file.name,
+                    data_product_uri=source_file.data_product_uri,
+                )
 
     def status(self, request, pk=None):
         run: models.Run = self.get_object()
@@ -476,7 +1292,14 @@ class RunViewSet(viewsets.ModelViewSet):
 
         input_values = {"Input-File": inpc_file_input_value.productUri}
 
-        self._create_remote_execution(request, run, app_interface_id, input_values)
+        self._create_remote_execution(
+            request,
+            run,
+            input_values,
+            app_interface_id,
+            input_values,
+            run.is_tutorial,
+        )
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
@@ -509,10 +1332,131 @@ class RunViewSet(viewsets.ModelViewSet):
             "Previous_JobID_Restart": job_id,
         }
 
-        self._create_remote_execution(request, run, app_interface_id, input_values)
+        self._create_remote_execution(
+            request,
+            run,
+            input_values,
+            app_interface_id,
+            input_values,
+            run.is_tutorial,
+        )
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
+
+    @action(detail=True, methods=["get"])
+    def presentation(self, request, pk=None):
+        run: models.Run = self.get_object()
+        serializer = self.get_serializer(run)
+        return Response(serializer.data["presentation"])
+
+    @action(detail=True, methods=["get", "post"])
+    @transaction.atomic
+    def workflow_continuation(self, request, pk=None):
+        source_run: models.Run = self.get_object()
+        eligibility = self._continuation_eligibility(request, source_run)
+        if request.method.lower() == "get":
+            return Response(eligibility)
+        if not eligibility["eligible"]:
+            raise exceptions.ValidationError(
+                {
+                    "detail": eligibility["message"],
+                    "reason": eligibility["reason"],
+                }
+            )
+
+        workflow_metadata = {
+            "isWorkflowPlan": True,
+            "continuation": True,
+            "importedSource": {
+                "runId": source_run.id,
+                "stage": eligibility["source_stage"],
+                "application": eligibility["source_application"],
+                "scientificVerification": eligibility.get(
+                    "scientific_verification", {}
+                ),
+            },
+            "dataGenerationApplication": (
+                eligibility["source_application"]
+                if eligibility["source_stage"] == "Data_Gen"
+                else "OpenMolcas"
+            ),
+            "analysisApplications": [
+                (
+                    eligibility.get("next_stage_preview", {}).get(
+                        "target_application"
+                    )
+                    if eligibility["next_stage"] == "Analysis"
+                    else workflow_output_contracts.DEFAULT_ANALYSIS_APPLICATION
+                )
+                or workflow_output_contracts.DEFAULT_ANALYSIS_APPLICATION
+            ],
+            "plannedStageIds": list(
+                workflow_continuation_domain.WORKFLOW_PRESENTATION_STAGES
+            ),
+            "workflow_state": "not_started",
+        }
+        parent_run = models.Run.objects.create(
+            name=f"Continuation of {source_run.name}"[:100],
+            owner=source_run.owner,
+            description=source_run.description,
+            airavata_project_id=source_run.airavata_project_id,
+            root=source_run.root,
+            experiment=source_run.experiment,
+            run_mode="workflow",
+            workflow_source_run=source_run,
+            workflow_metadata=workflow_metadata,
+            group_resource_profile_id=source_run.group_resource_profile_id,
+            compute_resource_id=source_run.compute_resource_id,
+            queue_name=source_run.queue_name,
+            core_count=source_run.core_count,
+            node_count=source_run.node_count,
+            walltime_limit=source_run.walltime_limit,
+            total_physical_memory=source_run.total_physical_memory,
+        )
+        parent_run.views.set(source_run.views.all())
+        child_runs = self._ensure_workflow_child_runs(parent_run)
+        next_child = child_runs[0]
+
+        return Response(
+            {
+                **eligibility,
+                "workflow_parent_run_id": parent_run.id,
+                "next_child_run_id": next_child.id,
+                "source_run_id": source_run.id,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=["get"])
+    def runtime_audit(self, request):
+        app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+            "EPOLYSCAT_APPLICATION_ID",
+            "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442",
+        )
+        errors = []
+
+        def fetch_runtime_data(label, method_name):
+            try:
+                method = getattr(request.airavata_client, method_name)
+                return method(request.authz_token, settings.GATEWAY_ID)
+            except Exception as error:
+                logger.exception("Failed to audit ePolyScat %s", label)
+                errors.append({"section": label, "message": str(error)})
+                return []
+
+        audit = runtime_audit_domain.audit_runtime_configuration(
+            application_module_id=app_module_id,
+            modules=fetch_runtime_data("modules", "getAllAppModules"),
+            interfaces=fetch_runtime_data(
+                "interfaces", "getAllApplicationInterfaces"
+            ),
+            deployments=fetch_runtime_data(
+                "deployments", "getAllApplicationDeployments"
+            ),
+            errors=errors,
+        )
+        return Response(audit)
 
     def _create_remote_execution(
         self,
@@ -521,23 +1465,47 @@ class RunViewSet(viewsets.ModelViewSet):
         inputs: typing.Dict[str, str],
         app_interface_id: str,
         input_values: typing.Dict[str, str],
-        is_tutorial: bool
+        is_tutorial: bool,
+        deployment_executable_path: str = "",
     ) -> models.RemoteExecution:
 
         # Make sure that there aren't any currently running executions
         if not run.are_all_executions_finished(request):
             raise Exception("Run already has a currently running execution")
 
-        # create experiment
-        experiment = ExperimentModel()
         run_label = f"{run.root.root}/{run.number}" if run.root else run.name
-        experiment.experimentName = f"{run_label} execution number {run.executions.count() + 1}"
         application_interface = request.airavata_client.getApplicationInterface(
-            request.authz_token, app_interface_id
+            request.authz_token,
+            app_interface_id,
+        )
+        experiment = ExperimentModel(
+            experimentName=(
+                f"{run_label} execution number {run.executions.count() + 1}"
+            ),
+            executionId=app_interface_id,
+            gatewayId=settings.GATEWAY_ID,
+            userName=request.user.username,
         )
         experiment.experimentInputs = application_interface.applicationInputs.copy()
-        experiment.experimentOutputs = application_interface.applicationOutputs.copy()
-        experiment.executionId = app_interface_id
+        experiment.experimentOutputs = (
+            application_interface.applicationOutputs.copy()
+        )
+        experiment_inputs = experiment.experimentInputs
+        for interface_input in experiment_inputs:
+            value = input_values.get(interface_input.name)
+            if (
+                interface_input.type == DataType.URI
+                and isinstance(value, str)
+                and len([item for item in value.split(",") if item.strip()]) > 1
+            ):
+                raise exceptions.ValidationError(
+                    {
+                        interface_input.name: (
+                            "This input accepts a single file, but multiple files "
+                            "were selected."
+                        )
+                    }
+                )
         if run.experiment is not None:
             if run.experiment.airavata_project_id is None:
                 run.experiment.create_airavata_project(request)
@@ -545,33 +1513,47 @@ class RunViewSet(viewsets.ModelViewSet):
             experiment.projectId = run.experiment.airavata_project_id
         else:
             experiment.projectId = run.airavata_project_id
-        experiment.gatewayId = settings.GATEWAY_ID
-        experiment.userName = request.user.username
-        #ucd = UserConfigurationDataModel()
-        #ucd.groupResourceProfileId = run.group_resource_profile_id
-        #ucd.shareExperimentPublicly=is_tutorial
-
-        #experiment.userConfigurationData = ucd
         experiment.userConfigurationData = UserConfigurationDataModel(
             groupResourceProfileId=run.group_resource_profile_id,
             shareExperimentPublicly=is_tutorial,
-            computationalResourceScheduling=ComputationalResourceSchedulingModel(
-                resourceHostId=run.compute_resource_id,
-                totalCPUCount=run.core_count,
-                nodeCount=run.node_count,
-                wallTimeLimit=run.walltime_limit,
-                queueName=run.queue_name
-            )
+            computationalResourceScheduling=(
+                ComputationalResourceSchedulingModel(
+                    resourceHostId=run.compute_resource_id,
+                    totalCPUCount=run.core_count,
+                    nodeCount=run.node_count,
+                    wallTimeLimit=run.walltime_limit,
+                    queueName=run.queue_name,
+                    totalPhysicalMemory=run.total_physical_memory,
+                )
+            ),
         )
-        #crs = ComputationalResourceSchedulingModel()
-        #crs.resourceHostId = run.compute_resource_id
-        #crs.totalCPUCount = run.core_count
-        #crs.nodeCount = run.node_count
-        #crs.wallTimeLimit = run.walltime_limit
-        #crs.queueName = run.queue_name
-        #experiment.userConfigurationData.computationalResourceScheduling = crs
 
-        for inp in experiment.experimentInputs:
+        command_line_input_names = _command_line_input_names(input_values)
+        try:
+            command_line_policy = (
+                remote_launch_contract.resolve_command_line_policy(
+                    executable_path=deployment_executable_path,
+                    input_values=input_values,
+                    forced_input_names=command_line_input_names,
+                )
+                if deployment_executable_path
+                else {
+                    "exclusive": False,
+                    "input_names": command_line_input_names,
+                }
+            )
+        except ValueError as error:
+            raise exceptions.ValidationError(str(error)) from error
+        command_line_policy["input_names"] = _add_registered_utility_input_aliases(
+            experiment_inputs,
+            input_values,
+            command_line_policy.get("input_names"),
+        )
+        remote_launch_contract.apply_command_line_policy(
+            experiment_inputs,
+            command_line_policy,
+        )
+        for inp in experiment_inputs:
             if inp.name in input_values:
                 inp.value = input_values[inp.name]
             elif inp.type in (DataType.URI, DataType.URI_COLLECTION) and not inp.value:
@@ -579,19 +1561,24 @@ class RunViewSet(viewsets.ModelViewSet):
 
         # Save experiment
         experiment_id = request.airavata_client.createExperiment(
-            request.authz_token, settings.GATEWAY_ID, experiment
+            request.authz_token,
+            settings.GATEWAY_ID,
+            experiment,
         )
-        # launch experiment
+        remote_execution = run.executions.create(
+            airavata_experiment_id=experiment_id,
+        )
+        # The portal helper prepares storage and relocates temporary uploads
+        # before launching the experiment.
         experiment_util.launch(request, experiment_id)
 
-        # add experiment to the run's executions
         compute_resource = request.airavata_client.getComputeResource(
-            request.authz_token, run.compute_resource_id
+            request.authz_token,
+            run.compute_resource_id,
         )
-        return run.executions.create(
-            airavata_experiment_id=experiment_id,
-            resource_name=compute_resource.hostName,
-        )
+        remote_execution.resource_name = compute_resource.hostName
+        remote_execution.save(update_fields=["resource_name", "updated"])
+        return remote_execution
     @action(detail=True, methods=["PATCH"])
     def change_notification_settings(self, request, pk=None, *args, **kwargs):
         run = self.get_object()
@@ -602,7 +1589,8 @@ class RunViewSet(viewsets.ModelViewSet):
         execution = run.latest_execution
 
         experiment = request.airavata_client.getExperiment(
-            request.authz_token, execution.airavata_experiment_id
+            request.authz_token,
+            execution.airavata_experiment_id,
         )
         if run.is_email_notification_on:
             experiment.emailAddresses = [request.user.email]
@@ -610,7 +1598,9 @@ class RunViewSet(viewsets.ModelViewSet):
             experiment.emailAddresses = []
 
         request.airavata_client.updateExperiment(
-            request.authz_token, execution.airavata_experiment_id, experiment
+            request.authz_token,
+            execution.airavata_experiment_id,
+            experiment,
         )
 
         return Response(serializer.data)
@@ -627,12 +1617,12 @@ class RunViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-    def _get_eployscat_app_interface_id(self, request):
-        app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
-            "EPOLYSCAT_APPLICATION_ID", "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
-        )
-        all_app_interfaces = request.airavata_client.getAllApplicationInterfaces(
-            request.authz_token, settings.GATEWAY_ID
+    def _get_app_interface_id_for_module(self, request, app_module_id):
+        all_app_interfaces = (
+            request.airavata_client.getAllApplicationInterfaces(
+                request.authz_token,
+                settings.GATEWAY_ID,
+            )
         )
         app_interfaces = []
         for app_interface in all_app_interfaces:
@@ -647,6 +1637,44 @@ class RunViewSet(viewsets.ModelViewSet):
                 f"Could not figure out the applicationInterfaceId for app module {app_module_id}"
             )
         return app_interface_id
+
+    def _get_eployscat_app_interface_id(self, request):
+        app_module_id = self._get_run_application_module_id(None)
+        return self._get_app_interface_id_for_module(request, app_module_id)
+
+    def _get_run_application_module_id(self, run):
+        if run is not None and _uses_dedicated_gaussian_interface(run):
+            return getattr(settings, "EPOLYSCAT", {}).get(
+                "GAUSSIAN16_APPLICATION_ID",
+                DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID,
+            )
+        if run is not None and _uses_dedicated_openmolcas_interface(run):
+            return getattr(settings, "EPOLYSCAT", {}).get(
+                "OPENMOLCAS_APPLICATION_ID",
+                DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID,
+            )
+        return getattr(settings, "EPOLYSCAT", {}).get(
+            "EPOLYSCAT_APPLICATION_ID",
+            DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID,
+        )
+
+    def _get_run_app_interface_id(self, request, run):
+        app_module_id = self._get_run_application_module_id(run)
+        return self._get_app_interface_id_for_module(request, app_module_id)
+
+    def _get_run_deployment_executable_path(self, request, run):
+        deployments = request.airavata_client.getAllApplicationDeployments(
+            request.authz_token,
+            settings.GATEWAY_ID,
+        )
+        try:
+            return remote_launch_contract.find_deployment_executable_path(
+                deployments,
+                application_module_id=self._get_run_application_module_id(run),
+                compute_resource_id=run.compute_resource_id,
+            )
+        except ValueError as error:
+            raise exceptions.ValidationError(str(error)) from error
 
     @action(
         detail=True, methods=["post"], permission_classes=[permissions.IsAuthenticated]
@@ -773,53 +1801,54 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(methods=["get"], detail=True)
     def viewables(self, request, pk=None):
         run: models.Run = self.get_object()
-        viewables = []
-
-        epolyscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "ePolyScat"
-        ]
-        for filename, description in epolyscat_settings["FILE_VIEWABLE"].items():
-            if run_file_exists(request, run, filename):
-                url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
-                viewables.append(dict(filename=filename, url=url))
-
-        for data_type in self.DATA_TYPE_TO_FILENAME.keys():
-            try:
-                dp_uri = get_run_output_data_product_uri(
-                    request, run, data_type=data_type
-                )
-                if dp_uri is not None:
-                    filename = self.DATA_TYPE_TO_FILENAME[data_type]
-                    url = self.reverse_action(
-                        url_name="show-viewable", args=[pk, filename]
-                    )
-                    viewables.append(dict(filename=filename, url=url))
-            except:
-                logger.exception(f"Failed to check if {data_type} is available")
-
-        return Response(viewables)
+        return Response(
+            [
+                file_data
+                for file_data in self._output_files_for_run(request, run)
+                if file_data.get("viewable")
+            ]
+        )
 
     @action(methods=["get"], detail=True, url_path="input-files")
     def input_files(self, request, pk=None):
         run: models.Run = self.get_object()
         input_files_list = []
-
-        eployscat_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "ePolyScat"
-        ]
-        for filename, description in eployscat_settings["FILE_INPUT"].items():
-            if run_file_exists(request, run, filename):
-                url = self.reverse_action(url_name="show-viewable", args=[pk, filename])
-                input_files_list.append(dict(filename=filename, url=url))
+        inputs = models.Input.objects.filter(
+            run=run,
+            type="files",
+        ).prefetch_related("files")
+        for input_instance in inputs:
+            for file_instance in input_instance.files.all():
+                input_files_list.append(
+                    {
+                        "name": file_instance.name,
+                        "filename": file_instance.name,
+                        "data_product_uri": file_instance.data_product_uri,
+                        "data-product-uri": file_instance.data_product_uri,
+                        "viewable": output_presentation_contracts.is_viewable_file(
+                            file_instance.name
+                        ),
+                    }
+                )
         return Response(input_files_list)
 
-    @action(methods=["get"], detail=True, url_path="viewables/(?P<filename>[\w]+)")
+    @action(methods=["get"], detail=True, url_path=r"viewables/(?P<filename>[^/]+)")
     def show_viewable(self, request, pk=None, filename: str = None):
 
         run: models.Run = self.get_object()
         try:
             # file may be experiment output file or a file from the run directory
-            if filename in self.DATA_TYPE_TO_FILENAME.values():
+            listed_data_product_uri = self._listed_output_data_product_uri(
+                request,
+                run,
+                filename,
+            )
+            if listed_data_product_uri:
+                f = user_storage.open_file(
+                    request,
+                    data_product_uri=listed_data_product_uri,
+                )
+            elif filename in self.DATA_TYPE_TO_FILENAME.values():
                 data_type = [
                     dt
                     for dt, fn in self.DATA_TYPE_TO_FILENAME.items()
@@ -849,18 +1878,123 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["GET"])
     def get_output_files(self, request, pk=None):
         run = self.get_object()
-        output_files = []
+        return Response(self._output_files_for_run(request, run))
 
-        if len(run.executions.all()) > 0:
-            most_recent_execution = run.executions.order_by("-created")[0]
-            try:
-                output_files = user_storage.list_experiment_dir(
-                    request, most_recent_execution.airavata_experiment_id, path="ARCHIVE"
-                )[1]
-            except Exception:
-                pass
+    @action(detail=True, methods=["GET"])
+    def output_manifest(self, request, pk=None):
+        run = self.get_object()
+        report = self._scientific_output_report(request, run)
+        return Response(
+            {
+                **report,
+                "files": [
+                    {
+                        key: value
+                        for key, value in entry.items()
+                        if key != "descriptor"
+                    }
+                    for entry in report["files"]
+                ],
+            }
+        )
 
-        return Response(output_files)
+    @action(detail=True, methods=["GET"])
+    def workflow_output_binding(self, request, pk=None):
+        run = self.get_object()
+        query_params = getattr(request, "query_params", request.GET)
+        target_stage = query_params.get("targetStageId", "")
+        if not target_stage:
+            raise exceptions.ValidationError(
+                {"targetStageId": "This query parameter is required."}
+            )
+
+        classification = workflow_continuation_domain.classify_run(run) or {}
+        source_application = classification.get("source_application") or (
+            run.workflow_application
+            or run.module_application
+            or run.utility_application
+        )
+        report = self._scientific_output_report(request, run)
+        verification = report["scientific_verification"]
+        provenance = {
+            "source_run_id": run.id,
+            "source_stage": classification.get("source_stage", ""),
+            "source_application": source_application,
+            "scheduler_status": report["scheduler_status"],
+            "verification_status": verification["status"],
+        }
+        if not report["scheduler_complete"]:
+            return Response(
+                {
+                    "status": "blocked",
+                    "reason": "source_run_not_completed",
+                    "message": (
+                        "The source run must complete before its outputs can be "
+                        "inherited."
+                    ),
+                    "scheduler_status": report["scheduler_status"],
+                    "input_file_name": query_params.get(
+                        "requiredFileName", ""
+                    ),
+                    "expected_role": "",
+                    "selected": None,
+                    "candidates": [],
+                    "data_entry_values": None,
+                    "source_stage": classification.get("source_stage", ""),
+                    "source_application": source_application,
+                    "target_stage": target_stage,
+                    "target_application": query_params.get(
+                        "targetApplicationId", ""
+                    ),
+                    "scientific_verification": verification,
+                    "provenance": provenance,
+                }
+            )
+        if verification["status"] != "verified":
+            return Response(
+                {
+                    "status": "blocked",
+                    "reason": verification["reason"],
+                    "message": verification["message"],
+                    "scheduler_status": report["scheduler_status"],
+                    "input_file_name": query_params.get(
+                        "requiredFileName", ""
+                    ),
+                    "expected_role": "",
+                    "selected": None,
+                    "candidates": [],
+                    "data_entry_values": None,
+                    "source_stage": classification.get("source_stage", ""),
+                    "source_application": source_application,
+                    "target_stage": target_stage,
+                    "target_application": query_params.get(
+                        "targetApplicationId", ""
+                    ),
+                    "scientific_verification": verification,
+                    "provenance": provenance,
+                }
+            )
+        result = workflow_output_contracts.resolve_workflow_output_binding(
+            output_manifest=report["files"],
+            source_application=source_application,
+            target_stage=target_stage,
+            target_application=query_params.get("targetApplicationId", ""),
+            required_file_name=query_params.get("requiredFileName", ""),
+        )
+        return Response(
+            {
+                **result,
+                "source_stage": classification.get("source_stage", ""),
+                "source_application": source_application,
+                "target_stage": target_stage,
+                "target_application": query_params.get(
+                    "targetApplicationId", ""
+                ),
+                "scheduler_status": report["scheduler_status"],
+                "scientific_verification": verification,
+                "provenance": provenance,
+            }
+        )
 
 
 class PlotParametersViewSet(viewsets.ModelViewSet):
@@ -1068,11 +2202,12 @@ def user_run_file_exists(request, run, filename):
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name].value
+        experiment_state = ExperimentState._NAMES_TO_VALUES.get(status_name)
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
             experiment_model = request.airavata_client.getExperiment(
-                request.authz_token, execution.airavata_experiment_id
+                request.authz_token,
+                execution.airavata_experiment_id,
             )
             break
     if experiment_model is None:
@@ -1109,13 +2244,30 @@ def user_run_file_exists(request, run, filename):
 
 @api_view(["GET"])
 def api_settings(request):
-    app_module_id = getattr(settings, "EPOLYSCAT", {}).get(
+    epolyscat_settings = getattr(settings, "EPOLYSCAT", {})
+    app_module_id = epolyscat_settings.get(
         "EPOLYSCAT_APPLICATION_ID",
         # "BSR:_B-Spline_atomic_R-matrix_code_9ae142cb-689f-4440-8d2d-e131f2891005"
         #"BSR3_82b15174-04a1-471e-82a3-33c77c8c6281"
-        "ePolyScat_940ab1c9-4ceb-431c-8595-c6246a195442"
+        DEFAULT_EPOLYSCAT_APPLICATION_MODULE_ID,
     )
-    return response.Response({"EPOLYSCAT": {"EPOLYSCAT_APPLICATION_ID": app_module_id}})
+    gaussian_app_module_id = epolyscat_settings.get(
+        "GAUSSIAN16_APPLICATION_ID",
+        DEFAULT_GAUSSIAN16_APPLICATION_MODULE_ID,
+    )
+    openmolcas_app_module_id = epolyscat_settings.get(
+        "OPENMOLCAS_APPLICATION_ID",
+        DEFAULT_OPENMOLCAS_APPLICATION_MODULE_ID,
+    )
+    return response.Response(
+        {
+            "EPOLYSCAT": {
+                "EPOLYSCAT_APPLICATION_ID": app_module_id,
+                "GAUSSIAN16_APPLICATION_ID": gaussian_app_module_id,
+                "OPENMOLCAS_APPLICATION_ID": openmolcas_app_module_id,
+            }
+        }
+    )
 
 
 def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
@@ -1128,18 +2280,19 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
         return None
 
     experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-        request.authz_token, most_recent_execution.airavata_experiment_id
+        request.authz_token,
+        most_recent_execution.airavata_experiment_id,
     )
     # Find the output by data type
     output = None
-    for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+    for experiment_output in experiment_model.experimentOutputs:
+        output_type_name = DataType._VALUES_TO_NAMES.get(experiment_output.type)
         if output_type_name == data_type:
-            output = output
+            output = experiment_output
             break
     # If experiment is finished, see if there is an experimentOutput available
     if most_recent_execution.is_airavata_experiment_finished(request):
-        if output is not None or user_storage.exists(
+        if output is not None and user_storage.exists(
             request, data_product_uri=output.value
         ):
             return output.value
@@ -1165,14 +2318,36 @@ class ViewsViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated, IsOwnerOrReadOnly]
     pagination_class = Pagination
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["include_runs"] = self.action != "list"
+        if self.action == "list":
+            context["refresh_remote_status"] = False
+        return context
+
     def get_queryset(self):
-        #request = self.request
-        return (
+        queryset = (
             # Returns Runs owned by the user
             models.View.objects.filter(
                 Q(owner=self.request.user)
             )
         )
+        if self.action == "list":
+            queryset = queryset.annotate(
+                serialized_run_count=Count(
+                    "runs",
+                    distinct=True,
+                ),
+                serialized_active_run_count=Count(
+                    "runs",
+                    filter=Q(
+                        runs__experiment__owner__isnull=False,
+                        runs__deleted=False,
+                    ),
+                    distinct=True,
+                ),
+            )
+        return queryset
 
 #        #queryset = models.View.filter_by_user(request)
 #
@@ -1355,9 +2530,9 @@ class ViewsViewSet(viewsets.ModelViewSet):
                 self._save_file(request, run_instance, file_data, new_input)
         else:
             # Ensures that if a run type is previously defined as something else, it gets overidden when updated
-            if input["name"] in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"]:
+            if input["name"] in RUN_SELECTOR_INPUT_NAMES:
                 matching_inputs = list(filter(lambda input:
-                    input.name in ["EPOLYSCAT_Application_Module", "Application_Utility", "Application_Workflow"],
+                    input.name in RUN_SELECTOR_INPUT_NAMES,
                     run_instance.inputs.all()
                 ));
                 for matching_input in matching_inputs:
@@ -1802,7 +2977,7 @@ def runs_dir(request, runs, filenames, ignore_missing=False):
 
 def open_run_file(request, run: models.Run, filename: str):
     # Handle tutorial runs specially: all of their files are available within the app
-    if FALSE and run.is_tutorial:
+    if False and run.is_tutorial:
         return open(BASE_DIR / run.filepath / filename, "rb")
     else:
         data_product_uri = user_run_file_exists(request, run, filename)
@@ -1813,7 +2988,7 @@ def open_run_file(request, run: models.Run, filename: str):
 
 
 def run_file_exists(request, run: models.Run, filename: str) -> bool:
-    if FALSE and run.is_tutorial:
+    if False and run.is_tutorial:
         return (BASE_DIR / run.filepath / filename).exists()
     else:
         return user_run_file_exists(request, run, filename) is not None
@@ -1824,99 +2999,72 @@ def user_run_file_exists(request, run, filename):
 
     # check to see if the file is already in the run directory, for backwards compatibility
     if run.owner == request.user:
-        print(f"DEBUG: Checking run directory for owner {run.owner}")
-        try:
-            data_product_uri = user_storage.user_file_exists(
-                request, os.path.join(run.filepath, filename)
-            )
-            if data_product_uri is not None:
-                 print(f"DEBUG: Found {filename} in {run.filepath} with URI: {data_product_uri}")
-                 logger.debug(f"Found {filename} in {run.filepath}")
-                 return data_product_uri
-        except Exception as e:
-            print(f"DEBUG: Failed to check run directory: {e}")
-    else:
-       print(f"DEBUG: Run owner {run.owner} != request user {request.user}, skipping run directory check")        
+        data_product_uri = user_storage.user_file_exists(
+            request, os.path.join(run.directory, filename)
+        )
+        if data_product_uri is not None:
+            logger.debug("Found %s in %s", filename, run.directory)
+            return data_product_uri
 
     # Find the most recent completed execution (Airavata experiment) if exists
-    print(f"DEBUG: Looking for completed execution in {run.executions.count()} executions")
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name].value
-        print(f"DEBUG: Execution {execution.airavata_experiment_id} status: {status_name}")
+        experiment_state = ExperimentState._NAMES_TO_VALUES.get(status_name)
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
             experiment_model = request.airavata_client.getExperiment(
-                request.authz_token, execution.airavata_experiment_id
+                request.authz_token,
+                execution.airavata_experiment_id,
             )
             break
     if experiment_model is None:
-        print(f"DEBUG: No completed execution found for run {run.id}")
         return None
 
     # Load the Modl_RunID file to find location of files
     # TODO: cache this information
-    print(f"DEBUG: Looking for Modl_RunID in {len(experiment_model.experimentOutputs)} experiment outputs")
     modl_runid_output = None
     for output in experiment_model.experimentOutputs:
         if output.name == "Modl_RunID":
             modl_runid_output = output
-            print(f"DEBUG: Found Modl_RunID output with URI: {output.value}")
             break
     if modl_runid_output is None:
-        print(f"DEBUG: Modl_RunID output not found")
         raise Exception("Modl_RunID file is missing")
-    if  not user_storage.exists(request, data_product_uri=modl_runid_output.value):
-        print(f"DEBUG: Modl_RunID file does not exist at URI: {modl_runid_output.value}")
+    if not user_storage.exists(request, data_product_uri=modl_runid_output.value):
         raise Exception("Modl_RunID file is missing")
 
-    print(f"DEBUG: Opening Modl_RunID file from URI: {modl_runid_output.value}")
     modl_runid_file = user_storage.open_file(
         request, data_product_uri=modl_runid_output.value
     )
     model_runid = modl_runid_file.read().decode()
-    print(f"DEBUG: Modl_RunID file contents: '{model_runid.strip()}'")
 
     m = re.match(r"(\S+) (\S+)", model_runid)
     if m is None:
-        print(f"DEBUG: Failed to parse Modl_RunID contents: '{model_runid}'")
         raise Exception(f"Invalid Modl_RunID file contents: {model_runid}")
     model, run_id = m.group(1, 2)
-    print(f"DEBUG: Parsed model: '{model}', run_id: '{run_id}'")
-    
-    try:
-        print(f"DEBUG: Using list_experiment_dir for experimen     t: '{experiment_model.experimentId}'")
-        directories, files = user_storage.list_experiment_dir(     request, experiment_model.experimentId)
-        print(f"DEBUG: Found {len(directories)} directories an     d {len(files)} files in experiment directory")
- 
-        available_files = [file['name'] for file in files]
-        print(f"DEBUG: Available files: {available_files}") 
-    # Check for the file in ARCHIVE/model/run_id/ directory
-        for file in files:
-            if file['name'] == filename:
-                print(f"DEBUG: Found file '{filename}' with data product URI: '{file['data-product-uri']}'")
-                return file['data-product-uri']
-     
-        print(f"DEBUG: File '{filename}' not found in experiment directory")
-        return None 
-         
-    except Exception as e:
-        print(f"DEBUG: Failed to list experiment directory: {e}")
 
-        archive_path = os.path.join("ARCHIVE", model, run_id, filename)
-        print(f"DEBUG: Fallback - checking archive path: '{archive_path}'")     
-        
-        try:
-           data_product_uri = user_storage.user_file_exists(
-               request,
-               os.path.join("ARCHIVE", model, run_id, filename),
-               experiment_id=experiment_model.experimentId,
-           )
-           return data_product_uri
-        except Exception as fallback_e:
-            print(f"DEBUG: Fallback also failed: {fallback_e}")
-            return None
+    try:
+        _directories, files = user_storage.list_experiment_dir(
+            request, experiment_model.experimentId
+        )
+        for file_data in files:
+            if file_data["name"] == filename:
+                return file_data.get("data-product-uri") or file_data.get(
+                    "dataProductURI"
+                )
+    except Exception:
+        logger.debug(
+            "Failed to list experiment directory for %s",
+            experiment_model.experimentId,
+            exc_info=True,
+        )
+
+    # Check for the file in ARCHIVE/model/run_id/ directory
+    return user_storage.user_file_exists(
+        request,
+        os.path.join("ARCHIVE", model, run_id, filename),
+        experiment_id=experiment_model.experimentId,
+    )
 
 
 def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
@@ -1929,18 +3077,19 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
         return None
 
     experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-        request.authz_token, most_recent_execution.airavata_experiment_id
+        request.authz_token,
+        most_recent_execution.airavata_experiment_id,
     )
     # Find the output by data type
     output = None
-    for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+    for experiment_output in experiment_model.experimentOutputs:
+        output_type_name = DataType._VALUES_TO_NAMES.get(experiment_output.type)
         if output_type_name == data_type:
-            output = output
+            output = experiment_output
             break
     # If experiment is finished, see if there is an experimentOutput available
     if most_recent_execution.is_airavata_experiment_finished(request):
-        if output is not None or user_storage.exists(
+        if output is not None and user_storage.exists(
             request, data_product_uri=output.value
         ):
             return output.value

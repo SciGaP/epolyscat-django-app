@@ -44,6 +44,7 @@
                             <b-button variant="light" :href="href" @click="navigate">New Run</b-button>
                         </router-link>
                     </div>
+                </div>
 
 
 
@@ -155,6 +156,7 @@
                         </template>
                     </ListView>
               </LoadingOverlay>
+            </div>
 
 <!--
 
@@ -259,7 +261,6 @@
         </div>
 
 -->
-
       </div>
       <multipane-resizer v-if="isCompareEnabled"/>
       <div class="h-100 m-1" v-if="isCompareEnabled" style="overflow-y: scroll;">

@@ -26,11 +26,9 @@
                     <span>No recent runs</span>
                 </div>
             </LoadingOverlay>
-            <router-link :to="`runs/new`" v-slot="{isExactActive, href, navigate}">
-                <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
-                    Create new run
-                </b-button>
-            </router-link>
+            <b-button variant="outline-secondary" @click="goToNewRun">
+                Create new run
+            </b-button>
             <router-link :to="`runs`" v-slot="{isExactActive, href, navigate}" v-if="runCount > 4">
                 <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
                     View all Runs
@@ -89,7 +87,6 @@
 import store from "@/store";
 import LoadingOverlay from '../overlay/LoadingOverlay.vue';
 import { eventBus } from '@/event-bus';
-import { ExperimentService } from "@/service/epolyscat-service";
 
 export default {
   components: { LoadingOverlay },
@@ -124,6 +121,9 @@ export default {
     }
   },
   methods: {
+    goToNewRun() {
+      this.$router.push("/runs/new");
+    },
     async refreshData() {
       try {
                     await this.$store.dispatch("run/fetchRuns", {});

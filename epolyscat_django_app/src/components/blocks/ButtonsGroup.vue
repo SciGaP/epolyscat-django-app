@@ -19,7 +19,7 @@
                         <b-icon icon="file-earmark-check" v-if="button.checked" />
                         <b-icon icon="file-earmark-plus"     v-else />
                     </template>
-                    <a v-if="button.delete" @click="button.delete()">
+                    <a v-if="button['delete']" @click="button['delete']()">
                         <b-icon icon="trash" size="sm" />
                     </a>
                 </label>

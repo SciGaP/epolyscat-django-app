@@ -1,5 +1,7 @@
 import {ViewService} from "@/service/epolyscat-service";
 
+const pendingViewRequests = {};
+
 const state = {
     // Must be declared here so they are reactive and never `undefined`.
     // getViewsPagination reads viewListPaginationMap during the very first
@@ -13,26 +15,43 @@ const state = {
 
 const actions = {
     //async fetchViews({commit}) {
-    async fetchViews({commit}, {page = 1, pageSize = 1000, tutorials = false} = {
+    fetchViews({commit}, {page = 1, pageSize = 1000, tutorials = false} = {
         page: 1, pageSize: 1000, tutorials: false
     }) {
         const queryString = JSON.stringify({page, pageSize, tutorials});
+        if (pendingViewRequests[queryString])
+            return pendingViewRequests[queryString];
 
-        const viewsRes = await ViewService.fetchAllViews({page, pageSize, tutorials});
-        const views = viewsRes.results;
-        const viewIds = views.map(({viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly}) => {
-            commit("SET_VIEW", {
-                viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
+        const request = ViewService.fetchAllViews({page, pageSize, tutorials})
+            .then(viewsRes => {
+                const views = viewsRes.results;
+                const viewIds = views.map(({viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly}) => {
+                    commit("SET_VIEW", {
+                        viewId, name, owner, updated, created, deleted, type, activeRunCount, runCount, readonly
+                    });
+
+                    return viewId;
+                });
+
+                commit("SET_VIEW_LIST", {
+                    queryString,
+                    viewIds,
+                    pagination: {page, pageSize, total: viewsRes.count}
+                });
             });
 
-            return viewId;
-        });
+        pendingViewRequests[queryString] = request.then(
+            result => {
+                delete pendingViewRequests[queryString];
+                return result;
+            },
+            error => {
+                delete pendingViewRequests[queryString];
+                throw error;
+            }
+        );
 
-        commit("SET_VIEW_LIST", {
-            queryString,
-            viewIds,
-            pagination: {page, pageSize, total: viewsRes.count}
-        });
+        return pendingViewRequests[queryString];
     },
  
         //const views = await ViewService.fetchViews();
@@ -136,12 +155,8 @@ const mutations = {
         state.viewMap = {...state.viewMap};
     },
     INSERT_RUN(state, { viewId, run }) {
-        // console.log(viewId, state.viewMap[viewId])
-        if (!(viewId in state.viewMap)) {
-          //print to log
-          console.log('no viewId in vewMap')
-        }
-
+        if (!(viewId in state.viewMap))
+            return;
         state.viewMap[viewId].runs.push(run);
         state.viewMap[viewId].runCount = state.viewMap[viewId].runs.length;
     },

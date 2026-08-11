@@ -4,15 +4,16 @@ import os
 from io import StringIO
 from urllib.parse import urlencode
 
-from airavata_django_portal_sdk import experiment_util, user_storage
 from airavata.model.workspace.ttypes import Project
+from airavata_django_portal_sdk import user_storage
+from django.apps import apps
 from django.db import transaction
 from django.db.models import Q
 from django.conf import settings
 from django.utils.text import get_valid_filename
 from rest_framework import reverse, serializers, validators
 
-from epolyscat_django_app import models
+from epolyscat_django_app import models, scientific_output_service
 
 logger = logging.getLogger(__name__)
 
@@ -29,9 +30,7 @@ class InputSerializer(serializers.ModelSerializer):
         fields = ['type', 'name', 'value', 'files']
 
     def get_files(self, input_instance):
-        files = models.File.objects.filter(input=input_instance)
-
-        return FileSerializer(files, many=True).data
+        return FileSerializer(input_instance.files.all(), many=True).data
 
 
 class UniqueToUserValidator(validators.UniqueValidator):
@@ -77,6 +76,7 @@ class RunSerializer(serializers.ModelSerializer):
     is_tutorial = serializers.SerializerMethodField()
     job_id = serializers.SerializerMethodField()
     resource = serializers.SerializerMethodField()
+    presentation = serializers.SerializerMethodField()
     #resource_short = serializers.SerializerMethodField()
     #executions = serializers.SlugRelatedField(
     #    slug_field="airavata_experiment_id", read_only=True, many=True
@@ -92,8 +92,11 @@ class RunSerializer(serializers.ModelSerializer):
             "created", "updated", "deleted", 'is_email_notification_on',
             "group_resource_profile_id", "compute_resource_id",
             "queue_name", "core_count", "node_count", "walltime_limit", "total_physical_memory",
-            "inputs", "executions", "status", "job_status", "is_tutorial", "job_id", "resource",
-            "experiment",
+            "run_mode", "module_application", "workflow_stage", "workflow_application",
+            "utility_application", "workflow_metadata",
+            "parent_run", "workflow_source_run", "workflow_step_order", "workflow_step_status",
+            "inputs", "executions", "status", "job_status", "is_tutorial", "job_id",
+            "resource", "presentation", "experiment",
             #"directedit", "inpc_download_url", "cancelable","can_resubmit", "input_table", "root",
             #"number", "root", "resource", #"resource_short", "job_id",
         )
@@ -117,10 +120,29 @@ class RunSerializer(serializers.ModelSerializer):
             -1,
             0
         )
-        epolyscat_project_choices = ([p for p in projects if "EPOLYSCAT_app_project" in p.projectID] or
-            [p for p in projects if "Default_Project" in p.projectID] or
-            [p for p in projects if "Default" in p.projectID] or
-            [p for p in projects if "default" in p.projectID])
+        epolyscat_project_choices = (
+            [
+                project
+                for project in projects
+                if "EPOLYSCAT_app_project"
+                in project.projectID
+            ]
+            or [
+                project
+                for project in projects
+                if "Default_Project" in project.projectID
+            ]
+            or [
+                project
+                for project in projects
+                if "Default" in project.projectID
+            ]
+            or [
+                project
+                for project in projects
+                if "default" in project.projectID
+            ]
+        )
 
         if len(epolyscat_project_choices) > 0:
             airavata_project_id = epolyscat_project_choices[0].projectID
@@ -286,15 +308,737 @@ class RunSerializer(serializers.ModelSerializer):
             return None
     '''
     def get_inputs(self, run_instance: models.Run):
-        inputs = models.Input.objects.filter(run=run_instance)
+        return InputSerializer(run_instance.inputs.all(), many=True).data
 
-        return InputSerializer(inputs, many=True).data
+    def _refresh_remote_status(self):
+        return self.context.get("refresh_remote_status", True)
+
+    def _workflow_steps(self, run_instance):
+        prefetched = getattr(
+            run_instance,
+            "_prefetched_objects_cache",
+            {},
+        ).get("workflow_steps")
+        if prefetched is not None:
+            return sorted(
+                prefetched,
+                key=lambda run: (
+                    run.workflow_step_order is None,
+                    run.workflow_step_order or 0,
+                    run.pk,
+                ),
+            )
+        return list(
+            run_instance.workflow_steps.order_by(
+                "workflow_step_order",
+                "id",
+            )
+        )
+
+    def get_presentation(self, run_instance: models.Run):
+        mode = run_instance.run_mode or "module"
+        metadata = run_instance.workflow_metadata or {}
+        child_stages = (
+            self._cached_workflow_child_stages(run_instance)
+            if mode == "workflow"
+            else []
+        )
+        context_run = self._presentation_context_run(run_instance, child_stages)
+        schema = self._presentation_file_schema(run_instance, context_run)
+        workflow_stage = schema["active_stage_id"]
+        input_files = self._run_file_names(run_instance, "files")
+        output_files = metadata.get("output_files") or schema["output_files"]
+        target_states = {
+            "input_columns": metadata.get("target_state_input_columns") or schema["input_columns"],
+            "output_files": output_files,
+        }
+        selectable_inputs = input_files or schema["input_files"]
+        selectable_files = selectable_inputs or output_files or [""]
+        file_groups = [
+            {"label": "Inputs", "files": selectable_inputs},
+            {"label": "Outputs", "files": output_files + schema["output_extras"]},
+        ]
+
+        presentation = {
+            "mode": mode,
+            "subtitle": schema["subtitle"],
+            "active_stage_id": workflow_stage,
+            "target_states": target_states,
+            "file_groups": file_groups,
+            "selected_file": metadata.get("selected_file") or selectable_files[0],
+            "code": metadata.get("code") or self._default_code(run_instance),
+            "parameters": metadata.get("parameters") or [
+                {"label": "Coupling mode", "value": "LS"},
+                {"label": "Nuclear charge/Atomic number", "value": "2"},
+                {"label": "Number of electrons", "value": "1"},
+            ],
+            "plot": metadata.get("plot") or {
+                "file": schema["plot_file"],
+                "x_axis": "0",
+                "y_axis": "1",
+                "flags": "-linY",
+            },
+            "plottable_file_names": self._plottable_file_names(),
+            "applications": self._workflow_applications(run_instance.workflow_application),
+            "stages": self._workflow_stages("epolyscat-dmat"),
+        }
+
+        if mode == "workflow":
+            presentation["stages"] = child_stages or self._workflow_stages(workflow_stage)
+            presentation.update(self._workflow_progress(run_instance, presentation["stages"]))
+
+        return presentation
+
+    def _cached_workflow_child_stages(self, run_instance):
+        parent_run = (
+            run_instance.parent_run
+            if run_instance.parent_run_id is not None
+            else run_instance
+        )
+        cache = getattr(self, "_workflow_child_stages_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_child_stages_cache = cache
+        if parent_run.pk not in cache:
+            cache[parent_run.pk] = self._workflow_child_stages(parent_run)
+        return cache[parent_run.pk]
+
+    def _workflow_parent_summary(self, run_instance):
+        if (
+            run_instance.run_mode != "workflow"
+            or run_instance.parent_run_id is not None
+            or not run_instance.workflow_steps.exists()
+        ):
+            return None
+
+        cache = getattr(self, "_workflow_parent_summary_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_parent_summary_cache = cache
+        if run_instance.pk in cache:
+            return cache[run_instance.pk]
+
+        stages = self._cached_workflow_child_stages(run_instance)
+        progress = self._workflow_progress(run_instance, stages)
+        remote_stages = [stage for stage in stages if not stage.get("local_only")]
+        child_runs = self._workflow_steps(run_instance)
+
+        if remote_stages and all(
+            self._workflow_stage_is_complete(stage) for stage in remote_stages
+        ):
+            status = "COMPLETED"
+        else:
+            latest_terminal_statuses = {
+                child.latest_execution.airavata_experiment_status
+                for child in child_runs
+                if child.latest_execution is not None
+            }
+            if "FAILED" in latest_terminal_statuses:
+                status = "FAILED"
+            elif "CANCELED" in latest_terminal_statuses:
+                status = "CANCELED"
+            else:
+                metadata_state = (run_instance.workflow_metadata or {}).get(
+                    "workflow_state"
+                )
+                started = (
+                    metadata_state in ("running", "waiting", "complete")
+                    or run_instance.workflow_source_run_id is not None
+                    or any(child.executions.exists() for child in child_runs)
+                    or any(
+                        self._workflow_stage_is_complete(stage)
+                        for stage in remote_stages
+                    )
+                )
+                status = "RUNNING" if started else "UNSUBMITTED"
+
+        active_child_id = progress.get("active_child_run_id")
+        active_child = next(
+            (child for child in child_runs if child.id == active_child_id),
+            None,
+        )
+        resource_candidates = [
+            candidate
+            for candidate in (
+                [active_child]
+                + list(reversed(child_runs))
+                + [run_instance.workflow_source_run]
+            )
+            if candidate is not None and candidate.latest_execution is not None
+        ]
+        resource = next(
+            (
+                candidate.latest_execution.resource_name
+                for candidate in resource_candidates
+                if candidate.latest_execution.resource_name
+            ),
+            "",
+        )
+        summary = {
+            "status": status,
+            "job_status": status,
+            "resource": resource,
+            "stages": stages,
+            "progress": progress,
+        }
+        cache[run_instance.pk] = summary
+        return summary
+
+    def _run_file_names(self, run_instance: models.Run, input_type):
+        names = []
+        inputs = [
+            input_instance
+            for input_instance in run_instance.inputs.all()
+            if input_instance.type == input_type
+        ]
+        for input_instance in inputs:
+            names.extend(file.name for file in input_instance.files.all())
+        return names
+
+    def _plottable_file_names(self):
+        # Kept in the presentation shape for older clients. New clients use the
+        # per-output plottable and plot_contract fields from get_output_files.
+        return []
+
+    def _presentation_context_run(self, run_instance, stages=None):
+        if run_instance.run_mode != "workflow" or run_instance.parent_run_id is not None:
+            return run_instance
+
+        children = self._workflow_steps(run_instance)
+        if not children:
+            return run_instance
+
+        stages = stages or []
+        children_by_id = {child.id: child for child in children}
+        metadata = run_instance.workflow_metadata or {}
+        active_child_run_id = metadata.get("active_child_run_id")
+        if active_child_run_id:
+            active_stage = next(
+                (
+                    stage for stage in stages
+                    if active_child_run_id in (
+                        [stage.get("child_run_id")]
+                        + list(stage.get("child_run_ids") or [])
+                    )
+                ),
+                None,
+            )
+            if (
+                active_stage is not None
+                and not self._workflow_stage_is_complete(active_stage)
+                and active_child_run_id in children_by_id
+            ):
+                return children_by_id[active_child_run_id]
+
+        active_stage = next(
+            (
+                stage for stage in stages
+                if stage.get("state") == "active"
+                and stage.get("child_run_id") in children_by_id
+            ),
+            None,
+        )
+        if active_stage is not None:
+            return children_by_id[active_stage["child_run_id"]]
+
+        workflow_started = (
+            metadata.get("workflow_state") in ("running", "waiting", "complete")
+            or any(self._workflow_stage_is_complete(stage) for stage in stages)
+        )
+        if workflow_started:
+            pending_stage = self._first_actionable_pending_stage(stages)
+            if (
+                pending_stage is not None
+                and pending_stage.get("child_run_id") in children_by_id
+            ):
+                return children_by_id[pending_stage["child_run_id"]]
+
+        visualization_stage = next(
+            (
+                stage for stage in stages
+                if stage.get("local_only")
+                and stage.get("state") == "active"
+                and stage.get("source_child_run_id") in children_by_id
+            ),
+            None,
+        )
+        if visualization_stage is not None:
+            return children_by_id[visualization_stage["source_child_run_id"]]
+
+        return children[0]
+
+    def _workflow_stage_is_complete(self, stage):
+        return (
+            stage.get("state") == "complete"
+            or stage.get("status") in ("complete", "imported", "not_included")
+        )
+
+    def _first_actionable_pending_stage(self, stages):
+        for index, stage in enumerate(stages):
+            if stage.get("local_only") or stage.get("state") != "pending":
+                continue
+            if all(
+                self._workflow_stage_is_complete(previous_stage)
+                for previous_stage in stages[:index]
+            ):
+                return stage
+        return None
+
+    def _presentation_file_schema(self, display_run, context_run):
+        application = self._presentation_application(context_run)
+        stage = self._normalized_workflow_stage(context_run.workflow_stage)
+        display_stage = context_run.workflow_stage or stage
+        schema = self._file_schema_for_application(application)
+
+        if display_run.run_mode == "workflow":
+            subtitle = f"Workflow/{self._workflow_stage_label(display_stage)}"
+            active_stage_id = display_stage
+        elif display_run.run_mode == "utility":
+            subtitle = f"Utilities/{application}"
+            active_stage_id = application
+        elif display_run.module_application:
+            subtitle = f"Modules/{application}"
+            active_stage_id = application
+        else:
+            subtitle = "Modules/EPOLYSCAT_DMAT"
+            active_stage_id = "epolyscat-dmat"
+
+        return {
+            **schema,
+            "subtitle": subtitle,
+            "active_stage_id": active_stage_id,
+        }
+
+    def _presentation_application(self, run_instance):
+        stage = self._normalized_workflow_stage(run_instance.workflow_stage)
+        if run_instance.run_mode == "utility":
+            return run_instance.utility_application or "CnvMath"
+        if run_instance.run_mode == "workflow":
+            if stage == "Data_Gen":
+                return run_instance.workflow_application or "OpenMolcas"
+            if stage == "Analysis":
+                return run_instance.utility_application or "CnvMath"
+            return run_instance.module_application or "ePolyScat"
+        return run_instance.module_application or "ePolyScat"
+
+    def _normalized_workflow_stage(self, stage):
+        aliases = {
+            "data-generation": "Data_Gen",
+            "Data_Generation": "Data_Gen",
+            "bound": "ePolyScat_Run",
+            "epolyscat-dmat": "ePolyScat_Run",
+            "analysis": "Analysis",
+        }
+        return aliases.get(stage, stage or "ePolyScat_Run")
+
+    def _file_schema_for_application(self, application):
+        epolyscat_inputs = [
+            ["ns_001.c", "target", "ns_001.bsw"],
+            ["nd_001.c", "knot.dat", "nd_001.bsw"],
+            ["bound.nnn", "target.bsw", "mult_bnk", "pert_nnn.bsw"],
+        ]
+        schemas = {
+            "Gaussian16": {
+                "input_columns": [["Gaussian_Input"]],
+                "input_files": ["Gaussian_Input"],
+                "output_files": ["gaussian.log", "molden.dat"],
+                "output_extras": [],
+                "plot_file": "molden.dat",
+            },
+            "OpenMolcas": {
+                "input_columns": [["Molcas_Input"]],
+                "input_files": ["Molcas_Input"],
+                "output_files": ["molcas.log", "molden.dat"],
+                "output_extras": [],
+                "plot_file": "molden.dat",
+            },
+            "ePolyScat": {
+                "input_columns": epolyscat_inputs,
+                "input_files": ["ePolyScat_Input_Data", "ePolyscat_Input_File"],
+                "output_files": ["d.nnn", "zf_res", "ePolyScat_dmat.log"],
+                "output_extras": ["Parameters", "bound_tab", "logs"],
+                "plot_file": "cross_sections",
+            },
+            "MoldenMerge": {
+                "input_columns": [["molden.dat"]],
+                "input_files": ["molden.dat"],
+                "output_files": ["merged_molden.dat"],
+                "output_extras": [],
+                "plot_file": "merged_molden.dat",
+            },
+        }
+        utility_outputs = {
+            "CnvMath": "mathematica_output.dat",
+            "CnvMatLab": "matlab_output.dat",
+            "CnvLinFull": "differential_cross_section.dat",
+            "NRFPAD": "nrfpad.dat",
+            "Cube2igor": "igor_plot.itx",
+        }
+        if application in utility_outputs:
+            return {
+                "input_columns": [],
+                "input_files": [],
+                "output_files": [utility_outputs[application]],
+                "output_extras": [],
+                "plot_file": utility_outputs[application],
+            }
+        return schemas.get(application, schemas["ePolyScat"])
+
+    def _workflow_stage_label(self, stage):
+        labels = {
+            "Data_Gen": "Data Generation",
+            "Data_Generation": "Data Generation",
+            "data-generation": "Data Generation",
+            "bound": "Bound",
+            "ePolyScat_Run": "ePolyScat Run",
+            "stgf": "STGF",
+            "Analysis": "Post-processing",
+            "analysis": "Post-processing",
+            "Visualization": "Visualization",
+            "visualization": "Visualization",
+            "epolyscat-dmat": "EPOLYSCAT_DMAT",
+        }
+        return labels.get(stage, stage.replace("-", " ").title())
+
+    def _workflow_applications(self, selected_application):
+        selected = selected_application or "OpenMolcas"
+        return [
+            {
+                "id": "Gaussian16",
+                "label": "Gaussian16",
+                "selected": selected == "Gaussian16",
+                "parameters": [
+                    {"label": "Input file", "name": "gaussian_input"},
+                    {"label": "GPU_Version?", "name": "gpu_version", "value": "Yes"},
+                ],
+            },
+            {
+                "id": "OpenMolcas",
+                "label": "OpenMolcas",
+                "selected": selected == "OpenMolcas",
+                "parameters": [
+                    {"label": "Input file", "name": "openmolcas_input"},
+                    {"label": "Optional files", "name": "openmolcas_optional"},
+                    {"label": "Printing of orbitals", "name": "printing_orbitals", "value": "Yes"},
+                ],
+            },
+        ]
+
+    def _workflow_stages(self, active_stage_id):
+        stage_aliases = {
+            "data-generation": "Data_Gen",
+            "Data_Generation": "Data_Gen",
+            "bound": "ePolyScat_Run",
+            "analysis": "Analysis",
+            "visualization": "Visualization",
+        }
+        active_stage_id = stage_aliases.get(active_stage_id, active_stage_id)
+        stages = [
+            {"id": "Data_Gen", "label": "Data Generation"},
+            {"id": "ePolyScat_Run", "label": "ePolyScat Run"},
+            {"id": "Analysis", "label": "Post-processing"},
+            {
+                "id": "Visualization",
+                "label": "Visualization",
+                "local_only": True,
+            },
+        ]
+        active_index = next(
+            (index for index, stage in enumerate(stages) if stage["id"] == active_stage_id),
+            1,
+        )
+        for index, stage in enumerate(stages):
+            if index < active_index:
+                stage["state"] = "complete"
+            elif index == active_index:
+                stage["state"] = "active"
+            else:
+                stage["state"] = "pending"
+        return stages
+
+    def _workflow_child_stages(self, run_instance):
+        if run_instance.parent_run_id is not None:
+            return self._workflow_child_stages(run_instance.parent_run)
+
+        child_runs = self._workflow_steps(run_instance)
+        if not child_runs:
+            return []
+
+        metadata = run_instance.workflow_metadata or {}
+        imported_source = metadata.get("importedSource") or {}
+        imported_stage = imported_source.get("stage")
+        if run_instance.workflow_source_run_id and imported_stage:
+            canonical_stages = ["Data_Gen", "ePolyScat_Run", "Analysis"]
+            try:
+                imported_index = canonical_stages.index(imported_stage)
+            except ValueError:
+                imported_index = -1
+            if imported_index >= 0:
+                stages = [
+                    {
+                        "id": stage,
+                        "label": self._workflow_stage_label(stage),
+                        "state": "not_included",
+                        "status": "not_included",
+                    }
+                    for stage in canonical_stages[:imported_index]
+                ]
+                stages.append(
+                    {
+                        "id": imported_stage,
+                        "label": self._workflow_stage_label(imported_stage),
+                        "state": "complete",
+                        "status": "imported",
+                        "child_run_id": run_instance.workflow_source_run_id,
+                        "application": imported_source.get("application") or "",
+                        "imported": True,
+                    }
+                )
+                stages.extend(self._workflow_children_to_stages(child_runs))
+                return self._with_visualization_stage(stages)
+
+        stages = self._workflow_children_to_stages(child_runs)
+        return self._with_visualization_stage(stages)
+
+    def _workflow_children_to_stages(self, child_runs):
+        stages = []
+        analysis_children = [
+            child for child in child_runs if child.workflow_stage == "Analysis"
+        ]
+        analysis_added = False
+
+        for child in child_runs:
+            if child.workflow_stage != "Analysis":
+                stages.append(
+                    {
+                        "id": child.workflow_stage
+                        or f"step-{child.workflow_step_order}",
+                        "label": self._workflow_stage_label(
+                            child.workflow_stage or ""
+                        ),
+                        "state": self._workflow_child_state(child),
+                        "child_run_id": child.id,
+                        "application": self._workflow_child_application(child),
+                        "status": self._workflow_child_status(child),
+                    }
+                )
+                continue
+            if analysis_added:
+                continue
+
+            analysis_added = True
+            child_states = [
+                self._workflow_child_state(analysis_child)
+                for analysis_child in analysis_children
+            ]
+            if child_states and all(state == "complete" for state in child_states):
+                state = "complete"
+                status = "complete"
+            elif "active" in child_states:
+                state = "active"
+                status = "active"
+            else:
+                state = "pending"
+                status = "pending"
+            selected_child = next(
+                (
+                    analysis_child
+                    for analysis_child, child_state in zip(
+                        analysis_children, child_states
+                    )
+                    if child_state != "complete"
+                ),
+                analysis_children[-1],
+            )
+            stages.append(
+                {
+                    "id": "Analysis",
+                    "label": self._workflow_stage_label("Analysis"),
+                    "state": state,
+                    "status": status,
+                    "child_run_id": selected_child.id,
+                    "child_run_ids": [
+                        analysis_child.id
+                        for analysis_child in analysis_children
+                    ],
+                    "application": self._workflow_child_application(
+                        selected_child
+                    ),
+                    "applications": [
+                        self._workflow_child_application(analysis_child)
+                        for analysis_child in analysis_children
+                    ],
+                }
+            )
+        return stages
+
+    def _with_visualization_stage(self, stages):
+        if any(stage.get("id") == "Visualization" for stage in stages):
+            return stages
+
+        analysis_stages = [stage for stage in stages if stage.get("id") == "Analysis"]
+        analysis_complete = bool(analysis_stages) and all(
+            stage.get("state") == "complete"
+            or stage.get("status") in ("complete", "imported")
+            for stage in analysis_stages
+        )
+        source_stage = next(
+            (
+                stage
+                for stage in reversed(analysis_stages)
+                if stage.get("child_run_id")
+            ),
+            None,
+        )
+        return [
+            *stages,
+            {
+                "id": "Visualization",
+                "label": "Visualization",
+                "state": "active" if analysis_complete else "pending",
+                "status": "ready" if analysis_complete else "pending",
+                "local_only": True,
+                "source_child_run_id": (
+                    source_stage.get("child_run_id") if source_stage else None
+                ),
+            },
+        ]
+
+    def _workflow_child_state(self, child_run):
+        if (
+            child_run.workflow_step_status == "complete"
+            or self._workflow_child_has_verified_completion(child_run)
+        ):
+            return "complete"
+        if self._workflow_child_has_terminal_execution(child_run):
+            return "pending"
+        if child_run.workflow_step_status in ("submitted", "running"):
+            return "active"
+        if child_run.executions.exists():
+            return "active"
+        return "pending"
+
+    def _workflow_child_status(self, child_run):
+        if (
+            child_run.workflow_step_status == "complete"
+            or self._workflow_child_has_verified_completion(child_run)
+        ):
+            return "complete"
+        if self._workflow_child_has_terminal_execution(child_run):
+            return "pending"
+        return child_run.workflow_step_status or "pending"
+
+    def _workflow_child_report(self, child_run):
+        if not self._refresh_remote_status():
+            return None
+        request = self.context.get("request")
+        if not request or not child_run.executions.exists():
+            return None
+
+        cache = getattr(self, "_workflow_scientific_report_cache", None)
+        if cache is None:
+            cache = {}
+            self._workflow_scientific_report_cache = cache
+        if child_run.pk not in cache:
+            try:
+                cache[child_run.pk] = scientific_output_service.build_report(
+                    request,
+                    child_run,
+                )
+            except Exception:
+                logger.warning(
+                    "Unable to verify scientific completion for workflow child %s",
+                    child_run.pk,
+                    exc_info=True,
+                )
+                cache[child_run.pk] = None
+        return cache[child_run.pk]
+
+    def _workflow_child_has_verified_completion(self, child_run):
+        report = self._workflow_child_report(child_run)
+        return bool(
+            report
+            and report.get("scheduler_complete")
+            and report.get("scientific_verification", {}).get("status")
+            == "verified"
+        )
+
+    def _workflow_child_has_terminal_execution(self, child_run):
+        report = self._workflow_child_report(child_run)
+        return bool(
+            report
+            and report.get("scheduler_status")
+            in scientific_output_service.TERMINAL_SCHEDULER_STATUSES
+        )
+
+    def _workflow_child_application(self, child_run):
+        return (
+            child_run.workflow_application
+            or child_run.module_application
+            or child_run.utility_application
+            or ""
+        )
+
+    def _workflow_progress(self, run_instance, stages):
+        metadata = run_instance.workflow_metadata or {}
+        workflow_state = metadata.get("workflow_state") or "not_started"
+        active_child_run_id = metadata.get("active_child_run_id")
+        active_stage = next(
+            (
+                stage for stage in stages
+                if active_child_run_id and stage.get("child_run_id") == active_child_run_id
+                and not self._workflow_stage_is_complete(stage)
+            ),
+            None,
+        )
+        if active_stage is None:
+            active_stage = next(
+                (stage for stage in stages if stage.get("state") == "active"),
+                None,
+            )
+        workflow_started = (
+            workflow_state in ("running", "waiting", "complete")
+            or any(self._workflow_stage_is_complete(stage) for stage in stages)
+        )
+        if active_stage is None and workflow_started:
+            active_stage = self._first_actionable_pending_stage(stages)
+            if active_stage is not None:
+                active_stage["state"] = "active"
+        if active_stage and workflow_state == "not_started":
+            workflow_state = "running"
+
+        return {
+            "workflow_state": workflow_state,
+            "active_child_run_id": active_stage.get("child_run_id") if active_stage else active_child_run_id,
+            "active_child_label": active_stage.get("label") if active_stage else "",
+            "active_child_status": active_stage.get("status") if active_stage else "",
+        }
+
+    def _default_code(self, run_instance):
+        return "\n".join(
+            [
+                f"# {run_instance.name}",
+                "Calculation_Type = MODULE",
+                "EPOLYSCAT_Application_Module = EPOLYSCAT_DMAT",
+                "Input_File = target",
+            ]
+        )
 
     def get_is_tutorial(self, run_instance: models.Run):
         request = self.context["request"]
-            
+        if "tutorial_view_id" in self.context:
+            tutorial_view_id = self.context["tutorial_view_id"]
+            return bool(
+                tutorial_view_id
+                and any(
+                    view.pk == tutorial_view_id
+                    for view in run_instance.views.all()
+                )
+            )
+
         tutorial_view = models.View.tutorial_view()
-            
+        if tutorial_view is None:
+            return False
         return tutorial_view in run_instance.views.all() and request.user != tutorial_view.owner
             
 #    def get_status(self, instance: models.Run):
@@ -314,103 +1058,84 @@ class RunSerializer(serializers.ModelSerializer):
 #            return latest_execution.get_airavata_experiment_status(request)
 
     def get_status(self, run_instance: models.Run):
+        workflow_summary = self._workflow_parent_summary(run_instance)
+        if workflow_summary is not None:
+            return workflow_summary["status"]
+
         request = self.context["request"]
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return "UNSUBMITTED"
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
-            # If not finished, try to get application specific status
-            if not latest_execution.is_airavata_experiment_finished(request):
-                # experiment: ExperimentModel = request.airavata_client.getExperiment(
-                #     request.authz_token, latest_execution.airavata_experiment_id
-                # )
+        if not self._refresh_remote_status():
+            return latest_execution.airavata_experiment_status
 
-                # application_status = experiment_util.intermediate_output.get_intermediate_output_process_status(
-                #     request, experiment, "bsr_prep.log"
-                # )
-
-                application_status = request.airavata_client.getExperimentStatus(
-                    request.authz_token, latest_execution.airavata_experiment_id
-                )
-
-                if application_status is not None:
-                    state = application_status.state
-                    status = "CREATED" if state == 0 else (
-                        "VALIDATED" if state == 1 else
-                        "SCHEDULED"     if state == 2 else
-                        "LAUNCHED"      if state == 3 else
-                        "EXECUTING"     if state == 4 else
-                        "CANCELING"     if state == 5 else
-                        "CANCELED"      if state == 6 else
-                        "COMPLETED"     if state == 7 else
-                        "FAILED"
-                    )
-
-                    return status
-
-            return latest_execution.get_airavata_experiment_status(request)
+        return latest_execution.get_airavata_experiment_status(request)
 
 
 
     def get_job_status(self, run_instance: models.Run):
+        workflow_summary = self._workflow_parent_summary(run_instance)
+        if workflow_summary is not None:
+            return workflow_summary["job_status"]
+
         request = self.context["request"]
-            
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return "UNSUBMITTED"
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
+        if not self._refresh_remote_status():
+            return latest_execution.airavata_experiment_status
 
-            try:
-                job_statuses = request.airavata_client.getJobStatuses(
-                    request.authz_token, latest_execution.airavata_experiment_id
+        try:
+            job_statuses = request.airavata_client.getJobStatuses(
+                request.authz_token,
+                latest_execution.airavata_experiment_id
+            )
+            job_statuses_list = list(job_statuses.values())
+
+            if len(job_statuses_list) > 0:
+                # gets the most recent status
+                job_statuses_list.sort(
+                    key=lambda status: status.timeOfStateChange,
+                    reverse=True,
                 )
-        
-                job_statuses_list = list(job_statuses.values());
-            
-                if len(job_statuses_list) > 0:
-                    # gets the most recent status
-                    job_statuses_list.sort(key=lambda status: status.timeOfStateChange, reverse=True)
-                    state = job_statuses_list[0].jobState
+                state = job_statuses_list[0].jobState
 
-                    status = "SUBMITTED"    if state == 0 else (
-                        "QUEUED"            if state == 1 else
-                        "ACTIVE"            if state == 2 else
-                        "COMPLETED"         if state == 3 else
-                        "CANCELED"          if state == 4 else
-                        "FAILED"            if state == 5 else
-                        "SUSPENDED"         if state == 6 else
-                        "UNKNOWN"           if state == 7 else
-                        "NON_CRITICAL_FAIL"     if state == 8 else "UNKNOWN_"
-                    )
+                status = "SUBMITTED"    if state == 0 else (
+                    "QUEUED"            if state == 1 else
+                    "ACTIVE"            if state == 2 else
+                    "COMPLETED"         if state == 3 else
+                    "CANCELED"          if state == 4 else
+                    "FAILED"            if state == 5 else
+                    "SUSPENDED"         if state == 6 else
+                    "UNKNOWN"           if state == 7 else
+                    "NON_CRITICAL_FAIL"     if state == 8 else "UNKNOWN_"
+                )
 
-                    return status
-                else:
-                    return "NO STATUS"
-            except:
-                return "---"
+                return status
+            return "NO STATUS"
+        except Exception:
+            return "---"
 
     def get_job_id(self, run_instance: models.Run):
         request = self.context["request"]
-
-        if not run_instance.executions.exists():
+        latest_execution = run_instance.latest_execution
+        if latest_execution is None:
             return None
-        else:
-            # get the last execution and return it's status
-            latest_execution: models.RemoteExecution = run_instance.latest_execution
-            return latest_execution.get_job_id(request)
+        if not self._refresh_remote_status():
+            return latest_execution.job_id
+        return latest_execution.get_job_id(request)
 
 
 
     def get_resource(self, instance):
-        request = self.context["request"]
-        if not instance.executions.exists():
+        workflow_summary = self._workflow_parent_summary(instance)
+        if workflow_summary is not None:
+            return workflow_summary["resource"]
+
+        latest_execution = instance.latest_execution
+        if latest_execution is None:
             return ""
-        else:
-            # get the last execution and return it's status
-            latest_execution = instance.latest_execution
-            return latest_execution.resource_name
+        return latest_execution.resource_name
 
     def get_resource_short(self, instance):
         request = self.context["request"]
@@ -620,7 +1345,7 @@ class PlotParametersSerializer(serializers.ModelSerializer):
 
 class PlotSerializer(serializers.Serializer):
     runs = RunIdRelatedField(many=True)
-    plotfile = serializers.CharField(max_length=20)
+    plotfile = serializers.CharField(max_length=20, required=False, allow_blank=True)
     plotfiles = PlotfileSerializer(many=True)
     plot_parameters = PlotParametersSerializer(required=False)
     plot_parameters_id = PlotParametersIdRelatedField(required=False)
@@ -661,21 +1386,38 @@ class ViewSerializer(serializers.ModelSerializer):
         #read_only_fields = ("owner", "created", "updated", "deleted", "type")
 
     def get_runs(self, view_instance: models.View):
-        runs = filter(
-            lambda run: any(map(lambda view: view==view_instance,run.views.all())),
-            models.Run.objects.all()
-        )
-
-        return RunSerializer(runs, many=True, context={'request': self.context['request']}).data
+        if not self.context.get("include_runs", True):
+            return []
+        return RunSerializer(
+            view_instance.runs.all(),
+            many=True,
+            context=self.context,
+        ).data
 
     def get_run_count(self, view_instance: models.View):
-        return len(self.get_runs(view_instance))
+        annotated_count = getattr(
+            view_instance,
+            "serialized_run_count",
+            None,
+        )
+        if annotated_count is not None:
+            return annotated_count
+        return view_instance.runs.count()
 
 #//    def get_run_count(self, obj):
 #//        return obj.runs.exclude(experiment__owner=None).count()
 
     def get_active_run_count(self, obj):
-        return obj.runs.exclude(experiment__owner=None).filter(Q(deleted=False)).count()
+        annotated_count = getattr(
+            obj,
+            "serialized_active_run_count",
+            None,
+        )
+        if annotated_count is not None:
+            return annotated_count
+        return obj.runs.exclude(experiment__owner=None).filter(
+            Q(deleted=False)
+        ).count()
 
     @transaction.atomic
     def create(self, validated_data):

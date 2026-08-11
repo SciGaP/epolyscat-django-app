@@ -2,12 +2,12 @@ import logging
 import re
 from typing import Union
 
-from django.db import models
-from airavata.model.workspace.ttypes import Project as AiravataProject
 from airavata.model.experiment.ttypes import ExperimentModel
 from airavata.model.status.ttypes import ExperimentState
+from airavata.model.workspace.ttypes import Project as AiravataProject
 from airavata_django_portal_sdk import experiment_util, user_storage
 from django.conf import settings
+from django.db import models
 from django.db.models import Q
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,9 @@ class Project(models.Model):
             name="Runs for experiment (epolyscat): " + self.name,
         )
         airavata_project_id = request.airavata_client.createProject(
-            request.authz_token, settings.GATEWAY_ID, airavata_project
+            request.authz_token,
+            settings.GATEWAY_ID,
+            airavata_project,
         )
         self.airavata_project_id = airavata_project_id
 
@@ -75,7 +77,9 @@ class Experiment(models.Model):
             name="Runs for experiment (ePolyScat): " + self.name,
         )
         airavata_project_id = request.airavata_client.createProject(
-            request.authz_token, settings.GATEWAY_ID, airavata_project
+            request.authz_token,
+            settings.GATEWAY_ID,
+            airavata_project,
         )
         self.airavata_project_id = airavata_project_id
 
@@ -142,6 +146,24 @@ class View(models.Model):
             return None
         else:
             return tutorial_views[0]
+
+    @staticmethod
+    def filter_by_user(request):
+        return View.objects.filter(Q(owner=request.user) | Q(owner=None))
+
+    def populate_unsubmitted_runs(self, request):
+        executions = RemoteExecution.objects.filter(run=models.OuterRef("pk"))
+        self.runs.set(Run.filter_by_user(request).filter(~models.Exists(executions)))
+
+    @staticmethod
+    def create_default_views(request):
+        owner = request.user
+        if not View.objects.filter(owner=owner, type="unsubmitted").exists():
+            View.objects.create(
+                type="unsubmitted", name="Unsubmitted", owner=owner, order=20
+            )
+        if not View.objects.filter(owner=owner, type="default").exists():
+            View.objects.create(type="default", name="Selected", owner=owner, order=10)
 '''
     class Meta:
         unique_together = ["name", "owner"]
@@ -203,6 +225,35 @@ class Run(models.Model):
     walltime_limit = models.IntegerField(null=True)
     total_physical_memory = models.IntegerField(null=True)  # in megabytes
     input_table = models.TextField(null=True)
+    RUN_MODE_CHOICES = (
+        ("module", "Module"),
+        ("workflow", "Workflow"),
+        ("utility", "Utility"),
+    )
+    run_mode = models.CharField(
+        max_length=20, choices=RUN_MODE_CHOICES, default="module"
+    )
+    module_application = models.CharField(max_length=64, blank=True, default="")
+    workflow_stage = models.CharField(max_length=64, blank=True, default="")
+    workflow_application = models.CharField(max_length=64, blank=True, default="")
+    utility_application = models.CharField(max_length=64, blank=True, default="")
+    workflow_metadata = models.JSONField(default=dict, blank=True)
+    parent_run = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        related_name="workflow_steps",
+        null=True,
+        blank=True,
+    )
+    workflow_source_run = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        related_name="workflow_continuations",
+        null=True,
+        blank=True,
+    )
+    workflow_step_order = models.PositiveSmallIntegerField(null=True, blank=True)
+    workflow_step_status = models.CharField(max_length=32, blank=True, default="")
 
 #    class Meta:
 #        #name = models.CharField(max_length=100)
@@ -251,6 +302,15 @@ class Run(models.Model):
 
     @property
     def latest_execution(self):
+        prefetched = getattr(self, "_prefetched_objects_cache", {}).get(
+            "executions"
+        )
+        if prefetched is not None:
+            return max(
+                prefetched,
+                key=lambda execution: (execution.created, execution.pk),
+                default=None,
+            )
         try:
             return self.executions.latest("created")
         except RemoteExecution.DoesNotExist:
@@ -326,7 +386,7 @@ class RemoteExecution(models.Model):
     updated = models.DateTimeField(auto_now=True)
     airavata_experiment_status = models.CharField(
         max_length=255,
-        default=ExperimentState(ExperimentState.CREATED).name,
+        default=ExperimentState._VALUES_TO_NAMES[ExperimentState.CREATED],
     )
     resource_name = models.CharField(max_length=255, blank=True, default="")
     job_id = models.CharField(max_length=255, null=True)
@@ -334,7 +394,8 @@ class RemoteExecution(models.Model):
     def get_job_id(self, request):
         if self.job_id is None and self.airavata_experiment_id is not None:
             jobs = request.airavata_client.getJobDetails(
-                request.authz_token, self.airavata_experiment_id
+                request.authz_token,
+                self.airavata_experiment_id
             )
             if len(jobs) > 0:
                 self.job_id = jobs[0].jobId
@@ -343,32 +404,40 @@ class RemoteExecution(models.Model):
 
     def get_airavata_experiment_status(self, request):
         terminal_states = self.get_airavata_experiment_terminal_states()
-        old_state = ExperimentState[self.airavata_experiment_status].value
+        old_state = ExperimentState._NAMES_TO_VALUES[
+            self.airavata_experiment_status
+        ]
         if old_state in terminal_states:
             return self.airavata_experiment_status
         else:
             logger.debug(f"getExperimentStatus({self.airavata_experiment_id})")
             current_status = request.airavata_client.getExperimentStatus(
-                request.authz_token, self.airavata_experiment_id
+                request.authz_token,
+                self.airavata_experiment_id
             )
-            self.airavata_experiment_status = ExperimentState(
+            self.airavata_experiment_status = ExperimentState._VALUES_TO_NAMES[
                 current_status.state
-            ).name
+            ]
             self.save()
             return self.airavata_experiment_status
 
     def is_airavata_experiment_finished(self, request):
         status = self.get_airavata_experiment_status(request)
-        state = ExperimentState[status].value
+        state = ExperimentState._NAMES_TO_VALUES[status]
         return state in self.get_airavata_experiment_terminal_states()
 
     def get_application_specific_status(self, request) -> Union[str, None]:
         output_name = "ePolyScat_Standard-Out"
         experiment_model: ExperimentModel = request.airavata_client.getExperiment(
-            request.authz_token, self.airavata_experiment_id
+            request.authz_token,
+            self.airavata_experiment_id
         )
         stdout_dp = None
-        if experiment_model.experimentStatus[-1].state == ExperimentState.COMPLETED:
+        experiment_statuses = experiment_model.experimentStatus
+        if (
+            experiment_statuses
+            and experiment_statuses[-1].state == ExperimentState.COMPLETED
+        ):
             for output in experiment_model.experimentOutputs:
                 if (
                     output.name == output_name
@@ -376,7 +445,8 @@ class RemoteExecution(models.Model):
                     and output.value.startswith("airavata-dp://")
                 ):
                     stdout_dp = request.airavata_client.getDataProduct(
-                        request.authz_token, output.value
+                        request.authz_token,
+                        output.value
                     )
         else:
             can_fetch = (
@@ -400,7 +470,9 @@ class RemoteExecution(models.Model):
 
                 ident = re.compile(r"^ ===  done")
                 items = list(filter(ident.match, stdout))
-                if items or stdout[-1].find(" *** further output on") != -1:
+                if items or (
+                    stdout and stdout[-1].find(" *** further output on") != -1
+                ):
                     return "* - Completed"
 
                 ident = re.compile(r"^ ===  TIME PROPAGATION")
@@ -436,12 +508,14 @@ class RemoteExecution(models.Model):
 
     def cancel(self, request):
         request.airavata_client.terminateExperiment(
-            request.authz_token, self.airavata_experiment_id, settings.GATEWAY_ID
+            request.authz_token,
+            self.airavata_experiment_id,
+            settings.GATEWAY_ID,
         )
 
     def is_cancelable(self, request) -> bool:
         status = self.get_airavata_experiment_status(request)
-        state = ExperimentState[status].value
+        state = ExperimentState._NAMES_TO_VALUES[status]
         return state in self.get_airavata_experiment_cancelable_states()
 
 

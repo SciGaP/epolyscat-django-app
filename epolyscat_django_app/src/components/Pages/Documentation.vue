@@ -50,20 +50,14 @@
       </div>
       -->
       <!-- iframe :src="https://epolyscat.droppages.com/front" frameborder="0" width="100%" height="500px"></iframe -->
+      <div>
+        <iframe src="https://epolyscat.droppages.com/IntroREADME2/"></iframe>
+      </div>
     </div>
-  </div>
-  <div>
-    <iframe :src="https://epolyscat.droppages.com/IntroREADME2/" ></iframe>
   </div>
 </template>
 
 <script>
-import ExperimentCard from "@/components/block/ExperimentCard";
-import store from "@/store";
-import { ExperimentService } from "@/service/epolyscat-service";
-
-import { ref, onMounted } from 'vue';
-
 export default {
   data() {
         return {

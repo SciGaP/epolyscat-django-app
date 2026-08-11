@@ -3,6 +3,8 @@ import { RunService, InputService } from "@/service/epolyscat-service";
 
 const OUTPUTS = ["bound_tab", "H.DAT", "KMAT", "TMAT", "KMAT_keep", "TMAT_keep", "tr_nnn_nnn"];
 
+let pendingRunsRequest = null;
+
 const state = {
     //runListMap: {},
     //runListPaginationMap: {},
@@ -12,15 +14,36 @@ const state = {
 }
 
 const actions = {
-    async fetchRuns({commit}, {experimentId = null} = {}) {
-        const data = experimentId
-            ? await RunService.fetchAllRuns({ experimentId })
-            : await RunService.fetchRuns();
-        const runs = data.results;
+    fetchRuns({commit}, {experimentId = null} = {}) {
+        if (!experimentId) {
+            if (pendingRunsRequest)
+                return pendingRunsRequest;
+        }
 
-        commit("SET_RUN_MAP", { runs });
+        const request = (experimentId
+            ? RunService.fetchAllRuns({ experimentId })
+            : RunService.fetchRuns())
+            .then(data => {
+                const runs = data.results;
+                commit("SET_RUN_MAP", { runs });
+                return runs;
+            });
 
-        return runs;
+        if (experimentId)
+            return request;
+
+        pendingRunsRequest = request.then(
+            runs => {
+                pendingRunsRequest = null;
+                return runs;
+            },
+            error => {
+                pendingRunsRequest = null;
+                throw error;
+            }
+        );
+
+        return pendingRunsRequest;
     },
 
     /*
@@ -60,7 +83,7 @@ const actions = {
         let run;
 
         try {
-            run = await RunService.fetchRun(runId);
+            run = await RunService.fetchRun({ runId });
         } catch (error) {
             if (getters["getRun"](runId) != undefined)
                 run = getters["getRun"](runId)
@@ -129,7 +152,6 @@ const actions = {
         let run;
 
         const path = rootGetters["input/getPath"];
-        console.log("Path being gotten: ", path);
 
         try {
             run = getters["getRun"](runId) || await dispatch("fetchRun");
@@ -179,7 +201,7 @@ const actions = {
 
         for (const outputFileObj of outputFileObjs) {
             if (outputFileObj != null && typeof outputFileObj == "object" && !("dataProductURI" in outputFileObj))
-                outputFileObj.dataProductURI = outputFileObj["dataProductURI"]
+                outputFileObj.dataProductURI = outputFileObj["data-product-uri"]
 
             const isInput = inputFiles.some(file => file.name == outputFileObj.name);
 
@@ -239,15 +261,21 @@ const actions = {
 
         return run;
     },
-    async createRun({dispatch, commit, rootGetters}, {
+    async createRun({dispatch, rootGetters}, {
         name, groupResourceProfileId, computeResourceId, coreCount,
-        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, viewIds, description, experimentId
+        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, viewIds, description,
+        inputs, runMode, moduleApplication, workflowStage, workflowApplication,
+        utilityApplication, workflowMetadata, experimentId
     }) {
-        const inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: true });
+        if (inputs == null) {
+            inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: true });
+        }
 
         const data = await RunService.createRun({
             name, inputs, groupResourceProfileId, computeResourceId,
-            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description, experimentId
+            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description,
+            runMode, moduleApplication, workflowStage, workflowApplication,
+            utilityApplication, workflowMetadata, experimentId
         }, false);
 
         await dispatch("view/insertIntoViews", { viewIds, run: data }, { root: true });
@@ -256,13 +284,19 @@ const actions = {
     },
     async updateRun({rootGetters}, {
         name, id, groupResourceProfileId, computeResourceId, coreCount,
-        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, description
+        totalPhysicalMemory, nodeCount, wallTimeLimit, queueName, description,
+        inputs, runMode, moduleApplication, workflowStage, workflowApplication,
+        utilityApplication, workflowMetadata
     }) {
-        const inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: false });
+        if (inputs == null) {
+            inputs = await rootGetters["input/getPreparedInputs"]({ prepareForCreation: false });
+        }
 
         const data = await RunService.updateRun({
             name, runId: id, inputs, groupResourceProfileId, computeResourceId,
-            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, description
+            coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, description,
+            runMode, moduleApplication, workflowStage, workflowApplication,
+            utilityApplication, workflowMetadata
         }, false);
 
         return data;
@@ -303,7 +337,7 @@ const actions = {
 
         return run;
     },
-    async fetchStatus({}, {runId}) {
+    async fetchStatus(_context, {runId}) {
         return await RunService.fetchStatus({runId});
     },
     async changeNotificationSettings({commit}, {runId, isEmailNotificationOn}) {
@@ -459,13 +493,14 @@ const getters = {
             return runs.slice(0, n);
         }
     },
-    getStrippedRun: (state) => {
+    getStrippedRun: () => {
         return (run) => {
             return {
                 name: run.name,
                 id: run.id,
                 isEmailNotificationOn: run.isEmailNotificationOn,
                 description: run.description,
+                groupResourceProfileId: run.groupResourceProfileId,
                 computeResourceId: run.computeResourceId,
                 queueName: run.queueName,
                 coreCount: run.coreCount,

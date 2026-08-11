@@ -28,9 +28,16 @@ class epolyscatDjangoAppConfig(AppConfig):
     verbose_name = "Epolyscat Django App"
     url_home = "epolyscat_django_app:home"
     fa_icon_class = "fa-atom"
-    settings = Settings()
     default_auto_field = "django.db.models.BigAutoField"
     SCRIPTS = os.path.join(BASE_DIR, "ePolyScat", "SCRIPTS")
+
+    def merge_settings(self, settings):
+        for app in ("django.contrib.contenttypes", "django.contrib.auth"):
+            if app not in settings.INSTALLED_APPS:
+                settings.INSTALLED_APPS.append(app)
+        webpack_loader = dict(getattr(settings, "WEBPACK_LOADER", {}) or {})
+        webpack_loader.update(Settings.WEBPACK_LOADER)
+        settings.WEBPACK_LOADER = webpack_loader
 
     APPLICATION_SETTINGS = {
         "EPOLYSCAT_DJANGO_APP": {
@@ -228,7 +235,7 @@ class epolyscatDjangoAppConfig(AppConfig):
                     ]
                 },
             ],
-            "MASTER_LINP": os.path.join(BASE_DIR, "data", "eployscat", "linp"),
+            "MASTER_LINP": os.path.join(BASE_DIR, "data", "epolyscat", "linp"),
             "FILE_PLOTABLE": {
                 "spec_total": "energy-differential spectrum",
                 "spec_partial": "partial-wave spectrum",

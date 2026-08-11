@@ -28,6 +28,16 @@ const getters = {
       ? state.settings.EPOLYSCAT.EPOLYSCAT_APPLICATION_ID
       : null;
   },
+  gaussian16ApplicationModuleId: (state) => {
+    return state.settings && state.settings.EPOLYSCAT
+      ? state.settings.EPOLYSCAT.GAUSSIAN16_APPLICATION_ID
+      : null;
+  },
+  openmolcasApplicationModuleId: (state) => {
+    return state.settings && state.settings.EPOLYSCAT
+      ? state.settings.EPOLYSCAT.OPENMOLCAS_APPLICATION_ID
+      : null;
+  },
   getPreference: (state) => {
         return (key) => state.prefrences[key]
   }

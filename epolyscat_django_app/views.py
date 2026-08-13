@@ -485,8 +485,12 @@ class RunViewSet(viewsets.ViewSet):
         return Response(input_files_list)
 
     @action(methods=["get"], detail=True, url_path=r"viewables/(?P<filename>[\w]+)")
-    def show_viewable(self, request, pk=None, filename: str = None):
+    def show_viewable(self, request, pk=None, filename: str | None = None):
         run = self.get_object()
+        # The url_path regex always captures a filename; the default is only
+        # here to match the action signature.
+        if filename is None:
+            raise exceptions.NotFound("No filename given")
         try:
             # file may be experiment output file or a file from the run directory
             if filename in self.DATA_TYPE_TO_FILENAME.values():

@@ -1,0 +1,10 @@
+%nprocshared=1
+%mem=1GB
+#p hf/sto-3g
+
+Expanse Gaussian16 validation
+
+0 1
+H 0.0 0.0 0.0
+H 0.0 0.0 0.74
+

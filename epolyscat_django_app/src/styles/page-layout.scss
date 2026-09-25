@@ -1,0 +1,286 @@
+// Shared page chrome, scoped to the ePolyScat app rather than the gateway.
+#app.portal-app {
+  --portal-primary: #226597;
+  --portal-text: #1f2933;
+  --portal-border: #d8dde5;
+  --portal-width: 1200px;
+  --portal-gutter: 32px;
+  --portal-section-gap: 32px;
+  --portal-heading-gap: 12px;
+  color: var(--portal-text);
+
+  .portal-shell { min-width: 0; }
+  .app_left_nav {
+    flex: 0 0 250px;
+    min-width: 0;
+    border-right: 1px solid var(--portal-border);
+  }
+  .portal-content { min-width: 0; background: #fff; }
+  .portal-navigation-toggle { display: none; }
+  .portal-skip-link {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 1100;
+    padding: 8px 16px;
+    background: #fff;
+    transform: translateY(-200%);
+    &:focus { transform: translateY(0); }
+  }
+
+  .portal-page,
+  .new-run-page,
+  .workflow-run-page,
+  .view-run-page { min-height: 100%; background: #fff; color: var(--portal-text); }
+
+  .portal-page-content,
+  .new-run-content,
+  .workflow-run-content,
+  .view-run-content {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--portal-width);
+    margin: 0 auto;
+    padding: 24px var(--portal-gutter) 64px;
+    min-width: 0;
+  }
+
+  .portal-page-header,
+  .new-run-heading,
+  .workflow-heading,
+  .view-run-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .portal-page-title,
+  .new-run-title,
+  .workflow-heading h1,
+  .view-run-heading h1 {
+    color: var(--portal-text);
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .portal-content h2 { font-size: 18px; font-weight: 700; line-height: 1.4; margin: 0 0 var(--portal-heading-gap); }
+  .section-title-row,
+  .workflow-section-title-row,
+  .new-run-description-header {
+    align-items: flex-end;
+    margin-bottom: var(--portal-heading-gap);
+  }
+  .section-title-row h2,
+  .workflow-section-title-row h2,
+  .new-run-description-header h2 { margin: 0; }
+  .portal-content .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin: 0 0 16px;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .portal-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .portal-list-page .portal-page-header { align-items: center; min-height: 38px; gap: 12px; margin-bottom: 12px; }
+  .portal-list-page .portal-page-actions { justify-content: flex-end; margin: 0 0 0 auto; }
+  .portal-list-page .portal-page-actions .btn { margin-left: 0; }
+  .portal-list-page .portal-list-filter { margin: 0 0 12px; }
+  .portal-list-page .portal-list-filter .form-control { height: 44px; border-right: 0; font-size: 16px; }
+  .portal-list-page .portal-list-filter .input-group-text { background: #fff; border-left: 0; color: #6c757d; }
+  .portal-list-page .portal-collection-description { margin-bottom: 12px; }
+  .portal-list-table .table { margin-bottom: 0; }
+  .portal-list-table .table th,
+  .portal-list-table .table td { padding: 12px; font-size: 14px; line-height: 1.5; vertical-align: middle; border-color: var(--portal-border); }
+  .portal-list-table .table thead th,
+  .portal-list-table .header { background: #f6f7f9; color: var(--portal-text); font-weight: 600; border-top: 0; border-bottom: 1px solid var(--portal-border); }
+  .portal-list-table .header.row,
+  .portal-list-table .run_item.row { margin-right: 0; margin-left: 0; padding: 12px 0; font-size: 14px; line-height: 1.5; }
+  .portal-list-table.container { padding-right: 0; padding-left: 0; }
+  .portal-list-table .cell { padding-right: 12px; padding-left: 12px; min-width: 0; overflow-wrap: anywhere; }
+  .portal-content .btn:not(.btn-link):not(.btn-sm),
+  .input-file-storage-button,
+  .input-file-computer-button,
+  .workflow-storage-button,
+  .workflow-computer-button {
+    min-height: 38px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+    padding: 8px 12px;
+  }
+  .input-file-storage-button,
+  .workflow-storage-button { background: #fff; border: 1px solid var(--portal-primary); color: var(--portal-primary); }
+  .input-file-storage-button:hover,
+  .workflow-storage-button:hover { background: var(--portal-primary); color: #fff; }
+
+  .portal-content input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .portal-content select,
+  .portal-content textarea { border-radius: 6px; }
+  .portal-content a:focus-visible,
+  .portal-content button:focus-visible,
+  .portal-content input:focus-visible,
+  .portal-content select:focus-visible,
+  .portal-content textarea:focus-visible,
+  .portal-navigation-toggle:focus-visible {
+    outline: 3px solid var(--portal-primary);
+    outline-offset: 3px;
+  }
+
+  .portal-home-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 32px; }
+  .portal-home-grid > section { min-width: 0; }
+  .portal-recent-runs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-bottom: 16px; }
+  .portal-recent-runs .btn { display: block; box-sizing: border-box; width: 100%; min-width: 0; margin: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+  .portal-collection-description { margin: 0 0 16px; font-size: 14px; overflow-wrap: anywhere; }
+  .portal-empty-state { padding: 32px 16px; text-align: center; color: #52616b; border: 1px solid var(--portal-border); border-radius: 6px; }
+  .portal-documentation-frame { width: 100%; min-height: 65vh; border: 1px solid var(--portal-border); border-radius: 6px; }
+  .portal-experiment-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 24px 0; }
+  .portal-experiment-fields label { display: block; font-weight: 600; }
+
+  // Use one content edge and one section rhythm throughout run pages.
+  .new-run-content > section,
+  .new-run-content > header,
+  .workflow-run-content > section,
+  .workflow-run-content > header,
+  .workflow-run-content > .workflow-stepper,
+  .view-run-content > section,
+  .view-run-content > header,
+  .view-run-content > .workflow-stepper,
+  .view-run-main > section {
+    max-width: none;
+    margin-top: 0;
+    margin-bottom: var(--portal-section-gap);
+  }
+  .view-run-main,
+  .view-run-layout:not(.with-plot-panel) .view-run-main,
+  .run-code-viewer,
+  .module-parameters,
+  .view-run-resource,
+  .workflow-parameter-card,
+  .workflow-code-preview {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+  .run-code-viewer { margin-bottom: var(--portal-section-gap); }
+  .run-code-viewer pre { max-height: 360px; overflow: auto; overflow-wrap: anywhere; }
+  .run-code-viewer pre:focus-visible { outline: 3px solid var(--portal-primary); outline-offset: -3px; }
+  .file-preview-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid var(--portal-border);
+    color: #52616b;
+    font-size: 13px;
+  }
+  .file-preview-actions .btn { padding: 4px 0; font-size: 13px; }
+  .new-run-descriptions,
+  .new-run-description-list,
+  .workflow-continuation-preview { border-top: 0; border-bottom: 0; padding-top: 0; padding-bottom: 0; }
+  .view-run-identity { font-size: 14px; overflow-wrap: anywhere; }
+  .view-run-identity strong { margin-right: 8px; }
+  .view-run-heading-actions { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .run-actions-bar,
+  .workflow-actions { margin-top: var(--portal-section-gap); max-width: none; }
+  .new-run-content > .new-run-resource { margin-bottom: 0; }
+
+  // Shared by editable New Run controls and the saved run's read-only summary.
+  .resource-settings-grid {
+    display: grid;
+    grid-template-columns: 80px minmax(0, 1fr) 136px minmax(0, 1fr);
+    gap: 24px 12px;
+    margin: 0;
+    max-width: 760px;
+    width: 100%;
+  }
+  .resource-fields { display: grid; grid-column: span 2; gap: 16px; align-content: start; min-width: 0; }
+  .resource-row { display: grid; grid-template-columns: 80px minmax(0, 1fr); align-items: start; gap: 12px; }
+  .resource-fields:nth-child(2) .resource-row { grid-template-columns: 136px minmax(0, 1fr); }
+  .resource-row > label,
+  .settings-label { color: var(--portal-text); font-size: 14px; font-weight: 600; line-height: 20px; margin: 0; }
+  .resource-row > label { padding: 9px 0; white-space: nowrap; }
+  .resource-search-dropdown,
+  .save-to-dropdown { width: 100%; min-width: 0; }
+  .resource-search-input { height: 38px; font-size: 14px; width: 100%; min-width: 0; }
+  .settings-label { grid-column: 1; align-self: center; }
+  .queue-settings-card {
+    display: grid;
+    gap: 12px;
+    grid-column: 2 / -1;
+    margin: 0;
+    padding: 16px;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    background: #f7f8fa;
+    border: 1px solid var(--portal-border);
+    border-radius: 6px;
+  }
+  .queue-card-header { align-items: center; }
+  .queue-name { color: var(--portal-text); font-size: 14px; font-weight: 600; line-height: 32px; min-height: 32px; }
+  .queue-fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 16px;
+  }
+  .queue-fields-readonly { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .queue-fields label { display: grid; gap: 8px; margin: 0; min-width: 0; text-align: center; }
+  .queue-input { width: 100%; height: 38px; min-width: 0; text-align: center; font-size: 14px; }
+  .queue-fields span { color: var(--portal-text); font-size: 13px; line-height: 20px; min-height: 0; }
+  .queue-lock-button { height: 38px; }
+  .resource-settings-readonly input[readonly] { background: #fff; color: var(--portal-text); }
+
+  @media (max-width: 1200px) {
+    .resource-settings-grid { grid-template-columns: 136px minmax(0, 1fr); }
+    .resource-fields { grid-column: 1 / -1; }
+    .resource-row { grid-template-columns: 136px minmax(0, 1fr); }
+  }
+
+  @media (max-width: 700px) {
+    .resource-settings-grid { grid-template-columns: minmax(0, 1fr); row-gap: 24px; }
+    .resource-row,
+    .resource-fields:nth-child(2) .resource-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .resource-row > label { padding: 0; }
+    .settings-label { grid-column: 1; margin-bottom: -16px; }
+    .queue-settings-card { grid-column: 1; padding: 16px; }
+    .queue-fields,
+    .queue-fields-readonly { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .queue-lock-button { order: 1; grid-column: 1 / -1; justify-self: center; }
+    .code-viewer-toolbar { flex-wrap: wrap; }
+    .code-viewer-toolbar .file-control-row { flex: 1 1 100%; min-width: 0; }
+    .file-selector { min-width: 0; width: 100%; }
+    .module-parameter-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .workflow-status-panel { flex-wrap: wrap; }
+  }
+
+  @media (max-width: 900px) {
+    --portal-gutter: 16px;
+    .portal-shell { flex-direction: column; }
+    .portal-navigation-toggle { display: block; align-self: flex-start; margin: 12px 16px; }
+    .app_left_nav {
+      display: none;
+      flex: 0 0 auto;
+      width: 100%;
+      max-height: 40vh;
+      border-right: 0;
+      border-bottom: 1px solid var(--portal-border);
+      &.is-open { display: block; }
+    }
+    .portal-home-grid,
+    .portal-experiment-fields { grid-template-columns: minmax(0, 1fr); }
+    .view-run-layout.with-plot-panel { grid-template-columns: minmax(0, 1fr); }
+    .view-run-heading-actions { align-items: flex-start; }
+    .view-run-status { flex-wrap: wrap; }
+  }
+}

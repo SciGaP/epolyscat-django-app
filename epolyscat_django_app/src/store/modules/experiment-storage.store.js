@@ -7,10 +7,10 @@ const state = {
 }
 
 const actions = {
-    async fetchExperiments({commit}, {page = 1, pageSize = 1000} = {page: 1, pageSize: 1000}) {
-        const queryString = JSON.stringify({page, pageSize});
+    async fetchExperiments({commit}, {page = 1, pageSize = 1000, search = ""} = {}) {
+        const queryString = JSON.stringify({page, pageSize, ...(search ? {search} : {})});
 
-        const experimentsRes = await ExperimentService.fetchAllExperiments({page, pageSize});
+        const experimentsRes = await ExperimentService.fetchAllExperiments({page, pageSize, search});
         const experiments = experimentsRes.results;
 
         const experimentIds = experiments.map(({experimentId, name, root, description, activeRunCount, runCount, owner, updated, created, deleted, airavataProjectId}) => {
@@ -73,8 +73,8 @@ const mutations = {
 
 const getters = {
     getExperiments: (state, getters) => {
-        return ({page = 1, pageSize = 1000} = {page: 1, pageSize: 1000}) => {
-            const queryString = JSON.stringify({page, pageSize});
+        return ({page = 1, pageSize = 1000, search = ""} = {}) => {
+            const queryString = JSON.stringify({page, pageSize, ...(search ? {search} : {})});
             const experimentIds = state.experimentListMap[queryString];
             if (experimentIds) {
                 return experimentIds.map(experimentId => getters.getExperiment({experimentId}));
@@ -84,8 +84,8 @@ const getters = {
         }
     },
     getExperimentsPagination: (state) => {
-        return ({page = 1, pageSize = 1000} = {page: 1, pageSize: 1000}) => {
-            const queryString = JSON.stringify({page, pageSize});
+        return ({page = 1, pageSize = 1000, search = ""} = {}) => {
+            const queryString = JSON.stringify({page, pageSize, ...(search ? {search} : {})});
             const experimentListPagination = state.experimentListPaginationMap[queryString];
             if (experimentListPagination) {
                 return experimentListPagination;

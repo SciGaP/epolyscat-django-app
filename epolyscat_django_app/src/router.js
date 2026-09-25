@@ -16,6 +16,8 @@ const SignUp = () => import('@/components/Pages/SignUp');
 const Home = () => import('@/components/Pages/Home');
 const Documentation = () => import('@/components/Pages/Documentation');
 const CreateRun = () => import('@/components/Pages/CreateRun')
+const WorkflowRun = () => import('@/components/Pages/WorkflowRun')
+const ViewRun = () => import('@/components/Pages/ViewRun')
 
 
 Vue.use(Router);
@@ -63,13 +65,28 @@ export default new Router({
         },
         {
             path: '/runs/new',
-            name: 'Run',
+            name: 'CreateRun',
+            component: CreateRun,
+        },
+        {
+            path: '/runs/new/workflow',
+            name: 'WorkflowRun',
+            component: WorkflowRun,
+        },
+        {
+            path: '/runs/new/legacy',
+            name: 'LegacyCreateRun',
             component: Run,
         },
 
         {
             path: '/runs/:runId',
             name: 'Run',
+            component: ViewRun,
+        },
+        {
+            path: '/runs/:runId/legacy',
+            name: 'LegacyRun',
             component: Run,
         },
         {
@@ -84,17 +101,17 @@ export default new Router({
         },
         {
             path: '/create-run',
-            name: 'CreateRun',
+            name: 'CreateRunAlias',
             component: CreateRun
         },
         {
             path: '/views/:viewId',
-            name: 'Runs',
+            name: 'ViewRuns',
             component: Runs,
         },
         {
             path: '/tutorials',
-            name: 'Runs',
+            name: 'TutorialRuns',
             component: Runs
         },
         {

@@ -454,7 +454,13 @@ class RunViewSet(viewsets.ModelViewSet):
             else:
                 inputs[input.name] = input.value
 
-        self._create_remote_execution(request, run, inputs, app_interface_id, inputs, serializer.data["is_tutorial"])
+        self._create_remote_execution(
+            request,
+            run,
+            app_interface_id=app_interface_id,
+            input_values=inputs,
+            is_tutorial=serializer.data["is_tutorial"],
+        )
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
@@ -476,7 +482,9 @@ class RunViewSet(viewsets.ModelViewSet):
 
         input_values = {"Input-File": inpc_file_input_value.productUri}
 
-        self._create_remote_execution(request, run, app_interface_id, input_values)
+        self._create_remote_execution(
+            request, run, app_interface_id=app_interface_id, input_values=input_values
+        )
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
@@ -509,7 +517,13 @@ class RunViewSet(viewsets.ModelViewSet):
             "Previous_JobID_Restart": job_id,
         }
 
-        self._create_remote_execution(request, run, app_interface_id, input_values)
+        self._create_remote_execution(
+            request,
+            run,
+            app_interface_id=app_interface_id,
+            input_values=input_values,
+            is_tutorial=serializer.data["is_tutorial"],
+        )
 
         serializer = self.get_serializer(run)
         return Response(serializer.data)
@@ -518,13 +532,13 @@ class RunViewSet(viewsets.ModelViewSet):
         self,
         request,
         run: models.Run,
-        inputs: typing.Dict[str, str],
+        *,
         app_interface_id: str,
         input_values: typing.Dict[str, str],
-        is_tutorial: bool
+        is_tutorial: bool = False,
     ) -> models.RemoteExecution:
 
-        # Make sure that there aren't any currently running executions
+        # make sure that there aren't any currently running executions
         if not run.are_all_executions_finished(request):
             raise Exception("Run already has a currently running execution")
 
@@ -1068,7 +1082,7 @@ def user_run_file_exists(request, run, filename):
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name].value
+        experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
             experiment_model = request.airavata_client.getExperiment(
@@ -1133,7 +1147,7 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     # Find the output by data type
     output = None
     for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+        output_type_name = DataType._VALUES_TO_NAMES[output.type]
         if output_type_name == data_type:
             output = output
             break
@@ -1843,7 +1857,7 @@ def user_run_file_exists(request, run, filename):
     experiment_model = None
     for execution in run.executions.order_by("-created"):
         status_name = execution.get_airavata_experiment_status(request)
-        experiment_state = ExperimentState[status_name].value
+        experiment_state = ExperimentState._NAMES_TO_VALUES[status_name]
         print(f"DEBUG: Execution {execution.airavata_experiment_id} status: {status_name}")
         if experiment_state == ExperimentState.COMPLETED:
             logger.debug(f"getExperiment({execution.airavata_experiment_id})")
@@ -1934,7 +1948,7 @@ def get_run_output_data_product_uri(request, run: models.Run, data_type: str):
     # Find the output by data type
     output = None
     for output in experiment_model.experimentOutputs:
-        output_type_name = DataType(output.type).name
+        output_type_name = DataType._VALUES_TO_NAMES[output.type]
         if output_type_name == data_type:
             output = output
             break

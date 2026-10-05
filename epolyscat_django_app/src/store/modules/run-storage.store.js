@@ -60,7 +60,7 @@ const actions = {
         let run;
 
         try {
-            run = await RunService.fetchRun(runId);
+            run = await RunService.fetchRun({ runId });
         } catch (error) {
             if (getters["getRun"](runId) != undefined)
                 run = getters["getRun"](runId)

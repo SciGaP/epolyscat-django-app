@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).parent
 class LinpWithMasterFileTestCase(TestCase):
     def setUp(self) -> None:
         trecx_settings = apps.get_app_config("epolyscat_django_app").APPLICATION_SETTINGS[
-            "tRecX"
+            "EPOLYSCAT_DJANGO_APP"
         ]
         self.linp = Linp(trecx_settings["MASTER_LINP"])
 

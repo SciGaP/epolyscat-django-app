@@ -326,7 +326,7 @@ class RemoteExecution(models.Model):
     updated = models.DateTimeField(auto_now=True)
     airavata_experiment_status = models.CharField(
         max_length=255,
-        default=ExperimentState(ExperimentState.CREATED).name,
+        default=ExperimentState._VALUES_TO_NAMES[ExperimentState.CREATED],
     )
     resource_name = models.CharField(max_length=255, blank=True, default="")
     job_id = models.CharField(max_length=255, null=True)

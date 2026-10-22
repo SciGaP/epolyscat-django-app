@@ -3,7 +3,7 @@ const BundleTracker = require("webpack-bundle-tracker");
 module.exports = {
   publicPath:
         process.env.NODE_ENV === "development"
-          ? "http://0.0.0.0:9000/static/epolyscat_django_app/dashboard/dist/" : "/static/epolyscat_django_app/dashboard/dist/",
+          ? "http://localhost:9000/static/epolyscat_django_app/dashboard/dist/" : "/static/epolyscat_django_app/dashboard/dist/",
   // baseUrl: "http://0.0.0.0:8080/",
   outputDir: './static/epolyscat_django_app/dashboard/dist',
 
@@ -65,7 +65,7 @@ module.exports = {
       .set('__STATIC__', 'static');
 
     config.devServer
-      .public('http://0.0.0.0:9000')
+      .public('http://localhost:9000')
       .host('0.0.0.0')
       .port(9000)
       .hotOnly(true)

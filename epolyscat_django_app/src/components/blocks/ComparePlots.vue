@@ -47,34 +47,38 @@
                         ></b-form-radio-group>
                     </b-form-group>
                     
-                    <b-form-group label="y-axes" v-slot="{ ariaDescribedby }" class="mx-3" :disabled="plotParameter != 'new'">
+                    <b-form-group class="mx-3" :disabled="plotParameter != 'new'">
                         <template v-slot:label>
                             Y_Axis
                             <b-button variant="link" v-b-modal.flags-modal size="sm">(help)</b-button>
                         </template>
-                        <b-form-checkbox-group
-                            id="y-axes-checkboxes"
-                            v-model="yAxisIndeces"
-                            :options="yAxisOptions"
-                            :aria-describedby="ariaDescribedby"
-                            name="y-axes"
-                            stacked
-                        ></b-form-checkbox-group>
+                        <template v-slot:default="{ ariaDescribedby }">
+                            <b-form-checkbox-group
+                                id="y-axes-checkboxes"
+                                v-model="yAxisIndeces"
+                                :options="yAxisOptions"
+                                :aria-describedby="ariaDescribedby"
+                                name="y-axes"
+                                stacked
+                            ></b-form-checkbox-group>
+                        </template>
                     </b-form-group>
 
-                    <b-form-group v-slot="{ ariaDescribedby }" class="mx-3" :disabled="plotParameter != 'new'">
+                    <b-form-group class="mx-3" :disabled="plotParameter != 'new'">
                         <template v-slot:label>
                             Flags
                             <b-button variant="link" v-b-modal.flags-modal size="sm">(help)</b-button>
                         </template>
-                        <b-form-textarea
-                            id="textarea"
-                            v-model="flags"
-                            placeholder="Enter flags here"
-                            :aria-describedby="ariaDescribedby"
-                            rows="6"
-                            max-rows="6"
-                        ></b-form-textarea>
+                        <template v-slot:default="{ ariaDescribedby }">
+                            <b-form-textarea
+                                id="textarea"
+                                v-model="flags"
+                                placeholder="Enter flags here"
+                                :aria-describedby="ariaDescribedby"
+                                rows="6"
+                                max-rows="6"
+                            ></b-form-textarea>
+                        </template>
                     </b-form-group>
                 </div>
                 <b-button variant="primary" @click="fetchPlot" :disabled="!canCreate">Create Plot</b-button>

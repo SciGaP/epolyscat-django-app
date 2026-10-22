@@ -19,7 +19,7 @@
                         <b-icon icon="file-earmark-check" v-if="button.checked" />
                         <b-icon icon="file-earmark-plus"     v-else />
                     </template>
-                    <a v-if="button.delete" @click="button.delete()">
+                    <a v-if="button.delete" @click.stop="deleteButton(button)">
                         <b-icon icon="trash" size="sm" />
                     </a>
                 </label>
@@ -36,6 +36,13 @@ export default {
     computed: {
         path() {
             return this.$store.getters["input/getPath"];
+        }
+    },
+    methods: {
+        deleteButton(button) {
+            if (button && typeof button.delete === "function") {
+                button.delete();
+            }
         }
     },
 }

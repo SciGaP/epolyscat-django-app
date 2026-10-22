@@ -39,11 +39,12 @@
                                 @close="$refs.saveSelectionPopover.$emit('close')"
                             />
                         </b-popover>
-                        <div v-show="!isTutorials && numberOfRunsSelected >= 1" class="mx-1" style="width: 0.1px; height: 50%; border: 0.5px solid black" />
+                        <div v-show="!isTutorials && numberOfRunsSelected >= 1" class="mx-1" style="width: 0.1px; height: 50%; border: 0.5px solid black"></div>
                         <router-link v-if="!isTutorials" :to="newRunLink" v-slot="{ href, navigate }">
                             <b-button variant="light" :href="href" @click="navigate">New Run</b-button>
                         </router-link>
                     </div>
+                </div>
 
 
 
@@ -155,6 +156,7 @@
                         </template>
                     </ListView>
               </LoadingOverlay>
+            </div>
 
 <!--
 

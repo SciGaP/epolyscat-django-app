@@ -1,5 +1,29 @@
 <template>
-  <div>
+  <section v-if="viewing" class="resource-settings-grid resource-settings-readonly" aria-label="Run resources">
+    <div class="resource-fields">
+      <div class="resource-row">
+        <label for="run-allocation">Allocation</label>
+        <input id="run-allocation" class="form-control resource-search-input" :value="allocationName" readonly />
+      </div>
+    </div>
+    <div class="resource-fields">
+      <div class="resource-row">
+        <label for="run-compute-resource">Compute Resource</label>
+        <input id="run-compute-resource" class="form-control resource-search-input" :value="computeResourceName" readonly />
+      </div>
+    </div>
+    <div class="settings-label" id="run-queue-settings-label">Settings</div>
+    <div class="queue-settings-card" role="group" aria-labelledby="run-queue-settings-label">
+      <div class="queue-card-header"><div class="queue-name">{{ queueName || "No queue selected" }}</div></div>
+      <div class="queue-fields queue-fields-readonly">
+        <label v-for="field in resourceSummary" :key="field.label">
+          <input class="form-control queue-input" :value="field.value == null ? 'Not specified' : field.value" readonly />
+          <span>{{ field.label }}</span>
+        </label>
+      </div>
+    </div>
+  </section>
+  <div v-else>
     <div class="w-100 d-flex flex-row">
       <adpf-group-resource-profile-selector class="p-2 d-flex flex-row flex-fill" :disabled="viewing"
         v-on:input="onGroupResourceProfileSelector" :value="groupResourceProfileId" />
@@ -15,6 +39,7 @@
 
 <script>
 import store from "@/store";
+const { services } = AiravataAPI;
 
 export default {
     name: 'RunResource',
@@ -34,10 +59,27 @@ export default {
             coreCount: null,
             nodeCount: null,
             wallTimeLimit: null,
-            totalPhysicalMemory: null
+            totalPhysicalMemory: null,
+            groupResourceProfiles: [],
+            computeResourceNames: {}
         };
     },
     computed: {
+        allocationName() {
+            const profile = this.groupResourceProfiles.find(item => item.groupResourceProfileId === this.groupResourceProfileId);
+            return (profile && profile.groupResourceProfileName) || this.groupResourceProfileId || "Not specified";
+        },
+        computeResourceName() {
+            return this.computeResourceNames[this.computeResourceId] || this.computeResourceId || "Not specified";
+        },
+        resourceSummary() {
+            return [
+                { label: "Core count", value: this.coreCount },
+                { label: "Node count", value: this.nodeCount },
+                { label: "Wall time limit", value: this.wallTimeLimit == null ? null : `${this.wallTimeLimit} minutes` },
+                { label: "Total physical memory", value: this.totalPhysicalMemory == null ? null : `${this.totalPhysicalMemory} MB` }
+            ];
+        },
         isResourceSelectionAllowed() {
             return !this.disabled && !!this.run && ["UNSUBMITTED", "FAILED"].indexOf(this.run.status) >= 0;
         },
@@ -113,7 +155,19 @@ export default {
     },
     async beforeMount() {
         this.updateFromRun();
-        await this.$store.dispatch("settings/fetchSettings");
+        if (this.viewing) {
+            // Resolve display names only; saved run resources remain unchanged.
+            await Promise.all([
+                services.GroupResourceProfileService.list().then(profiles => {
+                    this.groupResourceProfiles = profiles || [];
+                }).catch(() => {}),
+                services.ComputeResourceService.names().then(names => {
+                    this.computeResourceNames = names || {};
+                }).catch(() => {})
+            ]);
+        } else {
+            await this.$store.dispatch("settings/fetchSettings");
+        }
     }
 };
 </script>

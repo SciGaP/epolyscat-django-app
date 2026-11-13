@@ -1,0 +1,49 @@
+#
+# input file for test01
+#
+# electron scattering from CH4 in A1 symmetry
+#
+ LMax 15 # maximum l to be used for wave functions
+ EMax 50.0 # EMax, maximum asymptotic energy in eV
+ EngForm # Energy formulas
+ 0 1 # charge, formula type
+ 3 # number of terms in the formulas
+ 2.0 -1.0 # orbital occupation and coefficient for the K operators
+ 2.0 -1.0
+ 2.0 -1.0
+ VCorr 'PZ'
+ AsyPol
+ 0.15 # SwitchD, distance where switching function is down to 0.1
+ 1 # nterm, number of terms needed to define asymptotic potential
+ 1 # center for polarization term 1 is for C atom
+ 1 # ittyp type of polarization term, = 1 for spherically symmetric
+ # = 2 for reading in the full tensor
+ 17.50 # value of the spherical polarizability
+ 3 # icrtyp, flag to determine where r match is, 3 for second crossing
+ # or at nearest approach
+ 0 # ilntyp, flag to determine what matching line is used, 0 - use
+ # l = 0 radial function as matching function
+ FegeEng 13.0 # Energy correction (in eV) used in the fege potential
+ ScatContSym 'A1' # Scattering symmetry
+ LMaxK 4 # Maximum l in the K matirx
+
+Convert '$pt/test01.molden2015' 'molden'
+PrintBlm 4
+GetBlms
+
+SaveBlms 'test01Blms.dat'
+
+ReadBlms 'test01Blms.dat'
+
+ExpOrb
+GetPot
+Scat 0.0001 0.01 0.5
+ ScatContSym 'A2' # Scattering symmetry
+Scat 0.0001 0.01 0.5
+TotalCrossSection
+LMaxK 3
+TotalCrossSection
+LMaxK 2
+TotalCrossSection
+LMaxK 1
+TotalCrossSection

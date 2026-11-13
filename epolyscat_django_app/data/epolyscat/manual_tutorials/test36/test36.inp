@@ -1,0 +1,34 @@
+#
+# input file for test36
+#
+# CH4, T2^-1 photoionization, using output from GAMESS
+#
+ LMax 15 # maximum l to be used for wave functions
+ EMax 50.0 # EMax, maximum asymptotic energy in eV
+ FegeEng 13.0 # Energy correction (in eV) used in the fege potential
+ ScatEng 15.8 # list of scattering energies
+
+ InitSym 'A1' # Initial state symmetry
+ InitSpinDeg 1 # Initial state spin degeneracy
+ OrbOccInit 2 2 6 # Orbital occupation of initial state
+
+ OrbOcc 2 2 5 # occupation of the orbital groups of target
+ SpinDeg 1 # Spin degeneracy of the total scattering state (=1 singlet)
+ TargSym 'T2' # Symmetry of the target state
+ TargSpinDeg 2 # Target spin degeneracy
+ IPot 14.2 # ionization potentail
+
+Convert '$pt/test36.gms.dat' 'gamess'
+GetBlms
+ExpOrb
+
+ ScatSym 'T2' # Scattering symmetry of total final state
+ ScatContSym 'T1' # Scattering symmetry of continuum electron
+
+GenFormPhIon
+DipoleOp
+GetPot
+PhIon
+GetCro
+
+Exit

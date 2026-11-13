@@ -1,0 +1,58 @@
+#
+# input file for test08
+#
+# Photodetachment from F2-
+#
+LMax 60 # maximum l to be used for wave functions
+EMax 100.
+PrintFlag 0 # no extra printing
+FegeEng 5. # Energy correction used in the fege potential (9.89 eV from CRC)
+LMaxK 12 # Maximum l in the K matirx
+OrbOccInit
+ 2 2 2 2 4 4 2 1
+OrbOcc # occupation of the orbital groups of target
+ 2 2 2 2 4 4 2 0
+SpinDeg 2 # Spin degeneracy of the total scattering state (=1 singlet)
+TargSym 'SG' # Symmetry of the target state
+TargSpinDeg 1 # Target spin degeneracy
+InitSym 'SU' # Initial state symmetry
+InitSpinDeg 2 # Initial state spin degeneracy
+IPot 3.1 # IPot, ionization potential, Koopmans
+
+Convert '$pt/test08.molden2012' 'molden'
+GetBlms
+#
+ScatEng 1. 40.
+ExpOrb
+
+ScatSym 'SG' # Scattering symmetry of total final state
+ScatContSym 'SG' # Scattering symmetry of continuum electron
+
+GenFormPhIon
+DipoleOp
+GetPot
+FileName 'MatrixElements' 'test08SG.dat' 'REWIND'
+PhIon
+GetCro
+FileName 'MatrixElements' 'test08DPW.dat' 'REWIND'
+CalcInt 'DipoleOp' 1 'PlaneWv' 12
+FileName 'MatrixElements' 'test08PWSG.dat' 'REWIND'
+PhIonPlaneWv
+GetCro
+
+ScatSym 'PG' # Scattering symmetry of total final state
+ScatContSym 'PG' # Scattering symmetry of continuum electron
+
+GenFormPhIon
+DipoleOp
+GetPot
+FileName 'MatrixElements' 'test08PG.dat' 'REWIND'
+PhIon
+GetCro
+FileName 'MatrixElements' 'test08DPW.dat' 'APPEND'
+CalcInt 'DipoleOp' 1 'PlaneWv' 12
+FileName 'MatrixElements' 'test08PWPG.dat' 'REWIND'
+PhIonPlaneWv
+GetCro
+GetCro 'test08SG.dat' 'test08PG.dat'
+GetCro 'test08PWSG.dat' 'test08PWPG.dat'

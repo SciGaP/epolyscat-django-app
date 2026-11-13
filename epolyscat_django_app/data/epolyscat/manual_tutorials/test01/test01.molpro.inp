@@ -1,0 +1,19 @@
+***,CH4 gs
+
+RCH = 1.083346 ANG
+TANG = 109.471220634491 DEGREES
+
+cartesian
+
+geometry={
+C1;
+H1,C1,RCH;
+H2,C1,RCH,H1,TANG;
+H3,C1,RCH,H1,TANG,H2,TANG,1;
+H4,C1,RCH,H1,TANG,H2,TANG,-1;
+}
+
+basis=STO-3G
+{rhf;
+wf,10,1,0;}
+put,molden,test01.molden2015;

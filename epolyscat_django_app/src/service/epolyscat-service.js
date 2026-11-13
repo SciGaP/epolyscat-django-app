@@ -17,12 +17,41 @@ const axiosInstance = axios.create({
         'Accept': '*/*',
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': "*",
-        'Origin': '*',
-        'x-csrftoken': utils.FetchUtils.getCSRFToken()
+        'Origin': '*'
     }
 })
 
+axiosInstance.interceptors.request.use(config => {
+    const csrfToken = utils.FetchUtils.getCSRFToken();
+    if (csrfToken) {
+        config.headers = config.headers || {};
+        config.headers["X-CSRFToken"] = csrfToken;
+    }
+    return config;
+});
+
 const appBaseUrl = "/epolyscat_django_app/api/";
+
+function encodeWorkflowContinuation(data) {
+    const preview = data.next_stage_preview
+        ? {
+            ...data.next_stage_preview,
+            nextStage: data.next_stage_preview.next_stage || "",
+            targetApplication: data.next_stage_preview.target_application || "",
+            inputFileName: data.next_stage_preview.input_file_name || "",
+            outputFile: data.next_stage_preview.selected || null,
+        }
+        : null;
+
+    return {
+        ...data,
+        sourceStage: data.source_stage || "",
+        sourceApplication: data.source_application || "",
+        nextStage: data.next_stage || "",
+        nextStagePreview: preview,
+        scientificVerification: data.scientific_verification,
+    };
+}
 
 export const InputService = {
     async fetchApplicationInputs() {
@@ -87,7 +116,7 @@ export const InputService = {
                                 },
                                 {
                                     "value": "Analysis",
-                                    "text": "Analysis"
+                                    "text": "Post-processing"
                                 }
                             ]
                         },
@@ -423,6 +452,42 @@ export const InputService = {
                                             "comparison": "equals",
                                             "value": "ePolyScat_Run"
                                         }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMath"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMatLab"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvLinFull"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "MoldenMerge"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "NRFPAD"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "Cube2igor"
+                                        }
                                     }
                                 ]
                             },
@@ -443,7 +508,7 @@ export const InputService = {
             {
                 "name": "molden.dat",
                 "value": "",
-                "type": 3,
+                "type": 4,
                 "applicationArgument": null,
                 "standardInput": true,
                 "userFriendlyDescription": "Molden Data file containing wavefunction.",
@@ -487,6 +552,148 @@ export const InputService = {
                 "storageResourceId": null,
                 "isReadOnly": false,
                 "overrideFilename": null
+            },
+            {
+                "name": "BendOrient_Output",
+                "value": "",
+                "type": 3,
+                "applicationArgument": null,
+                "standardInput": true,
+                "userFriendlyDescription": "Output file from BendOrient for CnvMath or CnvMatLab.",
+                "metaData": {
+                    "editor": {
+                        "dependencies": {
+                            "show": {
+                                "OR": [
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMath"
+                                        }
+                                    },
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvMatLab"
+                                        }
+                                    }
+                                ]
+                            },
+                            "showOptions": {
+                                "isRequired": true
+                            }
+                        }
+                    }
+                },
+                "inputOrder": 10,
+                "isRequired": true,
+                "requiredToAddedToCommandLine": false,
+                "dataStaged": true,
+                "storageResourceId": null,
+                "isReadOnly": false,
+                "overrideFilename": null
+            },
+            {
+                "name": "DumpOut",
+                "value": "",
+                "type": 3,
+                "applicationArgument": null,
+                "standardInput": true,
+                "userFriendlyDescription": "DumpIdy output file used by CnvLinFull.",
+                "metaData": {
+                    "editor": {
+                        "dependencies": {
+                            "show": {
+                                "OR": [
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "CnvLinFull"
+                                        }
+                                    }
+                                ]
+                            },
+                            "showOptions": {
+                                "isRequired": true
+                            }
+                        }
+                    }
+                },
+                "inputOrder": 11,
+                "isRequired": true,
+                "requiredToAddedToCommandLine": false,
+                "dataStaged": true,
+                "storageResourceId": null,
+                "isReadOnly": false,
+                "overrideFilename": null
+            },
+            {
+                "name": "Cross_Section_Input_File",
+                "value": "",
+                "type": 3,
+                "applicationArgument": null,
+                "standardInput": true,
+                "userFriendlyDescription": "OrientNCro output file used by NRFPAD.",
+                "metaData": {
+                    "editor": {
+                        "dependencies": {
+                            "show": {
+                                "OR": [
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "NRFPAD"
+                                        }
+                                    }
+                                ]
+                            },
+                            "showOptions": {
+                                "isRequired": true
+                            }
+                        }
+                    }
+                },
+                "inputOrder": 12,
+                "isRequired": true,
+                "requiredToAddedToCommandLine": false,
+                "dataStaged": true,
+                "storageResourceId": null,
+                "isReadOnly": false,
+                "overrideFilename": null
+            },
+            {
+                "name": "Cube_Output",
+                "value": "",
+                "type": 3,
+                "applicationArgument": null,
+                "standardInput": true,
+                "userFriendlyDescription": "Gaussian cube output file used by Cube2igor.",
+                "metaData": {
+                    "editor": {
+                        "dependencies": {
+                            "show": {
+                                "OR": [
+                                    {
+                                        "Application_Utility": {
+                                            "comparison": "equals",
+                                            "value": "Cube2igor"
+                                        }
+                                    }
+                                ]
+                            },
+                            "showOptions": {
+                                "isRequired": true
+                            }
+                        }
+                    }
+                },
+                "inputOrder": 13,
+                "isRequired": true,
+                "requiredToAddedToCommandLine": false,
+                "dataStaged": true,
+                "storageResourceId": null,
+                "isReadOnly": false,
+                "overrideFilename": null
             }
             
         ]
@@ -501,6 +708,38 @@ export const InputService = {
 
         return data;
     },
+    async fetchWorkflowOutputBinding({
+        runId,
+        targetStageId,
+        targetApplicationId = "",
+        requiredFileName = "",
+    }) {
+        const { data } = await axiosInstance.get(
+            appBaseUrl + `runs/${runId}/workflow_output_binding/`,
+            {
+                params: {
+                    targetStageId,
+                    targetApplicationId,
+                    requiredFileName,
+                },
+            }
+        );
+        const outputFile = data.selected ? {...data.selected} : null;
+        if (outputFile) {
+            const dataProductURI = outputFile.dataProductURI || outputFile["data-product-uri"];
+            if (dataProductURI && !outputFile.downloadURL) {
+                outputFile.downloadURL = `sdk/download/?data-product-uri=${encodeURIComponent(dataProductURI)}`;
+            }
+        }
+        return {
+            ...data,
+            inputFileName: data.input_file_name,
+            outputFile: outputFile,
+            dataEntryValues: data.data_entry_values,
+            scientificVerification: data.scientific_verification,
+            provenance: data.provenance,
+        };
+    },
     async fetchFileContents(file) {
         if (file == null)
             return null;
@@ -511,7 +750,16 @@ export const InputService = {
         if ("base64Contents" in file)
             return null;
 
-        if (file.isFromComputer)
+        const dataProductURI = file.dataProductURI || file["data-product-uri"];
+        const downloadURL = file.downloadURL || (dataProductURI
+            ? `sdk/download/?data-product-uri=${encodeURIComponent(dataProductURI)}`
+            : null);
+        const mimeType = file["mimeType"] || "";
+        const plaintextFileExtensions = /\.(inp|in|log|out|stdout|stderr|slurm)$/i;
+        const isKnownPlaintext = fileMetadata.isPlaintext(file.name) === true
+            || plaintextFileExtensions.test(file.name);
+
+        if (file.isFromComputer && file instanceof Blob)
             return await new Promise((resolve, reject) => {
                 let reader = new FileReader();
 
@@ -522,8 +770,11 @@ export const InputService = {
                 reader.readAsText(file);
             });
 
-        if (!("mimeType" in file) || (file["mimeType"] || "").startsWith("text")) {
-            return this.getValidatedResult(file.name, (await axiosInstance.get(file.downloadURL)).data);
+        if (!downloadURL)
+            return null;
+
+        if (isKnownPlaintext || !mimeType || mimeType.startsWith("text")) {
+            return this.getValidatedResult(file.name, (await axiosInstance.get(downloadURL)).data);
         }
 
         return null;
@@ -602,8 +853,8 @@ export const ExperimentService = {
             runCount: runs_count
         }
     },
-    async fetchAllExperiments({page = 1, pageSize = 1000} = {page: 1, pageSize: 1000}) {
-        const {data} = await axiosInstance.get(`/epolyscat_django_app/api/experiments/?page=${page}&page_size=${pageSize}`);
+    async fetchAllExperiments({page = 1, pageSize = 1000, search = ""} = {}) {
+        const {data} = await axiosInstance.get(`/epolyscat_django_app/api/experiments/?page=${page}&page_size=${pageSize}&search=${encodeURIComponent(search)}`);
         data.results = data.results.map(this.encodeObj);
         return data;
     },
@@ -633,10 +884,13 @@ export const PlotService = {
         }
     },
  
-    async plotSelectedRuns({runIds, expectationValue, xAxis, yAxis, flags}) {
+    async plotSelectedRuns({runIds, plotfiles = null, expectationValue = null, xAxis, yAxis, flags}) {
+        const selectedPlotfiles = plotfiles || (
+            expectationValue ? [{dataProductURI: expectationValue, prefix: ""}] : []
+        );
         const {data} = await axiosInstance.post("/epolyscat_django_app/api/plot/", {
             "runs": runIds,
-            "plotfiles": plotfiles.map(({ dataProductURI, prefix }) => ({
+            "plotfiles": selectedPlotfiles.map(({ dataProductURI, prefix }) => ({
                 "data_product_uri": dataProductURI,
                 "prefix": prefix
             })),
@@ -750,6 +1004,17 @@ export const RunService = {
             nodeCount: obj.node_count,
             wallTimeLimit: obj.walltime_limit,
             totalPhysicalMemory: obj.total_physical_memory,
+            runMode: obj.run_mode || "module",
+            moduleApplication: obj.module_application || "",
+            workflowStage: obj.workflow_stage || "",
+            workflowApplication: obj.workflow_application || "",
+            utilityApplication: obj.utility_application || "",
+            workflowMetadata: obj.workflow_metadata || {},
+            tutorialInputFormat: (obj.workflow_metadata || {}).tutorialInputFormat || "",
+            parentRunId: obj.parent_run || null,
+            workflowStepOrder: obj.workflow_step_order || null,
+            workflowStepStatus: obj.workflow_step_status || "",
+            presentation: obj.presentation || null,
 
             status: obj.status,
             jobStatus: obj.job_status,
@@ -763,11 +1028,16 @@ export const RunService = {
                 type: input.type,
                 name: input.name,
                 value: input.value,
-                files: input.files.map(file => ({
-                    name: file.name,
-                    dataProductURI: file.data_product_uri,
-                    downloadURL: `sdk/download/?data-product-uri=${encodeURIComponent(file.data_product_uri)}`
-                }))
+                files: input.files.map(file => {
+                    const dataProductURI = file.data_product_uri || "";
+                    return {
+                        name: file.name,
+                        dataProductURI,
+                        downloadURL: dataProductURI
+                            ? `sdk/download/?data-product-uri=${encodeURIComponent(dataProductURI)}`
+                            : null
+                    };
+                })
             })),
             viewIds: obj.views,
             displayStatus,
@@ -780,7 +1050,7 @@ export const RunService = {
         if (filename === "inpc" && inpcDownloadUrl) {
             res = await axios.get(inpcDownloadUrl);
         } else {
-            res = await axiosInstance.get(`/epolyscat_django_app/api/runs/${runId}/viewables/${filename}/`);
+            res = await axiosInstance.get(`/epolyscat_django_app/api/runs/${runId}/viewables/${encodeURIComponent(filename)}/`);
         }
 
         return res.data;
@@ -809,14 +1079,29 @@ export const RunService = {
 
     async fetchRun({runId = null} = {}) {
         const {data} = await axiosInstance.get(`/epolyscat_django_app/api/runs/${runId}`);
-        const _run = this.encodeObj(data);
-
-        if (!_run.inputTable) {
-            const _clone = await this.cloneRun({runId});
-            _run.inputTable = _clone.inputTable;
-        }
-
-        return _run;
+        return this.encodeObj(data);
+    },
+    async fetchRunPresentation({runId = null} = {}) {
+        const {data} = await axiosInstance.get(`/epolyscat_django_app/api/runs/${runId}/presentation/`);
+        return data;
+    },
+    async fetchWorkflowContinuation({runId = null} = {}) {
+        const {data} = await axiosInstance.get(
+            `/epolyscat_django_app/api/runs/${runId}/workflow_continuation/`
+        );
+        return encodeWorkflowContinuation(data);
+    },
+    async continueWorkflow({runId = null} = {}) {
+        const {data} = await axiosInstance.post(
+            `/epolyscat_django_app/api/runs/${runId}/workflow_continuation/`,
+            {}
+        );
+        return {
+            ...encodeWorkflowContinuation(data),
+            workflowParentRunId: data.workflow_parent_run_id,
+            nextChildRunId: data.next_child_run_id,
+            sourceRunId: data.source_run_id,
+        };
     },
     //async cloneRun({runId = null} = {}) {
     //    const {data} = await axiosInstance.post(`/epolyscat_django_app/api/runs/${runId}/new/`);
@@ -830,7 +1115,9 @@ export const RunService = {
     //async createRun({ root, experimentId, directedit, inputTable, groupResourceProfileId, computeResourceId, queueName, coreCount, nodeCount, wallTimeLimit, totalPhysicalMemory, viewIds, description
 
     async createRun({
-        name, inputs, groupResourceProfileId, computeResourceId, coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, viewIds, description, experimentId
+        name, inputs, groupResourceProfileId, computeResourceId, coreCount, nodeCount, wallTimeLimit, queueName,
+        totalPhysicalMemory, viewIds, description, experimentId, runMode = "module", moduleApplication = "",
+        workflowStage = "", workflowApplication = "", utilityApplication = "", workflowMetadata = {}
     }) {
         let data = {
             "name": name,
@@ -848,6 +1135,12 @@ export const RunService = {
             "node_count": nodeCount,
             "walltime_limit": wallTimeLimit,
             "total_physical_memory": totalPhysicalMemory,
+            "run_mode": runMode,
+            "module_application": moduleApplication,
+            "workflow_stage": workflowStage,
+            "workflow_application": workflowApplication,
+            "utility_application": utilityApplication,
+            "workflow_metadata": workflowMetadata,
             viewIds
         };
 
@@ -867,7 +1160,9 @@ export const RunService = {
 
     async updateRun({
         name, runId, inputs, groupResourceProfileId, computeResourceId,
-        coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, description
+        coreCount, nodeCount, wallTimeLimit, queueName, totalPhysicalMemory, description,
+        runMode = "module", moduleApplication = "", workflowStage = "",
+        workflowApplication = "", utilityApplication = "", workflowMetadata = {}
     }) {
         let data = {
             name,
@@ -879,7 +1174,13 @@ export const RunService = {
             "core_count": coreCount,
             "node_count": nodeCount,
             "walltime_limit": wallTimeLimit,
-            "total_physical_memory": totalPhysicalMemory
+            "total_physical_memory": totalPhysicalMemory,
+            "run_mode": runMode,
+            "module_application": moduleApplication,
+            "workflow_stage": workflowStage,
+            "workflow_application": workflowApplication,
+            "utility_application": utilityApplication,
+            "workflow_metadata": workflowMetadata
         };
 
         const { data: updatedRunData} = await axiosInstance.patch(appBaseUrl + `runs/${runId}/`, data);
@@ -982,6 +1283,9 @@ export const ViewService = {
             //owner: obj.owner,
             created: obj.created,
             updated: obj.updated,
+            owner: obj.owner,
+            type: obj.type,
+            readonly: obj.type === "tutorial" || obj.owner == null,
 
             //created: new Date(obj.created).toLocaleString(),
             //updated: new Date(obj.updated).toLocaleString(),
@@ -993,14 +1297,14 @@ export const ViewService = {
             //readonly: ViewService.readonlyViewTypes.indexOf(obj.type) >= 0
         };
     },
-    async fetchAllViews({page = 1, pageSize = 1000, tutorials = false} = {page: 1, pageSize: 1000, tutorials: false}) {
+    async fetchAllViews({page = 1, pageSize = 1000, tutorials = false, search = ""} = {}) {
         let url, data, res;
         if (tutorials) {
             url = "/epolyscat_django_app/api/views/tutorials/";
             res = await axiosInstance.get(url);
             data = {"count": 1, "next": null, "previous": null, "results": [res.data].map(this.encodeObj)}
         } else {
-            url = `/epolyscat_django_app/api/views/?page=${page}&page_size=${pageSize}`;
+            url = `/epolyscat_django_app/api/views/?page=${page}&page_size=${pageSize}&search=${encodeURIComponent(search)}`;
             res = await axiosInstance.get(url);
             data = res.data;
             data.results = data.results.map(this.encodeObj);
@@ -1043,28 +1347,13 @@ export const ViewService = {
     },
  
     async fetchTutorialsView() {
-        const { data: runs } =  await axiosInstance.get(appBaseUrl + `runs/tutorial_runs`);
-        
-        return this.encodeObj({
-            id: -1,
-            name: "Tutorials",
-            created: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            updated: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            run_count: runs.length,
-            runs
-        });
+        const {data} = await axiosInstance.get(appBaseUrl + 'views/tutorials/');
+        return this.encodeObj(data);
     },
     async fetchView({viewId}) {
         if (viewId == -1){
-           const { data: runs } =  await axiosInstance.get(appBaseUrl + `runs/tutorial_runs`);
-           return this.encodeObj({
-            id: -1,
-            name: "Tutorials",
-            created: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            updated: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            run_count: runs.length,
-            runs
-           });
+           const {data} = await axiosInstance.get(appBaseUrl + 'views/tutorials/');
+           return this.encodeObj(data);
         }
         else{   
            const {data} = await axiosInstance.get(`/epolyscat_django_app/api/views/${viewId}`);

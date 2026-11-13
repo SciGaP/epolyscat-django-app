@@ -1,11 +1,10 @@
 <template>
-  <div class="w-100 h-100 bg-light p-2">
+  <div class="portal-page portal-list-page">
     <multipane class="w-100 h-100" layout="vertical">
-      <div class="h-100 bg-white d-flex flex-column overflow-auto align-items-center" style="flex-grow: 1">
-                <div class="d-flex flex-row justify-content-between" style="padding: 30px 0 20px; flex-wrap: wrap; width: 93%">
-                    <h3 style="line-height: 38px; margin: 0;">{{ pageName }}</h3>
-                    <span></span>
-                    <div class="d-flex flex-row button_row align-items-center">
+      <div class="portal-page-content d-flex flex-column overflow-auto" style="flex-grow: 1">
+                <div class="portal-page-header">
+                    <h1 class="portal-page-title">{{ pageName }}</h1>
+                    <div class="portal-page-actions">
                         <span v-if="numberOfRunsSelected > 0" style="line-height: 41px;">
                             {{ numberOfRunsSelected }}
                             <span v-if="numberOfRunsSelected == 1">Run</span>
@@ -41,9 +40,10 @@
                         </b-popover>
                         <div v-show="!isTutorials && numberOfRunsSelected >= 1" class="mx-1" style="width: 0.1px; height: 50%; border: 0.5px solid black" />
                         <router-link v-if="!isTutorials" :to="newRunLink" v-slot="{ href, navigate }">
-                            <b-button variant="light" :href="href" @click="navigate">New Run</b-button>
+                            <b-button variant="primary" :href="href" @click="navigate">New Run</b-button>
                         </router-link>
                     </div>
+                </div>
 
 
 
@@ -66,49 +66,48 @@
           </b-breadcrumb>
         </dev -->
           <div class="w-100 d-flex flex-column" style="width: 93%;">
-            <div style="flex: 1;" class="overflow-auto" v-if="!!experiment || !!view">
-              <div class="d-inline mr-2">
-                <div class="overflow-auto" style="font-weight: 400; font-size: 19px;">
-                  <template v-if="!!experiment">{{ experiment.name }}</template>
-                  <template v-if="!!view">{{ view.name }}</template>
-                  <template v-if="!experiment && !view">Runs</template>
-                </div>
-                <div class="overflow-auto" v-if="!!experiment" style="font-weight: 300; font-size: 14px;">
-                  {{ experiment.description }}
-                </div>
-              </div>
-            </div>
-            <div class="pl-3" v-if="!view || !view.readonly">
-                 <div v-show="!isTutorials && numberOfRunsSelected >= 1" class="mx-1" style="width: 0.1px; height: 50%; border: 0.5px solid black;">
-                   <router-link v-if="!isTutorials" :to="newRunLink" v-slot="{ href, navigate }">
-                    <b-button variant="light" :href="href" @click="navigate">New Run</b-button>
-                   </router-link>
-                 </div>
-            </div>
-
-              <b-input-group class="filter-input my-3">
+            <p v-if="experiment && experiment.description" class="portal-collection-description">
+              {{ experiment.description }}
+            </p>
+              <b-input-group class="filter-input portal-list-filter">
                 <b-form-input v-model="filterText" type="search" placeholder="Filter runs"/>
                 <b-input-group-append is-text>
                   <b-icon icon="search"/>
                 </b-input-group-append>
               </b-input-group>
 
+              <b-alert
+                  v-if="isTutorials && tutorialLoadError"
+                  show
+                  variant="danger"
+                  class="d-flex align-items-center justify-content-between"
+              >
+                <span>{{ tutorialLoadError }}</span>
+                <b-button variant="outline-danger" size="sm" @click="retryTutorialLoad">
+                  Retry
+                </b-button>
+              </b-alert>
+
               <LoadingOverlay :name="loadingOverlayName" class="d-flex w-100" style="flex-grow: 1; min-height: 300px;">
-                    <ListView
-                        :items="runs" :columns="[['name', 'Run Name'], ['status', 'Status'], ['resource', 'Resource'], ['actions', 'Actions']]"
+                    <ListView class="portal-list-table"
+                        :items="runs" :columns="runColumns"
                         :canSelectMultiple="true" @updateSelected="updateSelected" identifier="id"
-                        :sorters="[
-                            (run1, run2) => run1.name.localeCompare(run2.name),
-                            (run1, run2) => sortStatus(run1.displayStatus, run2.displayStatus),
-                            (run1, run2) => (run1.resource || '').localeCompare(run2.resource || ''),
-                        ]"
+                        :sorters="runSorters"
                     >
                         <template v-slot:name="{ item }">
-                            <router-link :to="`/runs/${item.id}`" v-slot="{isExactActive, href, navigate}">
-                                <b-link variant="link" :class="{active: isExactActive}" :href="href" @click="navigate">
-                                    {{ item.name }}
-                                </b-link>
-                            </router-link>
+                            <div class="tutorial-name-cell">
+                              <router-link :to="`/runs/${item.id}`" v-slot="{isExactActive, href, navigate}">
+                                  <b-link variant="link" :class="{active: isExactActive}" :href="href" @click="navigate">
+                                      {{ item.name }}
+                                  </b-link>
+                              </router-link>
+                              <div v-if="isTutorials && item.description" class="tutorial-description">
+                                {{ item.description }}
+                              </div>
+                            </div>
+                        </template>
+                        <template v-slot:inputFormat="{ item }">
+                            {{ item.inputFormat || "—" }}
                         </template>
                         <template v-slot:status="{ item }">
                             <Badge :status="item.displayStatus"/>
@@ -131,7 +130,7 @@
                             <!-- View / tutorial contexts: full action set -->
                             <template v-else>
                                 <b-button
-                                    v-if="view != null" variant="link" size="sm" @click="removeFromView([item])"
+                                    v-if="view != null && !isTutorials" variant="link" size="sm" @click="removeFromView([item])"
                                     v-b-tooltip.hover title="Remove from view"
                                 ><b-icon icon="x" /></b-button>
                                 <b-button
@@ -155,6 +154,7 @@
                         </template>
                     </ListView>
               </LoadingOverlay>
+            </div>
 
 <!--
 
@@ -259,7 +259,6 @@
         </div>
 
 -->
-
       </div>
       <multipane-resizer v-if="isCompareEnabled"/>
       <div class="h-100 m-1" v-if="isCompareEnabled" style="overflow-y: scroll;">
@@ -307,6 +306,7 @@ export default {
       filterText: "",
       refreshDataInterval: null,
       view: null,
+      tutorialLoadError: "",
 
       //runIds: null,
       //selectedRunIdsMap: {},
@@ -321,6 +321,37 @@ export default {
     };
   },
   computed: {
+    runColumns() {
+      return this.isTutorials
+          ? [
+            ['name', 'Tutorial'],
+            ['inputFormat', 'Input Format'],
+            ['status', 'Status'],
+            ['actions', 'Actions'],
+          ]
+          : [
+            ['name', 'Run Name'],
+            ['status', 'Status'],
+            ['resource', 'Resource'],
+            ['actions', 'Actions'],
+          ];
+    },
+    runSorters() {
+      const nameSorter = (run1, run2) => run1.name.localeCompare(run2.name);
+      const statusSorter = (run1, run2) => this.sortStatus(run1.displayStatus, run2.displayStatus);
+
+      return this.isTutorials
+          ? [
+            nameSorter,
+            (run1, run2) => (run1.inputFormat || '').localeCompare(run2.inputFormat || ''),
+            statusSorter,
+          ]
+          : [
+            nameSorter,
+            statusSorter,
+            (run1, run2) => (run1.resource || '').localeCompare(run2.resource || ''),
+          ];
+    },
     isCompareEnabled() {
             return [...this.selected].some(
                 run => {
@@ -354,16 +385,20 @@ export default {
                     this.$store.getters["experiment/getExperiment"]({experimentId: this.experimentId}) : null;
     },
     runs() {
+         if (this.isTutorials && this.view == null) return [];
          // NOTE: loose == on experimentId is intentional; the route query param
          // is a string while run.experimentId is a number.
          let runs = (this.experimentId != null)
              ? this.$store.getters["run/getRuns"]().filter(run => run.experimentId == this.experimentId)
              : (this.view == null) ? this.$store.getters["run/getRuns"]() : this.view.runs;
 
-         return runs.filter(run => run.name.includes(this.filterText)).map(run => {
-                    run.isSelectable = !this.isTutorials;
-                    return run;
-         });
+         return runs.filter(run => run.name.includes(this.filterText)).map(run => ({
+                    ...run,
+                    inputFormat: run.tutorialInputFormat
+                        || (run.workflowMetadata || {}).tutorialInputFormat
+                        || "",
+                    isSelectable: !this.isTutorials,
+         }));
     },
 //      if (this.processingList) {
 //        return null;
@@ -384,10 +419,9 @@ export default {
                 return (this.viewId == null) ? "runs" : `viewRuns${this.viewId}`
     },
     pageName() {
-                return (this.experimentId != null) ?
+                return this.isTutorials ? "Tutorials" : (this.experimentId != null) ?
                     ((this.experiment == null) ? `Loading Experiment...` : this.experiment.name) :
-                    (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name
-    },
+                    (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name    },
     pageIsLoading() {
                 return this.$store.getters['loading/getMessages'](this.loadingOverlayName).length > 0
     },
@@ -525,7 +559,12 @@ export default {
          if (this.viewId != null) {
                     try {
                         this.view = await this.$store.dispatch("view/fetchView", { viewId: this.viewId });
+                        if (this.isTutorials) this.tutorialLoadError = "";
                     } catch (error) {
+                        this.view = null;
+                        if (this.isTutorials) {
+                            this.tutorialLoadError = "Tutorials could not be loaded.";
+                        }
                         eventBus.$emit("error", { name: `Error while trying to fetch view with id: ${this.viewId}`, error });
                     }   
          } else {
@@ -542,6 +581,9 @@ export default {
          }
             
          this.$store.commit("loading/STOP", { key: this.loadingOverlayName, message: "Fetching Runs" });
+    },
+    async retryTutorialLoad() {
+        await this.refreshData(true);
     },
     async removeFromView(runs) {
         if (this.view != null) {
@@ -699,19 +741,6 @@ export default {
         width: 93%;
     }
 
-    /* "Filter runs" search box */
-    .filter-input >>> .form-control {
-        border-right: 0;
-        height: 44px;
-        font-size: 16px;
-    }
-
-    .filter-input >>> .input-group-text {
-        background: #fff;
-        border-left: 0;
-        color: #6c757d;
-    }
-
     /* Clone / delete icons in the Actions column */
     .action-icon {
         color: #1b3a5c;
@@ -721,6 +750,22 @@ export default {
 
     .action-icon:hover {
         color: #102537;
+    }
+
+    .tutorial-name-cell {
+        align-items: flex-start;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .tutorial-description {
+        color: #6c757d;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        margin-top: 0.2rem;
+        max-width: 34rem;
     }
 
     .button_row > * {

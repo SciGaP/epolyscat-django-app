@@ -1,0 +1,15 @@
+&GATEWAY
+Title
+N2 molecule
+Symmetry
+X Y Z
+Basis set
+N.aug-cc-pvtz
+ N 0.00000000 0.00000000 -0.54884 /Angstrom
+cartesian all
+End of basis
+
+End of input
+
+&SEWARD
+&SCF

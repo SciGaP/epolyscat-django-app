@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "test01",
+      "name": "Test 01",
+      "description": "CH4 electron scattering, static exchange plus model polarization",
+      "input_format": "Molpro 2015 Molden",
+      "script": "test01.inp",
+      "runtime_data": "test01.molden2015",
+      "standard_output": "test01.ostnd",
+      "reference_input": "test01.molpro.inp",
+      "convert_format": "molden"
+    },
+    {
+      "id": "test04",
+      "name": "Test 04",
+      "description": "SiH4 electron scattering at multiple energies, T-matrix form",
+      "input_format": "Gaussian 09",
+      "script": "test04.inp",
+      "runtime_data": "test04.g09",
+      "standard_output": "test04.ostnd",
+      "reference_input": "test04.g09.inp",
+      "convert_format": "gaussian"
+    },
+    {
+      "id": "test08",
+      "name": "Test 08",
+      "description": "F2- static-exchange photodetachment",
+      "input_format": "Molpro 2012 Molden",
+      "script": "test08.inp",
+      "runtime_data": "test08.molden2012",
+      "standard_output": "test08.ostnd",
+      "reference_input": "test08.molpro.inp",
+      "convert_format": "molden"
+    },
+    {
+      "id": "test12",
+      "name": "Test 12",
+      "description": "N2 photoionization",
+      "input_format": "OpenMolcas Molden",
+      "script": "test12.inp",
+      "runtime_data": "test12.molcas.scf.molden",
+      "standard_output": "test12.ostnd",
+      "reference_input": "test12.molcas.inp",
+      "convert_format": "molden"
+    },
+    {
+      "id": "test36",
+      "name": "Test 36",
+      "description": "CH4 photoionization using GAMESS output",
+      "input_format": "GAMESS",
+      "script": "test36.inp",
+      "runtime_data": "test36.gms.dat",
+      "standard_output": "test36.ostnd",
+      "reference_input": "test36.gms.inp",
+      "convert_format": "gamess"
+    }
+  ]
+}

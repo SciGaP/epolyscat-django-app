@@ -1,0 +1,14 @@
+***,F2 Minus
+
+geomtyp=xyz
+geometry
+ 2
+ F2 Minus
+ F 0. 0. -0.9525186
+ F 0. 0. 0.9525186
+end
+
+basis=avqz
+{rhf;
+wf,19,5,1;}
+put,molden,test08.molden2012;

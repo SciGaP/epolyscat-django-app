@@ -1,0 +1,49 @@
+#
+# input file for test12 Using OpenMolCas molden file
+#
+# N2 molden SCF, (3-sigma-g)^-1 photoionization
+#
+ LMax 22 # maximum l to be used for wave functions
+ LMaxI 120
+ EMax 50.0 # EMax, maximum asymptotic energy in eV
+ FegeEng 13.0 # Energy correction (in eV) used in the fege potential
+
+ ScatEng 10.0 # list of scattering energies
+
+ InitSym 'SG' # Initial state symmetry
+ InitSpinDeg 1 # Initial state spin degeneracy
+ OrbOccInit 2 2 2 2 2 4 # Orbital occupation of initial state
+ OrbOcc 2 2 2 2 1 4 # occupation of the orbital groups of target
+ SpinDeg 1 # Spin degeneracy of the total scattering state (=1 singlet)
+ TargSym 'SG' # Symmetry of the target state
+ TargSpinDeg 2 # Target spin degeneracy
+ IPot 15.581 # ionization potentail
+
+EpsAsym 3 52.91772083
+Convert '$pt/test12.molcas.scf.molden' 'Molden'
+GetBlms
+ExpOrb
+
+ ScatSym 'SU' # Scattering symmetry of total final state
+ ScatContSym 'SU' # Scattering symmetry of continuum electron
+
+FileName 'MatrixElements' 'test12SU.idy' 'REWIND'
+GenFormPhIon
+DipoleOp
+GetPot
+PhIon
+GetCro
+#
+ ScatSym 'PU' # Scattering symmetry of total final state
+ ScatContSym 'PU' # Scattering symmetry of continuum electron
+
+FileName 'MatrixElements' 'test12PU.idy' 'REWIND'
+GenFormPhIon
+DipoleOp
+GetPot
+PhIon
+GetCro
+#
+GetCro 'test12PU.idy' 'test12SU.idy'
+#
+#

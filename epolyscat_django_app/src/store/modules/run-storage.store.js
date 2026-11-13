@@ -507,6 +507,12 @@ const getters = {
                 nodeCount: run.nodeCount,
                 wallTimeLimit: run.wallTimeLimit,
                 totalPhysicalMemory: run.totalPhysicalMemory,
+                runMode: run.runMode,
+                moduleApplication: run.moduleApplication,
+                workflowStage: run.workflowStage,
+                workflowApplication: run.workflowApplication,
+                utilityApplication: run.utilityApplication,
+                workflowMetadata: run.workflowMetadata,
                 inputs: run.inputs
             };
         }

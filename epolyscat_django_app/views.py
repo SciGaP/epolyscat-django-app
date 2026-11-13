@@ -52,6 +52,7 @@ from epolyscat_django_app import (
     runtime_audit as runtime_audit_domain,
     scientific_output_service,
     serializers,
+    tutorials as tutorial_domain,
     utility_runtime_contracts,
     workflow_continuation as workflow_continuation_domain,
     workflow_output_contracts,
@@ -467,6 +468,20 @@ def home(request):
     )
 
 
+class TutorialCatalogUnavailable(exceptions.APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_detail = "Packaged tutorial catalog is unavailable; no personal storage fallback is used."
+    default_code = "tutorial_catalog_unavailable"
+
+
+def _shared_packaged_tutorial_view():
+    try:
+        return tutorial_domain.ensure_tutorial_view()
+    except (OSError, KeyError, TypeError, ValueError) as error:
+        logger.warning("Packaged tutorial catalog is unavailable", exc_info=True)
+        raise TutorialCatalogUnavailable() from error
+
+
 class IsOwner(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         # Only the owner has write access
@@ -547,14 +562,8 @@ class RunViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         if self.action == "list":
             context["refresh_remote_status"] = False
-            context["tutorial_view_id"] = (
-                models.View.objects.filter(
-                    type="tutorial",
-                    owner=None,
-                )
-                .values_list("pk", flat=True)
-                .first()
-            )
+            tutorial_view = models.View.tutorial_view()
+            context["tutorial_view_id"] = tutorial_view.pk if tutorial_view else None
         return context
 
     def get_queryset(self):
@@ -665,6 +674,13 @@ class RunViewSet(viewsets.ModelViewSet):
         )
 
     def _continuation_eligibility(self, request, run):
+        if run.is_tutorial:
+            return {
+                "eligible": False,
+                "reason": "tutorial_read_only",
+                "message": "Clone this tutorial to continue it in an editable run.",
+            }
+
         eligibility = workflow_continuation_domain.continuation_eligibility(
             run,
             request,
@@ -766,15 +782,17 @@ class RunViewSet(viewsets.ModelViewSet):
             self._create_input(request, run, input)
 
         if "viewIds" in request.data:
-            for viewId in request.data["viewIds"]:
-                if int(viewId) < 0:
-                    try:
-                        tutorial_view = models.View.tutorial_view()
-                        run.views.add(tutorial_view)
-                    except models.View.DoesNotExist:
-                        pass
-                else:
-                    view = models.View.objects.get(pk=int(viewId))
+            for view_id in request.data["viewIds"]:
+                view = (
+                    models.View.objects.filter(
+                        pk=view_id,
+                        owner=request.user,
+                        deleted=False,
+                    )
+                    .exclude(type="tutorial")
+                    .first()
+                )
+                if view is not None:
                     run.views.add(view)
 
         if self._is_workflow_parent_run(run):
@@ -1590,11 +1608,15 @@ class RunViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["GET"])
     def tutorial_runs(self, request):
-        tutorial_view = models.View.tutorial_view()
-        if tutorial_view is None:
-            return Response([])
-        runs = [run for run in models.Run.objects.all() if tutorial_view in run.views.all()]
-
+        tutorial_view = _shared_packaged_tutorial_view()
+        runs = tutorial_view.runs.order_by("name").prefetch_related(
+            "views",
+            Prefetch(
+                "inputs",
+                queryset=models.Input.objects.prefetch_related("files"),
+            ),
+            "executions",
+        )
         serializer = self.get_serializer(runs, many=True)
 
         return Response(serializer.data)
@@ -1773,6 +1795,12 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(methods=["get"], detail=True, url_path="input-files")
     def input_files(self, request, pk=None):
         run: models.Run = self.get_object()
+        if run.is_tutorial:
+            try:
+                return Response(tutorial_domain.input_file_descriptors(run))
+            except FileNotFoundError as exc:
+                raise exceptions.NotFound from exc
+
         input_files_list = []
         inputs = models.Input.objects.filter(
             run=run,
@@ -1839,7 +1867,10 @@ class RunViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["GET"])
     def get_output_files(self, request, pk=None):
         run = self.get_object()
-        return Response(self._output_files_for_run(request, run))
+        try:
+            return Response(self._output_files_for_run(request, run))
+        except FileNotFoundError as exc:
+            raise exceptions.NotFound from exc
 
     @action(detail=True, methods=["GET"])
     def output_manifest(self, request, pk=None):
@@ -2131,21 +2162,22 @@ def get_tmp_dir(request, plotfile_objs, ignore_missing=False):
 
 def open_run_file(request, run: models.Run, filename: str):
     # Handle tutorial runs specially: all of their files are available within the app
-    if False and run.is_tutorial:
-        return open(BASE_DIR / run.filepath / filename, "rb")
-    else:
-        data_product_uri = user_run_file_exists(request, run, filename)
-        if data_product_uri is not None:
-            return user_storage.open_file(request, data_product_uri=data_product_uri)
-        else:
-            raise FileNotFoundError(f"{filename} does not exist in run {run.id}")
+    if run.is_tutorial:
+        return tutorial_domain.open_case_file(run, filename)
+    data_product_uri = user_run_file_exists(request, run, filename)
+    if data_product_uri is not None:
+        return user_storage.open_file(request, data_product_uri=data_product_uri)
+    raise FileNotFoundError(f"{filename} does not exist in run {run.id}")
 
 
 def run_file_exists(request, run: models.Run, filename: str) -> bool:
-    if False and run.is_tutorial:
-        return (BASE_DIR / run.directory / filename).exists()
-    else:
-        return user_run_file_exists(request, run, filename) is not None
+    if run.is_tutorial:
+        try:
+            with tutorial_domain.open_case_file(run, filename):
+                return True
+        except FileNotFoundError:
+            return False
+    return user_run_file_exists(request, run, filename) is not None
 
 def user_run_file_exists(request, run, filename):
     """Return data product uri for run file if it exists, else None."""
@@ -2288,14 +2320,11 @@ class ViewsViewSet(viewsets.ModelViewSet):
         return context
 
     def get_queryset(self):
-        queryset = (
-            # Returns Runs owned by the user
-            models.View.objects.filter(
-                Q(owner=self.request.user)
-            )
-        )
         if self.action == "list":
-            queryset = queryset.annotate(
+            queryset = models.View.objects.filter(
+                owner=self.request.user,
+                deleted=False,
+            ).exclude(type="tutorial").annotate(
                 serialized_run_count=Count(
                     "runs",
                     distinct=True,
@@ -2308,8 +2337,36 @@ class ViewsViewSet(viewsets.ModelViewSet):
                     ),
                     distinct=True,
                 ),
+            ).order_by("pk")
+            return queryset
+        return models.View.objects.filter(
+            Q(owner=self.request.user)
+            | Q(
+                owner=None,
+                type="tutorial",
+                tutorial_key=tutorial_domain.TUTORIAL_VIEW_KEY,
+            ),
+            deleted=False,
+        )
+
+    @action(methods=["GET"], detail=False)
+    def tutorials(self, request):
+        tutorial_view = _shared_packaged_tutorial_view()
+        tutorial_view = models.View.objects.prefetch_related(
+            Prefetch(
+                "runs",
+                queryset=models.Run.objects.order_by("name").prefetch_related(
+                    "views",
+                    Prefetch(
+                        "inputs",
+                        queryset=models.Input.objects.prefetch_related("files"),
+                    ),
+                    "executions",
+                ),
             )
-        return queryset
+        ).get(pk=tutorial_view.pk)
+        serializer = self.get_serializer(tutorial_view)
+        return Response(serializer.data)
 
 #        #queryset = models.View.filter_by_user(request)
 #
@@ -2933,21 +2990,22 @@ def runs_dir(request, runs, filenames, ignore_missing=False):
 
 def open_run_file(request, run: models.Run, filename: str):
     # Handle tutorial runs specially: all of their files are available within the app
-    if False and run.is_tutorial:
-        return open(BASE_DIR / run.filepath / filename, "rb")
-    else:
-        data_product_uri = user_run_file_exists(request, run, filename)
-        if data_product_uri is not None:
-            return user_storage.open_file(request, data_product_uri=data_product_uri)
-        else:
-            raise FileNotFoundError(f"{filename} does not exist in run {run.id}")
+    if run.is_tutorial:
+        return tutorial_domain.open_case_file(run, filename)
+    data_product_uri = user_run_file_exists(request, run, filename)
+    if data_product_uri is not None:
+        return user_storage.open_file(request, data_product_uri=data_product_uri)
+    raise FileNotFoundError(f"{filename} does not exist in run {run.id}")
 
 
 def run_file_exists(request, run: models.Run, filename: str) -> bool:
-    if False and run.is_tutorial:
-        return (BASE_DIR / run.filepath / filename).exists()
-    else:
-        return user_run_file_exists(request, run, filename) is not None
+    if run.is_tutorial:
+        try:
+            with tutorial_domain.open_case_file(run, filename):
+                return True
+        except FileNotFoundError:
+            return False
+    return user_run_file_exists(request, run, filename) is not None
 
 
 def user_run_file_exists(request, run, filename):

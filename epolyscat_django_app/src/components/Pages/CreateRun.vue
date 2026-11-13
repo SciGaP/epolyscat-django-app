@@ -36,6 +36,31 @@
         <h1 class="new-run-title">{{ pageTitle }}</h1>
       </header>
 
+      <b-alert
+          v-if="tutorialCloneHydrationError"
+          show
+          variant="danger"
+          class="tutorial-clone-alert"
+      >
+        <span>{{ tutorialCloneHydrationError }}</span>
+        <b-button
+            size="sm"
+            variant="outline-danger"
+            :disabled="tutorialCloneHydrating"
+            v-on:click="retryTutorialCloneHydration"
+        >
+          Retry loading tutorial files
+        </b-button>
+      </b-alert>
+      <b-alert
+          v-else-if="tutorialCloneHydrating"
+          show
+          variant="info"
+          class="tutorial-clone-alert"
+      >
+        Loading both tutorial inputs and preparing an editable copy…
+      </b-alert>
+
       <section class="run-type-selector-section">
         <b-alert v-if="applicationCatalogLoading" show variant="info">Loading applications from Airavata…</b-alert>
         <b-alert v-else-if="applicationCatalogError" show variant="warning">
@@ -819,12 +844,12 @@
       <div class="run-actions-bar">
         <button-overlay :show="processing">
           <b-button variant="outline-primary" class="run-action-button"
-                    v-on:click="onSave(false)" :disabled="processing || !applicationSelectionAvailable">
+                    v-on:click="onSave(false)" :disabled="processing || !applicationSelectionAvailable || tutorialCloneBlocked">
             Save
           </b-button>
         </button-overlay>
         <button-overlay :show="processing">
-          <b-button variant="primary" class="run-action-button" :disabled="processing || !applicationSelectionAvailable" v-on:click="onSave(true)">
+          <b-button variant="primary" class="run-action-button" :disabled="processing || !applicationSelectionAvailable || tutorialCloneBlocked" v-on:click="onSave(true)">
             Submit
           </b-button>
         </button-overlay>
@@ -857,6 +882,7 @@ import UserStorage from "@/components/overlay/UserStorage";
 import { descriptions } from "@/fileData";
 import { InputService } from "@/service/epolyscat-service";
 import { applicationSelectionForRun, filterApplicationContracts } from "@/utils/application-catalog";
+import { RunService } from "@/service/epolyscat-service";
 import {
   appendEPolyScatSequenceContinuationRow,
   appendEPolyScatSequenceNode,
@@ -880,6 +906,10 @@ import {
   buildEPolyScatInputDataSelectionValues,
   buildWorkflowOutputInputBinding,
 } from "@/utils/workflow-file-linking";
+import {
+  prepareTutorialCloneInputs,
+  requiredFilesAreReady,
+} from "@/utils/tutorial-clone";
 import {
   addAnalysisApplication,
   moveAnalysisApplication,
@@ -1179,7 +1209,11 @@ export default {
       ],
 
       isApplyingFileContent: false,
-      processing: false
+      processing: false,
+      cloningTutorial: false,
+      tutorialCloneHydrating: false,
+      tutorialCloneHydrationError: "",
+      tutorialCloneSourceRun: null,
     };
   },
   computed: {
@@ -1210,6 +1244,11 @@ export default {
       if (!this.activeExecutionApplication) return "No registered application is available for this selection. Choose another application or check the Airavata configuration.";
       if (!this.applicationSelectionAvailable) return "Some workflow stages have no registered application. Check the Airavata configuration before creating this workflow.";
       return "";
+    },
+    tutorialCloneBlocked() {
+      return this.cloningTutorial && (
+        this.tutorialCloneHydrating || Boolean(this.tutorialCloneHydrationError)
+      );
     },
     pageTitle() {
       if (this.isWorkflowChildEdit) {
@@ -1537,7 +1576,13 @@ export default {
         _isFormValid = _isFormValid && this.isValid[this.inputFieldsList[i]];
       }
 
-      return _isFormValid;
+      return _isFormValid && this.requiredFilesReady;
+    },
+    requiredFilesReady() {
+      const { inputFiles } = this.$store.getters["input/getInputs"]({
+        customPath: this.selectedRunPath
+      });
+      return requiredFilesAreReady(this.activeRequiredFiles, inputFiles);
     },
     activeInputFile() {
       return this.inputFiles.find(file => file.id === this.selectedInputFile) || this.inputFiles[0] || {
@@ -2824,7 +2869,7 @@ export default {
       });
     },
     async onSave(submit = false) {
-      if (!this.applicationSelectionAvailable) return;
+      if (!this.applicationSelectionAvailable || this.tutorialCloneBlocked) return;
       if (submit) {
         if (!this.validateWorkflowSubmitStep()) return;
       }
@@ -2925,6 +2970,63 @@ export default {
       this.viewIds = sourceRun.isTutorial ? [] : sourceRun.viewIds || [];
       this.applySelectedRunConfiguration({ replaceExisting: false });
     },
+    applyCloneSourceRun(sourceRun) {
+      // Keep the source application's identity even when it is no longer
+      // discoverable, so cloning cannot silently switch execution targets.
+      const selection = applicationSelectionForRun(sourceRun);
+      this.selectedRunType = selection.runType;
+      this.selectedApplicationId = selection.applicationId;
+      if (selection.stageSelections) {
+        this.workflowStageSelections = selection.stageSelections;
+        this.selectedWorkflowApplicationId = selection.stageSelections[selection.applicationId];
+        this.workflowAnalysisApplications = selection.analysisApplications;
+      }
+
+      this.run = {
+        ...this.run,
+        ...this.$store.getters["run/getStrippedRun"](sourceRun),
+      };
+      this.cloningTutorial = Boolean(
+          sourceRun.isTutorial
+          && sourceRun.workflowMetadata
+          && sourceRun.workflowMetadata.tutorialStandalone
+      );
+      this.applySelectedRunConfiguration({ replaceExisting: false });
+    },
+    async hydrateTutorialCloneInputs(sourceRun) {
+      this.tutorialCloneSourceRun = sourceRun;
+      this.tutorialCloneHydrating = true;
+      this.tutorialCloneHydrationError = "";
+
+      try {
+        const hydratedClone = await prepareTutorialCloneInputs({
+          sourceRun,
+          fetchContent: request => RunService.fetchViewableContent(request),
+          dataEntryValues: this.dataEntryValues,
+          outputDefinitions: this.outputDefinitions,
+        });
+        Object.assign(this.dataEntryValues, hydratedClone.dataEntryValues);
+        this.inpcContentType = "text";
+        this.inpcContent = hydratedClone.scriptContent;
+        this.applyInpcContentToDataEntryValues(hydratedClone.scriptContent);
+        hydratedClone.files.forEach(entry => {
+          this.$store.commit("input/ADD_TO_INPUT_FILE", {
+            inputFileName: entry.inputFileName,
+            file: entry.file,
+          });
+        });
+      } catch (error) {
+        this.tutorialCloneHydrationError = error && error.message
+          ? error.message
+          : "Tutorial files could not be loaded.";
+      } finally {
+        this.tutorialCloneHydrating = false;
+      }
+    },
+    async retryTutorialCloneHydration() {
+      if (!this.tutorialCloneSourceRun || this.tutorialCloneHydrating) return;
+      await this.hydrateTutorialCloneInputs(this.tutorialCloneSourceRun);
+    },
     async fetchURLData() {
       if (this.viewId) {
         this.viewIds = [this.viewId];
@@ -2964,23 +3066,14 @@ export default {
         const clonedRunId = parseInt(this.cloneRunId);
         const sourceRun = await this.$store.dispatch("run/fetchRun", { runId: clonedRunId });
 
-        // Keep the source application's identity even when it is no longer
-        // discoverable, so cloning cannot silently switch execution targets.
-        const selection = applicationSelectionForRun(sourceRun);
-        this.selectedRunType = selection.runType;
-        this.selectedApplicationId = selection.applicationId;
-        if (selection.stageSelections) {
-          this.workflowStageSelections = selection.stageSelections;
-          this.selectedWorkflowApplicationId = selection.stageSelections[selection.applicationId];
-          this.workflowAnalysisApplications = selection.analysisApplications;
-        }
-        this.applySelectedRunConfiguration({ replaceExisting: false });
-
+        this.applyCloneSourceRun(sourceRun);
         await this.$store.dispatch("run/loadInputs", { runId: clonedRunId });
+        if (this.cloningTutorial) {
+          await this.hydrateTutorialCloneInputs(sourceRun);
+        }
         this.viewIds = sourceRun.isTutorial ? [] : sourceRun.viewIds || [];
         this.run = {
           ...this.run,
-          ...this.$store.getters["run/getStrippedRun"](sourceRun),
           name: `Clone of ${sourceRun.name}`,
           id: -1,
           status: "UNSUBMITTED",

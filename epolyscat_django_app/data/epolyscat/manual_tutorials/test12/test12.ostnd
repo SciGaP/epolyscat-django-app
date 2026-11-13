@@ -1,0 +1,1488 @@
+Execution on n0213.lr6
+
+----------------------------------------------------------------------
+ePolyScat Version E3
+----------------------------------------------------------------------
+
+Authors: R. R. Lucchese, N. Sanna, A. P. P. Natalense, and F. A. Gianturco
+https://epolyscat.droppages.com
+Please cite the following two papers when reporting results obtained with this program
+F. A. Gianturco, R. R. Lucchese, and N. Sanna, J. Chem. Phys. 100, 6464 (1994).
+A. P. P. Natalense and R. R. Lucchese, J. Chem. Phys. 111, 5344 (1999).
+
+----------------------------------------------------------------------
+
+Starting at 2022-01-14 17:34:47.743 (GMT -0800)
+Using 20 processors
+Current git commit sha-1 836b26dfd5ffae0073e0f736b518bccf827345c3
+
+----------------------------------------------------------------------
+
++ Start of Input Records
+#
+# input file for test12 Using OpenMolCas molden file
+#
+# N2 molden SCF, (3-sigma-g)^-1 photoionization
+#
+ LMax 22 # maximum l to be used for wave functions
+ LMaxI 120
+ EMax 50.0 # EMax, maximum asymptotic energy in eV
+ FegeEng 13.0 # Energy correction (in eV) used in the fege potential
+
+ ScatEng 10.0 # list of scattering energies
+
+ InitSym 'SG' # Initial state symmetry
+ InitSpinDeg 1 # Initial state spin degeneracy
+ OrbOccInit 2 2 2 2 2 4 # Orbital occupation of initial state
+ OrbOcc 2 2 2 2 1 4 # occupation of the orbital groups of target
+ SpinDeg 1 # Spin degeneracy of the total scattering state (=1 singlet)
+ TargSym 'SG' # Symmetry of the target state
+ TargSpinDeg 2 # Target spin degeneracy
+ IPot 15.581 # ionization potentail
+
+EpsAsym 3 52.91772083
+Convert '/global/home/users/rlucchese/Applications/ePolyScat/tests/test12.molcas' 'Molden'
+GetBlms
+ExpOrb
+
+ ScatSym 'SU' # Scattering symmetry of total final state
+ ScatContSym 'SU' # Scattering symmetry of continuum electron
+
+FileName 'MatrixElements' 'test12SU.idy' 'REWIND'
+GenFormPhIon
+DipoleOp
+GetPot
+PhIon
+GetCro
+#
+ ScatSym 'PU' # Scattering symmetry of total final state
+ ScatContSym 'PU' # Scattering symmetry of continuum electron
+
+FileName 'MatrixElements' 'test12PU.idy' 'REWIND'
+GenFormPhIon
+DipoleOp
+GetPot
+PhIon
+GetCro
+#
+GetCro 'test12PU.idy' 'test12SU.idy'
+#
+#
++ End of input reached
++ Data Record LMax - 22
++ Data Record LMaxI - 120
++ Data Record EMax - 50.0
++ Data Record FegeEng - 13.0
++ Data Record ScatEng - 10.0
++ Data Record InitSym - 'SG'
++ Data Record InitSpinDeg - 1
++ Data Record OrbOccInit - 2 2 2 2 2 4
++ Data Record OrbOcc - 2 2 2 2 1 4
++ Data Record SpinDeg - 1
++ Data Record TargSym - 'SG'
++ Data Record TargSpinDeg - 2
++ Data Record IPot - 15.581
++ Data Record EpsAsym - 3 52.91772083
+
++ Command Convert
++ '/global/home/users/rlucchese/Applications/ePolyScat/tests/test12.molcas' 'Molden'
+
+----------------------------------------------------------------------
+MoldenCnv - Molden (from Molpro and OpenMolcas) conversion program
+----------------------------------------------------------------------
+
+Expansion center is (in Angstroms) -
+ 0.0000000000 0.0000000000 0.0000000000
+Conversion using Molden
+Conversion factor for Bohr to Angstroms is 0.5291772083000000
+Found 110 basis functions
+Selecting orbitals
+Number of orbitals selected is 7
+Selecting 1 1 SymOrb = 1ag Ene = -15.6840 Spin =Alpha Occup = 2.000000
+Selecting 2 2 SymOrb = 2ag Ene = -1.4720 Spin =Alpha Occup = 2.000000
+Selecting 3 3 SymOrb = 3ag Ene = -0.6343 Spin =Alpha Occup = 2.000000
+Selecting 4 25 SymOrb = 1b3u Ene = -0.6142 Spin =Alpha Occup = 2.000000
+Selecting 5 38 SymOrb = 1b2u Ene = -0.6142 Spin =Alpha Occup = 2.000000
+Selecting 6 56 SymOrb = 1b1u Ene = -15.6810 Spin =Alpha Occup = 2.000000
+Selecting 7 57 SymOrb = 2b1u Ene = -0.7793 Spin =Alpha Occup = 2.000000
+
+Atoms found 2 Coordinates in Angstroms
+Z = 7 ZS = 7 r = 0.0000000000 0.0000000000 -0.5488399993
+Z = 7 ZS = 7 r = 0.0000000000 0.0000000000 0.5488399993
+Maximum distance from expansion center is 0.5488399993
+
++ Command GetBlms
++
+
+----------------------------------------------------------------------
+GetPGroup - determine point group from geometry
+----------------------------------------------------------------------
+
+Found point group DAh
+Reduce angular grid using nthd = 2 nphid = 4
+Found point group for abelian subgroup D2h
+Time Now = 0.0504 Delta time = 0.0504 End GetPGroup
+List of unique axes
+ N Vector Z R
+ 1 0.00000 0.00000 1.00000 7 0.54884 7 0.54884
+List of corresponding x axes
+ N Vector
+ 1 1.00000 0.00000 0.00000
+Computed default value of LMaxA = 11
+Determining angular grid in GetAxMax LMax = 22 LMaxA = 11 LMaxAb = 44
+MMax = 3 MMaxAbFlag = 2
+For axis 1 mvals:
+ 0 1 2 3 4 5 6 7 8 9 10 11 3 3 3 3 3 3 3 3
+ 3 3 3
+On the double L grid used for products
+For axis 1 mvals:
+ 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+ 20 21 22 14 14 14 14 14 14 14 14 14 14 14 6 6 6 6 6 6
+ 6 6 6 6 6
+
+----------------------------------------------------------------------
+SymGen - generate symmetry adapted functions
+----------------------------------------------------------------------
+
+Point group is DAh
+LMax 22
+ The dimension of each irreducable representation is
+ SG ( 1) A2G ( 1) B1G ( 1) B2G ( 1) PG ( 2)
+ DG ( 2) FG ( 2) GG ( 2) SU ( 1) A2U ( 1)
+ B1U ( 1) B2U ( 1) PU ( 2) DU ( 2) FU ( 2)
+ GU ( 2)
+ Number of symmetry operations in the abelian subgroup (excluding E) = 7
+ The operations are -
+ 12 22 32 2 3 21 31
+ Rep Component Sym Num Num Found Eigenvalues of abelian sub-group
+ SG 1 1 13 1 1 1 1 1 1 1
+ A2G 1 2 1 1 -1 -1 1 1 -1 -1
+ B1G 1 3 3 -1 1 -1 1 -1 1 -1
+ B2G 1 4 3 -1 -1 1 1 -1 -1 1
+ PG 1 5 12 -1 -1 1 1 -1 -1 1
+ PG 2 6 12 -1 1 -1 1 -1 1 -1
+ DG 1 7 13 1 -1 -1 1 1 -1 -1
+ DG 2 8 13 1 1 1 1 1 1 1
+ FG 1 9 12 -1 -1 1 1 -1 -1 1
+ FG 2 10 12 -1 1 -1 1 -1 1 -1
+ GG 1 11 7 1 -1 -1 1 1 -1 -1
+ GG 2 12 7 1 1 1 1 1 1 1
+ SU 1 13 12 1 -1 -1 -1 -1 1 1
+ A2U 1 14 1 1 1 1 -1 -1 -1 -1
+ B1U 1 15 4 -1 -1 1 -1 1 1 -1
+ B2U 1 16 4 -1 1 -1 -1 1 -1 1
+ PU 1 17 14 -1 -1 1 -1 1 1 -1
+ PU 2 18 14 -1 1 -1 -1 1 -1 1
+ DU 1 19 12 1 -1 -1 -1 -1 1 1
+ DU 2 20 12 1 1 1 -1 -1 -1 -1
+ FU 1 21 13 -1 -1 1 -1 1 1 -1
+ FU 2 22 13 -1 1 -1 -1 1 -1 1
+ GU 1 23 7 1 -1 -1 -1 -1 1 1
+ GU 2 24 7 1 1 1 -1 -1 -1 -1
+Time Now = 1.1362 Delta time = 1.0857 End SymGen
+Number of partial waves for each l in the full symmetry up to LMaxA
+SG 1 0( 1) 1( 1) 2( 2) 3( 2) 4( 3) 5( 3) 6( 4) 7( 4) 8( 5) 9( 5)
+ 10( 7) 11( 7)
+A2G 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 0) 6( 0) 7( 0) 8( 0) 9( 0)
+ 10( 1) 11( 1)
+B1G 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 0) 6( 1) 7( 1) 8( 2) 9( 2)
+ 10( 3) 11( 3)
+B2G 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 0) 6( 1) 7( 1) 8( 2) 9( 2)
+ 10( 3) 11( 3)
+PG 1 0( 0) 1( 0) 2( 1) 3( 1) 4( 2) 5( 2) 6( 3) 7( 3) 8( 4) 9( 4)
+ 10( 6) 11( 6)
+PG 2 0( 0) 1( 0) 2( 1) 3( 1) 4( 2) 5( 2) 6( 3) 7( 3) 8( 4) 9( 4)
+ 10( 6) 11( 6)
+DG 1 0( 0) 1( 0) 2( 1) 3( 1) 4( 2) 5( 2) 6( 3) 7( 3) 8( 5) 9( 5)
+ 10( 7) 11( 7)
+DG 2 0( 0) 1( 0) 2( 1) 3( 1) 4( 2) 5( 2) 6( 3) 7( 3) 8( 5) 9( 5)
+ 10( 7) 11( 7)
+FG 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 1) 5( 1) 6( 2) 7( 2) 8( 4) 9( 4)
+ 10( 6) 11( 6)
+FG 2 0( 0) 1( 0) 2( 0) 3( 0) 4( 1) 5( 1) 6( 2) 7( 2) 8( 4) 9( 4)
+ 10( 6) 11( 6)
+GG 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 1) 5( 1) 6( 3) 7( 3) 8( 5) 9( 5)
+ 10( 7) 11( 7)
+GG 2 0( 0) 1( 0) 2( 0) 3( 0) 4( 1) 5( 1) 6( 3) 7( 3) 8( 5) 9( 5)
+ 10( 7) 11( 7)
+SU 1 0( 0) 1( 1) 2( 1) 3( 2) 4( 2) 5( 3) 6( 3) 7( 4) 8( 4) 9( 5)
+ 10( 5) 11( 7)
+A2U 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 0) 6( 0) 7( 0) 8( 0) 9( 0)
+ 10( 0) 11( 1)
+B1U 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 1) 6( 1) 7( 2) 8( 2) 9( 3)
+ 10( 3) 11( 4)
+B2U 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 1) 6( 1) 7( 2) 8( 2) 9( 3)
+ 10( 3) 11( 4)
+PU 1 0( 0) 1( 1) 2( 1) 3( 2) 4( 2) 5( 3) 6( 3) 7( 4) 8( 4) 9( 6)
+ 10( 6) 11( 9)
+PU 2 0( 0) 1( 1) 2( 1) 3( 2) 4( 2) 5( 3) 6( 3) 7( 4) 8( 4) 9( 6)
+ 10( 6) 11( 9)
+DU 1 0( 0) 1( 0) 2( 0) 3( 1) 4( 1) 5( 2) 6( 2) 7( 3) 8( 3) 9( 5)
+ 10( 5) 11( 7)
+DU 2 0( 0) 1( 0) 2( 0) 3( 1) 4( 1) 5( 2) 6( 2) 7( 3) 8( 3) 9( 5)
+ 10( 5) 11( 7)
+FU 1 0( 0) 1( 0) 2( 0) 3( 1) 4( 1) 5( 2) 6( 2) 7( 4) 8( 4) 9( 6)
+ 10( 6) 11( 8)
+FU 2 0( 0) 1( 0) 2( 0) 3( 1) 4( 1) 5( 2) 6( 2) 7( 4) 8( 4) 9( 6)
+ 10( 6) 11( 8)
+GU 1 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 1) 6( 1) 7( 3) 8( 3) 9( 5)
+ 10( 5) 11( 7)
+GU 2 0( 0) 1( 0) 2( 0) 3( 0) 4( 0) 5( 1) 6( 1) 7( 3) 8( 3) 9( 5)
+ 10( 5) 11( 7)
+
+----------------------------------------------------------------------
+SymGen - generate symmetry adapted functions
+----------------------------------------------------------------------
+
+Point group is D2h
+LMax 44
+ The dimension of each irreducable representation is
+ AG ( 1) B1G ( 1) B2G ( 1) B3G ( 1) AU ( 1)
+ B1U ( 1) B2U ( 1) B3U ( 1)
+Abelian axes
+ 1 1.000000 0.000000 0.000000
+ 2 0.000000 1.000000 0.000000
+ 3 0.000000 0.000000 1.000000
+Symmetry operation directions
+ 1 0.000000 0.000000 1.000000 ang = 0 1 type = 0 axis = 3
+ 2 0.000000 0.000000 1.000000 ang = 1 2 type = 2 axis = 3
+ 3 1.000000 0.000000 0.000000 ang = 1 2 type = 2 axis = 1
+ 4 0.000000 1.000000 0.000000 ang = 1 2 type = 2 axis = 2
+ 5 0.000000 0.000000 1.000000 ang = 1 2 type = 3 axis = 3
+ 6 0.000000 0.000000 1.000000 ang = 0 1 type = 1 axis = 3
+ 7 1.000000 0.000000 0.000000 ang = 0 1 type = 1 axis = 1
+ 8 0.000000 1.000000 0.000000 ang = 0 1 type = 1 axis = 2
+irep = 1 sym =AG 1 eigs = 1 1 1 1 1 1 1 1
+irep = 2 sym =B1G 1 eigs = 1 1 -1 -1 1 1 -1 -1
+irep = 3 sym =B2G 1 eigs = 1 -1 -1 1 1 -1 -1 1
+irep = 4 sym =B3G 1 eigs = 1 -1 1 -1 1 -1 1 -1
+irep = 5 sym =AU 1 eigs = 1 1 1 1 -1 -1 -1 -1
+irep = 6 sym =B1U 1 eigs = 1 1 -1 -1 -1 -1 1 1
+irep = 7 sym =B2U 1 eigs = 1 -1 -1 1 -1 1 1 -1
+irep = 8 sym =B3U 1 eigs = 1 -1 1 -1 -1 1 -1 1
+ Number of symmetry operations in the abelian subgroup (excluding E) = 7
+ The operations are -
+ 2 3 4 5 6 7 8
+ Rep Component Sym Num Num Found Eigenvalues of abelian sub-group
+ AG 1 1 142 1 1 1 1 1 1 1
+ B1G 1 2 119 1 -1 -1 1 1 -1 -1
+ B2G 1 3 119 -1 -1 1 1 -1 -1 1
+ B3G 1 4 119 -1 1 -1 1 -1 1 -1
+ AU 1 5 112 1 1 1 -1 -1 -1 -1
+ B1U 1 6 134 1 -1 -1 -1 -1 1 1
+ B2U 1 7 123 -1 -1 1 -1 1 1 -1
+ B3U 1 8 123 -1 1 -1 -1 1 -1 1
+Time Now = 1.1430 Delta time = 0.0068 End SymGen
+
++ Command ExpOrb
++
+In GetRMax, RMaxEps = 0.10000000E-05 RMax = 9.7429730852 Angs
+
+----------------------------------------------------------------------
+GenGrid - Generate Radial Grid
+----------------------------------------------------------------------
+
+HFacGauss 10.00000
+HFacWave 10.00000
+GridFac 1
+MinExpFac 300.00000
+Maximum R in the grid (RMax) = 9.74297 Angs
+Factors to determine step sizes in the various regions:
+In regions controlled by Gaussians (HFacGauss) = 10.0
+In regions controlled by the wave length (HFacWave) = 10.0
+Factor used to control the minimum exponent at each center (MinExpFac) = 300.0
+Maximum asymptotic kinetic energy (EMAx) = 50.00000 eV
+Maximum step size (MaxStep) = 9.74297 Angs
+Factor to increase grid by (GridFac) = 1
+
+ 1 Center at = 0.00000 Angs Alpha Max = 0.10000E+01
+ 2 Center at = 0.54884 Angs Alpha Max = 0.14700E+05
+
+Generated Grid
+
+ irg nin ntot step Angs R end Angs
+ 1 8 8 0.19062E-02 0.01525
+ 2 8 16 0.26839E-02 0.03672
+ 3 8 24 0.43199E-02 0.07128
+ 4 8 32 0.57890E-02 0.11759
+ 5 8 40 0.67485E-02 0.17158
+ 6 8 48 0.68608E-02 0.22647
+ 7 8 56 0.63139E-02 0.27698
+ 8 8 64 0.56134E-02 0.32188
+ 9 8 72 0.49594E-02 0.36156
+ 10 8 80 0.49866E-02 0.40145
+ 11 8 88 0.55369E-02 0.44575
+ 12 8 96 0.46954E-02 0.48331
+ 13 8 104 0.29845E-02 0.50719
+ 14 8 112 0.18971E-02 0.52236
+ 15 8 120 0.12059E-02 0.53201
+ 16 8 128 0.76649E-03 0.53814
+ 17 8 136 0.53675E-03 0.54244
+ 18 8 144 0.45383E-03 0.54607
+ 19 8 152 0.34660E-03 0.54884
+ 20 8 160 0.43646E-03 0.55233
+ 21 8 168 0.46530E-03 0.55605
+ 22 8 176 0.57358E-03 0.56064
+ 23 8 184 0.87025E-03 0.56760
+ 24 8 192 0.13836E-02 0.57867
+ 25 8 200 0.21997E-02 0.59627
+ 26 8 208 0.34972E-02 0.62425
+ 27 8 216 0.55601E-02 0.66873
+ 28 8 224 0.88398E-02 0.73945
+ 29 8 232 0.10199E-01 0.82104
+ 30 8 240 0.11324E-01 0.91163
+ 31 8 248 0.15101E-01 1.03244
+ 32 8 256 0.21632E-01 1.20549
+ 33 8 264 0.32074E-01 1.46208
+ 34 8 272 0.42552E-01 1.80250
+ 35 8 280 0.47759E-01 2.18457
+ 36 8 288 0.52194E-01 2.60212
+ 37 8 296 0.55948E-01 3.04970
+ 38 8 304 0.59122E-01 3.52268
+ 39 8 312 0.61811E-01 4.01717
+ 40 8 320 0.64100E-01 4.52997
+ 41 8 328 0.66059E-01 5.05844
+ 42 8 336 0.67747E-01 5.60042
+ 43 8 344 0.69209E-01 6.15409
+ 44 8 352 0.70484E-01 6.71796
+ 45 8 360 0.71604E-01 7.29079
+ 46 8 368 0.72592E-01 7.87153
+ 47 8 376 0.73469E-01 8.45928
+ 48 8 384 0.74252E-01 9.05330
+ 49 8 392 0.74954E-01 9.65293
+ 50 8 400 0.11255E-01 9.74297
+Time Now = 1.1546 Delta time = 0.0116 End GenGrid
+
+----------------------------------------------------------------------
+AngGCt - generate angular functions
+----------------------------------------------------------------------
+
+Maximum scattering l (lmax) = 22
+Maximum scattering m (mmaxs) = 22
+Maximum numerical integration l (lmaxi) = 120
+Maximum numerical integration m (mmaxi) = 120
+Maximum l to include in the asymptotic region (lmasym) = 11
+Parameter used to determine the cutoff points (PCutRd) = 0.10000000E-07 au
+Maximum E used to determine grid (in eV) = 50.00000
+Print flag (iprnfg) = 0
+lmasymtyts = 10
+ Actual value of lmasym found = 11
+Number of regions of the same l expansion (NAngReg) = 10
+Angular regions
+ 1 L = 2 from ( 1) 0.00191 to ( 7) 0.01334
+ 2 L = 4 from ( 8) 0.01525 to ( 15) 0.03404
+ 3 L = 6 from ( 16) 0.03672 to ( 23) 0.06696
+ 4 L = 7 from ( 24) 0.07128 to ( 31) 0.11180
+ 5 L = 9 from ( 32) 0.11759 to ( 39) 0.16483
+ 6 L = 11 from ( 40) 0.17158 to ( 47) 0.21961
+ 7 L = 19 from ( 48) 0.22647 to ( 71) 0.35660
+ 8 L = 22 from ( 72) 0.36156 to ( 240) 0.91163
+ 9 L = 19 from ( 241) 0.92673 to ( 256) 1.20549
+ 10 L = 11 from ( 257) 1.23757 to ( 400) 9.74297
+There are 2 angular regions for computing spherical harmonics
+ 1 lval = 11
+ 2 lval = 22
+Maximum number of processors is 49
+Last grid points by processor WorkExp = 1.500
+Proc id = -1 Last grid point = 1
+Proc id = 0 Last grid point = 56
+Proc id = 1 Last grid point = 72
+Proc id = 2 Last grid point = 88
+Proc id = 3 Last grid point = 104
+Proc id = 4 Last grid point = 112
+Proc id = 5 Last grid point = 128
+Proc id = 6 Last grid point = 136
+Proc id = 7 Last grid point = 152
+Proc id = 8 Last grid point = 168
+Proc id = 9 Last grid point = 176
+Proc id = 10 Last grid point = 192
+Proc id = 11 Last grid point = 200
+Proc id = 12 Last grid point = 216
+Proc id = 13 Last grid point = 232
+Proc id = 14 Last grid point = 240
+Proc id = 15 Last grid point = 256
+Proc id = 16 Last grid point = 296
+Proc id = 17 Last grid point = 328
+Proc id = 18 Last grid point = 368
+Proc id = 19 Last grid point = 400
+Time Now = 1.1607 Delta time = 0.0061 End AngGCt
+
+----------------------------------------------------------------------
+RotOrb - Determine rotation of degenerate orbitals
+----------------------------------------------------------------------
+
+##########################################
+The orbitals have been reordered by energy
+##########################################
+
+ R of maximum density
+ 1 Orig 1 Eng = -15.684000 SG 1 at max irg = 160 r = 0.55233
+ 2 Orig 6 Eng = -15.681000 SU 1 at max irg = 160 r = 0.55233
+ 3 Orig 2 Eng = -1.472000 SG 1 at max irg = 152 r = 0.54884
+ 4 Orig 7 Eng = -0.779300 SU 1 at max irg = 240 r = 0.91163
+ 5 Orig 3 Eng = -0.634300 SG 1 at max irg = 240 r = 0.91163
+ 6 Orig 4 Eng = -0.614200 PU 1 at max irg = 216 r = 0.66873
+ 7 Orig 5 Eng = -0.614200 PU 2 at max irg = 216 r = 0.66873
+
+Rotation coefficients for orbital 1 grp = 1 SG 1
+ 1 1.0000000000
+
+Rotation coefficients for orbital 2 grp = 2 SU 1
+ 1 1.0000000000
+
+Rotation coefficients for orbital 3 grp = 3 SG 1
+ 1 1.0000000000
+
+Rotation coefficients for orbital 4 grp = 4 SU 1
+ 1 1.0000000000
+
+Rotation coefficients for orbital 5 grp = 5 SG 1
+ 1 1.0000000000
+
+Rotation coefficients for orbital 6 grp = 6 PU 1
+ 1 -0.0000000000 2 1.0000000000
+
+Rotation coefficients for orbital 7 grp = 6 PU 2
+ 1 1.0000000000 2 0.0000000000
+Number of orbital groups and degeneracis are 6
+ 1 1 1 1 1 2
+Number of orbital groups and number of electrons when fully occupied
+ 6
+ 2 2 2 2 2 4
+Time Now = 1.5751 Delta time = 0.4144 End RotOrb
+
+----------------------------------------------------------------------
+ExpOrb - Single Center Expansion Program
+----------------------------------------------------------------------
+
+ First orbital group to expand (mofr) = 1
+ Last orbital group to expand (moto) = 6
+Orbital 1 of SG 1 symmetry normalization integral = 0.99803016
+Orbital 2 of SU 1 symmetry normalization integral = 0.99760077
+Orbital 3 of SG 1 symmetry normalization integral = 0.99989447
+Orbital 4 of SU 1 symmetry normalization integral = 0.99989714
+Orbital 5 of SG 1 symmetry normalization integral = 0.99999062
+Orbital 6 of PU 1 symmetry normalization integral = 0.99999969
+Time Now = 2.6644 Delta time = 1.0893 End ExpOrb
++ Data Record ScatSym - 'SU'
++ Data Record ScatContSym - 'SU'
+
++ Command FileName
++ 'MatrixElements' 'test12SU.idy' 'REWIND'
+Opening file test12SU.idy at position REWIND
+
++ Command GenFormPhIon
++
+
+----------------------------------------------------------------------
+SymProd - Construct products of symmetry types
+----------------------------------------------------------------------
+
+Number of sets of degenerate orbitals = 6
+Set 1 has degeneracy 1
+Orbital 1 is num 1 type = 1 name - SG 1
+Set 2 has degeneracy 1
+Orbital 1 is num 2 type = 13 name - SU 1
+Set 3 has degeneracy 1
+Orbital 1 is num 3 type = 1 name - SG 1
+Set 4 has degeneracy 1
+Orbital 1 is num 4 type = 13 name - SU 1
+Set 5 has degeneracy 1
+Orbital 1 is num 5 type = 1 name - SG 1
+Set 6 has degeneracy 2
+Orbital 1 is num 6 type = 17 name - PU 1
+Orbital 2 is num 7 type = 18 name - PU 2
+Orbital occupations by degenerate group
+ 1 SG occ = 2
+ 2 SU occ = 2
+ 3 SG occ = 2
+ 4 SU occ = 2
+ 5 SG occ = 1
+ 6 PU occ = 4
+The dimension of each irreducable representation is
+ SG ( 1) A2G ( 1) B1G ( 1) B2G ( 1) PG ( 2)
+ DG ( 2) FG ( 2) GG ( 2) SU ( 1) A2U ( 1)
+ B1U ( 1) B2U ( 1) PU ( 2) DU ( 2) FU ( 2)
+ GU ( 2)
+Symmetry of the continuum orbital is SU
+Symmetry of the total state is SU
+Spin degeneracy of the total state is = 1
+Symmetry of the target state is SG
+Spin degeneracy of the target state is = 2
+Symmetry of the initial state is SG
+Spin degeneracy of the initial state is = 1
+Orbital occupations of initial state by degenerate group
+ 1 SG occ = 2
+ 2 SU occ = 2
+ 3 SG occ = 2
+ 4 SU occ = 2
+ 5 SG occ = 2
+ 6 PU occ = 4
+Open shell symmetry types
+ 1 SG iele = 1
+Use only configuration of type SG
+MS2 = 1 SDGN = 2
+NumAlpha = 1
+List of determinants found
+ 1: 1.00000 0.00000 1
+Spin adapted configurations
+Configuration 1
+ 1: 1.00000 0.00000 1
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+
+ representation SG component 1 fun 1
+Symmeterized Function
+ 1: 1.00000 0.00000 1
+Open shell symmetry types
+ 1 SG iele = 1
+ 2 SU iele = 1
+Use only configuration of type SU
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+
+ representation SU component 1 fun 1
+Symmeterized Function from AddNewShell
+ 1: -0.70711 0.00000 1 4
+ 2: 0.70711 0.00000 2 3
+Open shell symmetry types
+ 1 SG iele = 1
+Use only configuration of type SG
+MS2 = 1 SDGN = 2
+NumAlpha = 1
+List of determinants found
+ 1: 1.00000 0.00000 1
+Spin adapted configurations
+Configuration 1
+ 1: 1.00000 0.00000 1
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+
+ representation SG component 1 fun 1
+Symmeterized Function
+ 1: 1.00000 0.00000 1
+Direct product basis set
+Direct product basis function
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 16
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Closed shell target
+Time Now = 2.6672 Delta time = 0.0027 End SymProd
+
+----------------------------------------------------------------------
+MatEle - Program to compute Matrix Elements over Determinants
+----------------------------------------------------------------------
+
+Configuration 1
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 16
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Direct product Configuration Cont sym = 1 Targ sym = 1
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 16
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Overlap of Direct Product expansion and Symmeterized states
+Symmetry of Continuum = 9
+Symmetry of target = 1
+Symmetry of total states = 9
+
+Total symmetry component = 1
+
+Cont Target Component
+Comp 1
+ 1 0.10000000E+01
+Initial State Configuration
+ 1: 1.00000 0.00000 1 2 3 4 5 6 7 8 9 10
+ 11 12 13 14
+One electron matrix elements between initial and final states
+ 1: -1.414213562 0.000000000 < 9| 15>
+
+Reduced formula list
+ 1 5 1 -0.1414213562E+01
+Time Now = 2.6675 Delta time = 0.0004 End MatEle
+
++ Command DipoleOp
++
+
+----------------------------------------------------------------------
+DipoleOp - Dipole Operator Program
+----------------------------------------------------------------------
+
+Number of orbitals in formula for the dipole operator (NOrbSel) = 1
+Symmetry of the continuum orbital (iContSym) = 9 or SU
+Symmetry of total final state (iTotalSym) = 9 or SU
+Symmetry of the initial state (iInitSym) = 1 or SG
+Symmetry of the ionized target state (iTargSym) = 1 or SG
+List of unique symmetry types
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types SU A2G
+ Each irreducable representation is present the number of times indicated
+ A2U ( 1)
+In the product of the symmetry types SU B1G
+ Each irreducable representation is present the number of times indicated
+ B1U ( 1)
+In the product of the symmetry types SU B2G
+ Each irreducable representation is present the number of times indicated
+ B2U ( 1)
+In the product of the symmetry types SU PG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types SU DG
+ Each irreducable representation is present the number of times indicated
+ DU ( 1)
+In the product of the symmetry types SU FG
+ Each irreducable representation is present the number of times indicated
+ FU ( 1)
+In the product of the symmetry types SU GG
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types SU SU
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+Unique dipole matrix type 1 Dipole symmetry type =SU
+ Final state symmetry type = SU Target sym =SG
+ Continuum type =SU
+In the product of the symmetry types SU A2U
+ Each irreducable representation is present the number of times indicated
+ A2G ( 1)
+In the product of the symmetry types SU B1U
+ Each irreducable representation is present the number of times indicated
+ B1G ( 1)
+In the product of the symmetry types SU B2U
+ Each irreducable representation is present the number of times indicated
+ B2G ( 1)
+In the product of the symmetry types SU PU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types SU DU
+ Each irreducable representation is present the number of times indicated
+ DG ( 1)
+In the product of the symmetry types SU FU
+ Each irreducable representation is present the number of times indicated
+ FG ( 1)
+In the product of the symmetry types SU GU
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU A2G
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU B1G
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types PU B2G
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types PU PG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+ A2U ( 1)
+ DU ( 1)
+In the product of the symmetry types PU DG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+ FU ( 1)
+In the product of the symmetry types PU FG
+ Each irreducable representation is present the number of times indicated
+ DU ( 1)
+ GU ( 1)
+In the product of the symmetry types PU GG
+ Each irreducable representation is present the number of times indicated
+ B1U ( 1)
+ B2U ( 1)
+ FU ( 1)
+In the product of the symmetry types PU SU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types PU A2U
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types PU B1U
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU B2U
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU PU
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+ A2G ( 1)
+ DG ( 1)
+Unique dipole matrix type 2 Dipole symmetry type =PU
+ Final state symmetry type = PU Target sym =SG
+ Continuum type =PU
+In the product of the symmetry types PU DU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+ FG ( 1)
+In the product of the symmetry types PU FU
+ Each irreducable representation is present the number of times indicated
+ DG ( 1)
+ GG ( 1)
+In the product of the symmetry types PU GU
+ Each irreducable representation is present the number of times indicated
+ B1G ( 1)
+ B2G ( 1)
+ FG ( 1)
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+Irreducible representation containing the dipole operator is SU
+Number of different dipole operators in this representation is 1
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+Vector of the total symmetry
+ie = 1 ij = 1
+ 1 ( 0.10000000E+01, 0.00000000E+00)
+Component Dipole Op Sym = 1 goes to Total Sym component 1 phase = 1.0
+
+Dipole operator types by symmetry components (x=1, y=2, z=3)
+sym comp = 1
+ coefficients = 0.00000000 0.00000000 1.00000000
+
+Formula for dipole operator
+
+Dipole operator sym comp 1 index = 1
+ 1 Cont comp 1 Orb 5 Coef = -1.4142135620
+Symmetry type to write out (SymTyp) =SU
+Time Now = 15.8208 Delta time = 13.1532 End DipoleOp
+
++ Command GetPot
++
+
+----------------------------------------------------------------------
+Den - Electron density construction program
+----------------------------------------------------------------------
+
+Total density = 13.00000000
+Time Now = 15.8273 Delta time = 0.0066 End Den
+
+----------------------------------------------------------------------
+StPot - Compute the static potential from the density
+----------------------------------------------------------------------
+
+ vasymp = 0.13000000E+02 facnorm = 0.10000000E+01
+Time Now = 15.8384 Delta time = 0.0110 Electronic part
+Time Now = 15.8389 Delta time = 0.0006 End StPot
+
++ Command PhIon
++
+
+----------------------------------------------------------------------
+Fege - FEGE exchange potential construction program
+----------------------------------------------------------------------
+
+ Off set energy for computing fege eta (ecor) = 0.13000000E+02 eV
+ Do E = 0.10000000E+02 eV ( 0.36749326E+00 AU)
+Time Now = 15.8778 Delta time = 0.0389 End Fege
+
+----------------------------------------------------------------------
+ScatStab - Iterative exchange scattering program (rev. 04/25/2005)
+----------------------------------------------------------------------
+
+Unit for output of final k matrices (iukmat) = 60
+Symmetry type of scattering solution (symtps) = SU 1
+Form of the Green's operator used (iGrnType) = -1
+Flag for dipole operator (DipoleFlag) = T
+Maximum l for computed scattering solutions (LMaxK) = 9
+Maximum number of iterations (itmax) = 15
+Convergence criterion on change in rmsq k matrix (cutkdf) = 0.10000000E-05
+Maximum l to include in potential (lpotct) = -1
+No exchange flag = F
+Runge Kutta factor used (RungeKuttaFac) = 4
+Error estimate for integrals used in convergence test (EpsIntError) = 0.10000000E-07
+General print flag (iprnfg) = 0
+Number of integration regions (NIntRegionR) = 40
+Factor for number of points in asymptotic region (HFacWaveAsym) = 10.0
+Asymptotic cutoff (EpsAsym) = 0.52917721E+02 Angs
+Asymptotic cutoff type (iAsymCond) = 3
+Number of integration regions used = 50
+Number of partial waves (np) = 12
+Number of asymptotic solutions on the right (NAsymR) = 5
+Number of asymptotic solutions on the left (NAsymL) = 2
+First solution on left to compute is (NAsymLF) = 1
+Last solution on left to compute is (NAsymLL) = 2
+Maximum in the asymptotic region (lpasym) = 11
+Number of partial waves in the asymptotic region (npasym) = 7
+Number of orthogonality constraints (NOrthUse) = 2
+Number of different asymptotic potentials = 3
+Maximum number of asymptotic partial waves = 78
+Maximum l used in usual function (lmax) = 22
+Maximum m used in usual function (LMax) = 22
+Maxamum l used in expanding static potential (lpotct) = 44
+Maximum l used in exapnding the exchange potential (lmaxab) = 44
+Higest l included in the expansion of the wave function (lnp) = 21
+Higest l included in the K matrix (lna) = 9
+Highest l used at large r (lpasym) = 11
+Higest l used in the asymptotic potential (lpzb) = 22
+Maximum L used in the homogeneous solution (LMaxHomo) = 11
+Number of partial waves in the homogeneous solution (npHomo) = 7
+Time Now = 15.8877 Delta time = 0.0099 Energy independent setup
+
+Compute solution for E = 10.0000000000 eV
+Found fege potential
+Charge on the molecule (zz) = 1.0
+Assumed asymptotic polarization is 0.00000000E+00 au
+ stpote at the end of the grid
+For potential 1
+ i = 1 lval = 0 1/r^n n = 4 StPot(RMax) = -0.58286709E-15 Asymp Coef = -0.14291775E-09 (eV Angs^(n))
+ i = 2 lval = 2 1/r^n n = 3 StPot(RMax) = 0.36788985E-18 Asymp Moment = -0.25582992E-15 (e Angs^(n-1))
+ i = 3 lval = 2 1/r^n n = 3 StPot(RMax) = -0.49030621E-03 Asymp Moment = 0.34095802E+00 (e Angs^(n-1))
+ i = 4 lval = 4 1/r^n n = 5 StPot(RMax) = -0.13163229E-20 Asymp Moment = 0.15640530E-15 (e Angs^(n-1))
+ i = 5 lval = 4 1/r^n n = 5 StPot(RMax) = 0.27066851E-20 Asymp Moment = -0.32160794E-15 (e Angs^(n-1))
+ i = 6 lval = 4 1/r^n n = 5 StPot(RMax) = 0.87751540E-07 Asymp Moment = -0.10426626E-01 (e Angs^(n-1))
+For potential 2
+ i = 1 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834866E-16
+ i = 2 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834868E-16
+ i = 3 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834872E-16
+ i = 4 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834877E-16
+For potential 3
+Number of asymptotic regions = 28
+Final point in integration = 0.52917721E+02 Angstroms
+Time Now = 16.6079 Delta time = 0.7202 End SolveHomo
+ Final Dipole matrix
+ ROW 1
+ (-0.29879717E+00, 0.11561475E+01) ( 0.13308302E+01,-0.66676135E+00)
+ ( 0.21607319E-01,-0.22409125E-01) ( 0.15062364E-03,-0.15781470E-03)
+ ( 0.64497256E-06,-0.62230700E-06)
+ ROW 2
+ (-0.26121864E+00, 0.10110991E+01) ( 0.11647736E+01,-0.58350313E+00)
+ ( 0.19996671E-01,-0.19634555E-01) ( 0.14883925E-03,-0.14349865E-03)
+ ( 0.70733148E-06,-0.59291921E-06)
+MaxIter = 7 c.s. = 6.43112068 rmsk= 0.00000003 Abs eps 0.25625503E-05 Rel eps 0.25819619E-04
+Time Now = 20.4900 Delta time = 3.8821 End ScatStab
+
++ Command GetCro
++
+
+----------------------------------------------------------------------
+CnvIdy - read in and convert dynamical matrix elements and convert to raw form
+----------------------------------------------------------------------
+
+Time Now = 20.4903 Delta time = 0.0003 End CnvIdy
+Found 1 energies :
+ 10.00000000
+List of matrix element types found Number = 1
+ 1 Cont Sym SU Targ Sym SG Total Sym SU
+Keeping 1 energies :
+ 10.00000000
+Time Now = 20.4904 Delta time = 0.0001 End SelIdy
+
+----------------------------------------------------------------------
+CrossSection - compute photoionization cross section
+----------------------------------------------------------------------
+
+Ionization potential (IPot) = 15.5810 eV
+Label -
+Cross section by partial wave F
+Cross Sections for
+
+ Sigma LENGTH at all energies
+ Eng
+ 25.5810 0.58622619E+01
+
+ Sigma MIXED at all energies
+ Eng
+ 25.5810 0.54560538E+01
+
+ Sigma VELOCITY at all energies
+ Eng
+ 25.5810 0.50779957E+01
+
+ Beta LENGTH at all energies
+ Eng
+ 25.5810 0.48032768E+00
+
+ Beta MIXED at all energies
+ Eng
+ 25.5810 0.48001400E+00
+
+ Beta VELOCITY at all energies
+ Eng
+ 25.5810 0.47970021E+00
+
+ COMPOSITE CROSS SECTIONS AT ALL ENERGIES
+ Energy SIGMA LEN SIGMA MIX SIGMA VEL BETA LEN BETA MIX BETA VEL
+EPhi 25.5810 5.8623 5.4561 5.0780 0.4803 0.4800 0.4797
+Time Now = 20.4931 Delta time = 0.0027 End CrossSection
++ Data Record ScatSym - 'PU'
++ Data Record ScatContSym - 'PU'
+
++ Command FileName
++ 'MatrixElements' 'test12PU.idy' 'REWIND'
+Opening file test12PU.idy at position REWIND
+
++ Command GenFormPhIon
++
+
+----------------------------------------------------------------------
+SymProd - Construct products of symmetry types
+----------------------------------------------------------------------
+
+Number of sets of degenerate orbitals = 6
+Set 1 has degeneracy 1
+Orbital 1 is num 1 type = 1 name - SG 1
+Set 2 has degeneracy 1
+Orbital 1 is num 2 type = 13 name - SU 1
+Set 3 has degeneracy 1
+Orbital 1 is num 3 type = 1 name - SG 1
+Set 4 has degeneracy 1
+Orbital 1 is num 4 type = 13 name - SU 1
+Set 5 has degeneracy 1
+Orbital 1 is num 5 type = 1 name - SG 1
+Set 6 has degeneracy 2
+Orbital 1 is num 6 type = 17 name - PU 1
+Orbital 2 is num 7 type = 18 name - PU 2
+Orbital occupations by degenerate group
+ 1 SG occ = 2
+ 2 SU occ = 2
+ 3 SG occ = 2
+ 4 SU occ = 2
+ 5 SG occ = 1
+ 6 PU occ = 4
+The dimension of each irreducable representation is
+ SG ( 1) A2G ( 1) B1G ( 1) B2G ( 1) PG ( 2)
+ DG ( 2) FG ( 2) GG ( 2) SU ( 1) A2U ( 1)
+ B1U ( 1) B2U ( 1) PU ( 2) DU ( 2) FU ( 2)
+ GU ( 2)
+Symmetry of the continuum orbital is PU
+Symmetry of the total state is PU
+Spin degeneracy of the total state is = 1
+Symmetry of the target state is SG
+Spin degeneracy of the target state is = 2
+Symmetry of the initial state is SG
+Spin degeneracy of the initial state is = 1
+Orbital occupations of initial state by degenerate group
+ 1 SG occ = 2
+ 2 SU occ = 2
+ 3 SG occ = 2
+ 4 SU occ = 2
+ 5 SG occ = 2
+ 6 PU occ = 4
+Open shell symmetry types
+ 1 SG iele = 1
+Use only configuration of type SG
+MS2 = 1 SDGN = 2
+NumAlpha = 1
+List of determinants found
+ 1: 1.00000 0.00000 1
+Spin adapted configurations
+Configuration 1
+ 1: 1.00000 0.00000 1
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+
+ representation SG component 1 fun 1
+Symmeterized Function
+ 1: 1.00000 0.00000 1
+Open shell symmetry types
+ 1 SG iele = 1
+ 2 PU iele = 1
+Use only configuration of type PU
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+
+ representation PU component 1 fun 1
+Symmeterized Function from AddNewShell
+ 1: -0.70711 0.00000 1 5
+ 2: 0.70711 0.00000 2 3
+
+ representation PU component 2 fun 1
+Symmeterized Function from AddNewShell
+ 1: -0.70711 0.00000 1 6
+ 2: 0.70711 0.00000 2 4
+Open shell symmetry types
+ 1 SG iele = 1
+Use only configuration of type SG
+MS2 = 1 SDGN = 2
+NumAlpha = 1
+List of determinants found
+ 1: 1.00000 0.00000 1
+Spin adapted configurations
+Configuration 1
+ 1: 1.00000 0.00000 1
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+
+ representation SG component 1 fun 1
+Symmeterized Function
+ 1: 1.00000 0.00000 1
+Direct product basis set
+Direct product basis function
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 17
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Direct product basis function
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 18
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 16
+Closed shell target
+Time Now = 20.4957 Delta time = 0.0025 End SymProd
+
+----------------------------------------------------------------------
+MatEle - Program to compute Matrix Elements over Determinants
+----------------------------------------------------------------------
+
+Configuration 1
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 17
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Configuration 2
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 18
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 16
+Direct product Configuration Cont sym = 1 Targ sym = 1
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 17
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 15
+Direct product Configuration Cont sym = 2 Targ sym = 1
+ 1: -0.70711 0.00000 1 2 3 4 5 6 7 8 9 11
+ 12 13 14 18
+ 2: 0.70711 0.00000 1 2 3 4 5 6 7 8 10 11
+ 12 13 14 16
+Overlap of Direct Product expansion and Symmeterized states
+Symmetry of Continuum = 13
+Symmetry of target = 1
+Symmetry of total states = 13
+
+Total symmetry component = 1
+
+Cont Target Component
+Comp 1
+ 1 0.10000000E+01
+ 2 0.00000000E+00
+
+Total symmetry component = 2
+
+Cont Target Component
+Comp 1
+ 1 0.00000000E+00
+ 2 0.10000000E+01
+Initial State Configuration
+ 1: 1.00000 0.00000 1 2 3 4 5 6 7 8 9 10
+ 11 12 13 14
+One electron matrix elements between initial and final states
+ 1: -1.414213562 0.000000000 < 9| 15>
+
+Reduced formula list
+ 1 5 1 -0.1414213562E+01
+Time Now = 20.4961 Delta time = 0.0005 End MatEle
+
++ Command DipoleOp
++
+
+----------------------------------------------------------------------
+DipoleOp - Dipole Operator Program
+----------------------------------------------------------------------
+
+Number of orbitals in formula for the dipole operator (NOrbSel) = 1
+Symmetry of the continuum orbital (iContSym) = 13 or PU
+Symmetry of total final state (iTotalSym) = 13 or PU
+Symmetry of the initial state (iInitSym) = 1 or SG
+Symmetry of the ionized target state (iTargSym) = 1 or SG
+List of unique symmetry types
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types SU A2G
+ Each irreducable representation is present the number of times indicated
+ A2U ( 1)
+In the product of the symmetry types SU B1G
+ Each irreducable representation is present the number of times indicated
+ B1U ( 1)
+In the product of the symmetry types SU B2G
+ Each irreducable representation is present the number of times indicated
+ B2U ( 1)
+In the product of the symmetry types SU PG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types SU DG
+ Each irreducable representation is present the number of times indicated
+ DU ( 1)
+In the product of the symmetry types SU FG
+ Each irreducable representation is present the number of times indicated
+ FU ( 1)
+In the product of the symmetry types SU GG
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types SU SU
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+Unique dipole matrix type 1 Dipole symmetry type =SU
+ Final state symmetry type = SU Target sym =SG
+ Continuum type =SU
+In the product of the symmetry types SU A2U
+ Each irreducable representation is present the number of times indicated
+ A2G ( 1)
+In the product of the symmetry types SU B1U
+ Each irreducable representation is present the number of times indicated
+ B1G ( 1)
+In the product of the symmetry types SU B2U
+ Each irreducable representation is present the number of times indicated
+ B2G ( 1)
+In the product of the symmetry types SU PU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types SU DU
+ Each irreducable representation is present the number of times indicated
+ DG ( 1)
+In the product of the symmetry types SU FU
+ Each irreducable representation is present the number of times indicated
+ FG ( 1)
+In the product of the symmetry types SU GU
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU A2G
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU B1G
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types PU B2G
+ Each irreducable representation is present the number of times indicated
+ GU ( 1)
+In the product of the symmetry types PU PG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+ A2U ( 1)
+ DU ( 1)
+In the product of the symmetry types PU DG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+ FU ( 1)
+In the product of the symmetry types PU FG
+ Each irreducable representation is present the number of times indicated
+ DU ( 1)
+ GU ( 1)
+In the product of the symmetry types PU GG
+ Each irreducable representation is present the number of times indicated
+ B1U ( 1)
+ B2U ( 1)
+ FU ( 1)
+In the product of the symmetry types PU SU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types PU A2U
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+In the product of the symmetry types PU B1U
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU B2U
+ Each irreducable representation is present the number of times indicated
+ GG ( 1)
+In the product of the symmetry types PU PU
+ Each irreducable representation is present the number of times indicated
+ SG ( 1)
+ A2G ( 1)
+ DG ( 1)
+Unique dipole matrix type 2 Dipole symmetry type =PU
+ Final state symmetry type = PU Target sym =SG
+ Continuum type =PU
+In the product of the symmetry types PU DU
+ Each irreducable representation is present the number of times indicated
+ PG ( 1)
+ FG ( 1)
+In the product of the symmetry types PU FU
+ Each irreducable representation is present the number of times indicated
+ DG ( 1)
+ GG ( 1)
+In the product of the symmetry types PU GU
+ Each irreducable representation is present the number of times indicated
+ B1G ( 1)
+ B2G ( 1)
+ FG ( 1)
+In the product of the symmetry types SU SG
+ Each irreducable representation is present the number of times indicated
+ SU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+Irreducible representation containing the dipole operator is PU
+Number of different dipole operators in this representation is 1
+In the product of the symmetry types PU SG
+ Each irreducable representation is present the number of times indicated
+ PU ( 1)
+Vector of the total symmetry
+ie = 1 ij = 1
+ 1 ( 0.10000000E+01, 0.00000000E+00)
+ 2 ( 0.99920072E-16, 0.00000000E+00)
+Vector of the total symmetry
+ie = 2 ij = 1
+ 1 ( 0.99920072E-16, 0.00000000E+00)
+ 2 ( 0.10000000E+01, 0.00000000E+00)
+Component Dipole Op Sym = 1 goes to Total Sym component 1 phase = 1.0
+Component Dipole Op Sym = 2 goes to Total Sym component 2 phase = 1.0
+
+Dipole operator types by symmetry components (x=1, y=2, z=3)
+sym comp = 1
+ coefficients = 0.00000000 1.00000000 0.00000000
+sym comp = 2
+ coefficients = 1.00000000 0.00000000 0.00000000
+
+Formula for dipole operator
+
+Dipole operator sym comp 1 index = 1
+ 1 Cont comp 1 Orb 5 Coef = -1.4142135620
+Symmetry type to write out (SymTyp) =PU
+Time Now = 33.6456 Delta time = 13.1495 End DipoleOp
+
++ Command GetPot
++
+
+----------------------------------------------------------------------
+Den - Electron density construction program
+----------------------------------------------------------------------
+
+Total density = 13.00000000
+Time Now = 33.6508 Delta time = 0.0051 End Den
+
+----------------------------------------------------------------------
+StPot - Compute the static potential from the density
+----------------------------------------------------------------------
+
+ vasymp = 0.13000000E+02 facnorm = 0.10000000E+01
+Time Now = 33.6616 Delta time = 0.0108 Electronic part
+Time Now = 33.6622 Delta time = 0.0006 End StPot
+
++ Command PhIon
++
+
+----------------------------------------------------------------------
+Fege - FEGE exchange potential construction program
+----------------------------------------------------------------------
+
+ Off set energy for computing fege eta (ecor) = 0.13000000E+02 eV
+ Do E = 0.10000000E+02 eV ( 0.36749326E+00 AU)
+Time Now = 33.6964 Delta time = 0.0342 End Fege
+
+----------------------------------------------------------------------
+ScatStab - Iterative exchange scattering program (rev. 04/25/2005)
+----------------------------------------------------------------------
+
+Unit for output of final k matrices (iukmat) = 60
+Symmetry type of scattering solution (symtps) = PU 1
+Form of the Green's operator used (iGrnType) = -1
+Flag for dipole operator (DipoleFlag) = T
+Maximum l for computed scattering solutions (LMaxK) = 9
+Maximum number of iterations (itmax) = 15
+Convergence criterion on change in rmsq k matrix (cutkdf) = 0.10000000E-05
+Maximum l to include in potential (lpotct) = -1
+No exchange flag = F
+Runge Kutta factor used (RungeKuttaFac) = 4
+Error estimate for integrals used in convergence test (EpsIntError) = 0.10000000E-07
+General print flag (iprnfg) = 0
+Number of integration regions (NIntRegionR) = 40
+Factor for number of points in asymptotic region (HFacWaveAsym) = 10.0
+Asymptotic cutoff (EpsAsym) = 0.52917721E+02 Angs
+Asymptotic cutoff type (iAsymCond) = 3
+Number of integration regions used = 50
+Number of partial waves (np) = 14
+Number of asymptotic solutions on the right (NAsymR) = 6
+Number of asymptotic solutions on the left (NAsymL) = 2
+First solution on left to compute is (NAsymLF) = 1
+Last solution on left to compute is (NAsymLL) = 2
+Maximum in the asymptotic region (lpasym) = 11
+Number of partial waves in the asymptotic region (npasym) = 9
+Number of orthogonality constraints (NOrthUse) = 1
+Number of different asymptotic potentials = 3
+Maximum number of asymptotic partial waves = 78
+Maximum l used in usual function (lmax) = 22
+Maximum m used in usual function (LMax) = 22
+Maxamum l used in expanding static potential (lpotct) = 44
+Maximum l used in exapnding the exchange potential (lmaxab) = 44
+Higest l included in the expansion of the wave function (lnp) = 21
+Higest l included in the K matrix (lna) = 9
+Highest l used at large r (lpasym) = 11
+Higest l used in the asymptotic potential (lpzb) = 22
+Maximum L used in the homogeneous solution (LMaxHomo) = 11
+Number of partial waves in the homogeneous solution (npHomo) = 9
+Time Now = 33.7054 Delta time = 0.0090 Energy independent setup
+
+Compute solution for E = 10.0000000000 eV
+Found fege potential
+Charge on the molecule (zz) = 1.0
+Assumed asymptotic polarization is 0.00000000E+00 au
+ stpote at the end of the grid
+For potential 1
+ i = 1 lval = 0 1/r^n n = 4 StPot(RMax) = -0.58286709E-15 Asymp Coef = -0.14291775E-09 (eV Angs^(n))
+ i = 2 lval = 2 1/r^n n = 3 StPot(RMax) = 0.36788985E-18 Asymp Moment = -0.25582992E-15 (e Angs^(n-1))
+ i = 3 lval = 2 1/r^n n = 3 StPot(RMax) = -0.49030621E-03 Asymp Moment = 0.34095802E+00 (e Angs^(n-1))
+ i = 4 lval = 4 1/r^n n = 5 StPot(RMax) = -0.13163229E-20 Asymp Moment = 0.15640530E-15 (e Angs^(n-1))
+ i = 5 lval = 4 1/r^n n = 5 StPot(RMax) = 0.27066851E-20 Asymp Moment = -0.32160794E-15 (e Angs^(n-1))
+ i = 6 lval = 4 1/r^n n = 5 StPot(RMax) = 0.87751540E-07 Asymp Moment = -0.10426626E-01 (e Angs^(n-1))
+For potential 2
+ i = 1 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834866E-16
+ i = 2 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834868E-16
+ i = 3 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834872E-16
+ i = 4 exps = -0.73646203E+02 -0.20000000E+01 stpote = -0.79834877E-16
+For potential 3
+Number of asymptotic regions = 28
+Final point in integration = 0.52917721E+02 Angstroms
+Time Now = 34.5668 Delta time = 0.8614 End SolveHomo
+ Final Dipole matrix
+ ROW 1
+ (-0.57226124E-02, 0.51633129E+00) ( 0.81002936E+00,-0.10250330E+00)
+ ( 0.17802248E-01,-0.89326639E-02) ( 0.12269022E-03,-0.81612979E-04)
+ (-0.17083581E-16,-0.59165841E-16) ( 0.45808986E-06,-0.30411112E-06)
+ ROW 2
+ ( 0.30272379E-02, 0.48644471E+00) ( 0.67631916E+00,-0.80221881E-01)
+ ( 0.15080977E-01,-0.73466552E-02) ( 0.10874359E-03,-0.68365269E-04)
+ (-0.95657824E-17,-0.53264015E-16) ( 0.44985876E-06,-0.26838784E-06)
+MaxIter = 7 c.s. = 1.63444418 rmsk= 0.00000000 Abs eps 0.10000000E-05 Rel eps 0.17171516E-08
+Time Now = 38.5155 Delta time = 3.9487 End ScatStab
+
++ Command GetCro
++
+
+----------------------------------------------------------------------
+CnvIdy - read in and convert dynamical matrix elements and convert to raw form
+----------------------------------------------------------------------
+
+Time Now = 38.5158 Delta time = 0.0003 End CnvIdy
+Found 1 energies :
+ 10.00000000
+List of matrix element types found Number = 1
+ 1 Cont Sym PU Targ Sym SG Total Sym PU
+Keeping 1 energies :
+ 10.00000000
+Time Now = 38.5158 Delta time = 0.0001 End SelIdy
+
+----------------------------------------------------------------------
+CrossSection - compute photoionization cross section
+----------------------------------------------------------------------
+
+Ionization potential (IPot) = 15.5810 eV
+Label -
+Cross section by partial wave F
+Cross Sections for
+
+ Sigma LENGTH at all energies
+ Eng
+ 25.5810 0.30052601E+01
+
+ Sigma MIXED at all energies
+ Eng
+ 25.5810 0.27649216E+01
+
+ Sigma VELOCITY at all energies
+ Eng
+ 25.5810 0.25522309E+01
+
+ Beta LENGTH at all energies
+ Eng
+ 25.5810 0.12530156E+01
+
+ Beta MIXED at all energies
+ Eng
+ 25.5810 0.12888066E+01
+
+ Beta VELOCITY at all energies
+ Eng
+ 25.5810 0.13227977E+01
+
+ COMPOSITE CROSS SECTIONS AT ALL ENERGIES
+ Energy SIGMA LEN SIGMA MIX SIGMA VEL BETA LEN BETA MIX BETA VEL
+EPhi 25.5810 3.0053 2.7649 2.5522 1.2530 1.2888 1.3228
+Time Now = 38.5186 Delta time = 0.0027 End CrossSection
+
++ Command GetCro
++ 'test12PU.idy' 'test12SU.idy'
+Taking dipole matrix from file test12PU.idy
+
+----------------------------------------------------------------------
+CnvIdy - read in and convert dynamical matrix elements and convert to raw form
+----------------------------------------------------------------------
+
+Time Now = 38.5188 Delta time = 0.0002 End CnvIdy
+Taking dipole matrix from file test12SU.idy
+
+----------------------------------------------------------------------
+CnvIdy - read in and convert dynamical matrix elements and convert to raw form
+----------------------------------------------------------------------
+
+Time Now = 38.5190 Delta time = 0.0002 End CnvIdy
+Found 1 energies :
+ 10.00000000
+List of matrix element types found Number = 2
+ 1 Cont Sym PU Targ Sym SG Total Sym PU
+ 2 Cont Sym SU Targ Sym SG Total Sym SU
+Keeping 1 energies :
+ 10.00000000
+Time Now = 38.5190 Delta time = 0.0001 End SelIdy
+
+----------------------------------------------------------------------
+CrossSection - compute photoionization cross section
+----------------------------------------------------------------------
+
+Ionization potential (IPot) = 15.5810 eV
+Label -
+Cross section by partial wave F
+Cross Sections for
+
+ Sigma LENGTH at all energies
+ Eng
+ 25.5810 0.88675220E+01
+
+ Sigma MIXED at all energies
+ Eng
+ 25.5810 0.82209754E+01
+
+ Sigma VELOCITY at all energies
+ Eng
+ 25.5810 0.76302265E+01
+
+ Beta LENGTH at all energies
+ Eng
+ 25.5810 0.10007537E+01
+
+ Beta MIXED at all energies
+ Eng
+ 25.5810 0.10269925E+01
+
+ Beta VELOCITY at all energies
+ Eng
+ 25.5810 0.10528459E+01
+
+ COMPOSITE CROSS SECTIONS AT ALL ENERGIES
+ Energy SIGMA LEN SIGMA MIX SIGMA VEL BETA LEN BETA MIX BETA VEL
+EPhi 25.5810 8.8675 8.2210 7.6302 1.0008 1.0270 1.0528
+Time Now = 38.5217 Delta time = 0.0027 End CrossSection
+Time Now = 38.5221 Delta time = 0.0004 Finalize

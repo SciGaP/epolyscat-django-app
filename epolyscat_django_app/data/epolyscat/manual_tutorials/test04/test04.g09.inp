@@ -1,0 +1,20 @@
+g09 <<eoi
+%mem=16gb
+%nprocshared=8
+# rhf/6-311G(2d,2p) 6D 10F scf=tight Gfinput PUNCH=MO
+
+SiH4 triple zeta 
+
+0 1
+ SI
+ H 1 R
+ H 1 R 2 T
+ H 1 R 2 T 3 T 1
+ H 1 R 2 T 3 T -1
+ Variables:
+ R 1.462
+ T 109.47122
+
+eoi
+#
+cat fort.7

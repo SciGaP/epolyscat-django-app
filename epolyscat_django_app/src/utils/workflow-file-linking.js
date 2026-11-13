@@ -76,14 +76,18 @@ function isCubeOutput(file) {
   return name.endsWith(".cube") || name.endsWith(".cub");
 }
 
-export function buildEPolyScatInputDataSelectionValues(file, sourceApplicationId = "") {
+export function buildEPolyScatInputDataSelectionValues(
+    file,
+    sourceApplicationId = "",
+    convertFormat = "",
+) {
   const sourceApplication = String(sourceApplicationId || "");
   const useGaussianFormat = sourceApplication === "Gaussian16"
       || (!sourceApplication && isGaussianConvertOutput(file));
 
   return {
     convertSource: stagedInputReference(file),
-    convertFormat: useGaussianFormat ? "gaussian" : "molden",
+    convertFormat: convertFormat || (useGaussianFormat ? "gaussian" : "molden"),
   };
 }
 

@@ -1010,6 +1010,7 @@ export const RunService = {
             workflowApplication: obj.workflow_application || "",
             utilityApplication: obj.utility_application || "",
             workflowMetadata: obj.workflow_metadata || {},
+            tutorialInputFormat: (obj.workflow_metadata || {}).tutorialInputFormat || "",
             parentRunId: obj.parent_run || null,
             workflowStepOrder: obj.workflow_step_order || null,
             workflowStepStatus: obj.workflow_step_status || "",
@@ -1027,11 +1028,16 @@ export const RunService = {
                 type: input.type,
                 name: input.name,
                 value: input.value,
-                files: input.files.map(file => ({
-                    name: file.name,
-                    dataProductURI: file.data_product_uri,
-                    downloadURL: `sdk/download/?data-product-uri=${encodeURIComponent(file.data_product_uri)}`
-                }))
+                files: input.files.map(file => {
+                    const dataProductURI = file.data_product_uri || "";
+                    return {
+                        name: file.name,
+                        dataProductURI,
+                        downloadURL: dataProductURI
+                            ? `sdk/download/?data-product-uri=${encodeURIComponent(dataProductURI)}`
+                            : null
+                    };
+                })
             })),
             viewIds: obj.views,
             displayStatus,
@@ -1277,6 +1283,9 @@ export const ViewService = {
             //owner: obj.owner,
             created: obj.created,
             updated: obj.updated,
+            owner: obj.owner,
+            type: obj.type,
+            readonly: obj.type === "tutorial" || obj.owner == null,
 
             //created: new Date(obj.created).toLocaleString(),
             //updated: new Date(obj.updated).toLocaleString(),
@@ -1338,28 +1347,13 @@ export const ViewService = {
     },
  
     async fetchTutorialsView() {
-        const { data: runs } =  await axiosInstance.get(appBaseUrl + `runs/tutorial_runs`);
-        
-        return this.encodeObj({
-            id: -1,
-            name: "Tutorials",
-            created: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            updated: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            run_count: runs.length,
-            runs
-        });
+        const {data} = await axiosInstance.get(appBaseUrl + 'views/tutorials/');
+        return this.encodeObj(data);
     },
     async fetchView({viewId}) {
         if (viewId == -1){
-           const { data: runs } =  await axiosInstance.get(appBaseUrl + `runs/tutorial_runs`);
-           return this.encodeObj({
-            id: -1,
-            name: "Tutorials",
-            created: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            updated: (new Date("Nov 3, 2023 10:00:00")).toISOString(),
-            run_count: runs.length,
-            runs
-           });
+           const {data} = await axiosInstance.get(appBaseUrl + 'views/tutorials/');
+           return this.encodeObj(data);
         }
         else{   
            const {data} = await axiosInstance.get(`/epolyscat_django_app/api/views/${viewId}`);

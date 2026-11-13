@@ -2,7 +2,9 @@
   <div class="view-run-page">
     <main class="view-run-content">
       <b-breadcrumb class="view-run-breadcrumb">
-        <b-breadcrumb-item to="/runs">Experiments</b-breadcrumb-item>
+        <b-breadcrumb-item :to="run && run.isTutorial ? &quot;/tutorials&quot; : &quot;/runs&quot;">
+          {{ run && run.isTutorial ? "Tutorials" : "Experiments" }}
+        </b-breadcrumb-item>
         <b-breadcrumb-item active>{{ run ? run.name : "Run" }}</b-breadcrumb-item>
       </b-breadcrumb>
 
@@ -29,6 +31,13 @@
               {{ badge.value }}
             </span>
           </div>
+          <b-button
+              v-if="run && run.isTutorial"
+              variant="primary"
+              v-on:click="cloneTutorial"
+          >
+            Clone Tutorial
+          </b-button>
           <b-button
               v-if="workflowContinuation.eligible"
               variant="primary"
@@ -98,17 +107,20 @@
 
       <div class="view-run-layout" :class="{ 'with-plot-panel': showPlotPanel }">
         <section class="view-run-main">
-          <section class="target-states-matrix" v-if="showTargetStates">
-            <div class="target-column">
-              <h2>Input</h2>
-              <div v-if="targetInputColumns.length" class="target-input-grid">
-                <div
-                    v-for="(column, columnIndex) in targetInputColumns"
-                    :key="`input-${columnIndex}`"
-                    class="target-input-column"
-                >
+          <section class="target-states-matrix"
+              v-if="showTargetStates"
+              :class="{ 'tutorial-file-groups': run && run.isTutorial }"
+          >
+            <template v-if="run && run.isTutorial">
+              <div
+                  v-for="group in resolvedFileGroups"
+                  :key="group.label"
+                  class="target-column"
+              >
+                <h2>{{ group.label }}</h2>
+                <div class="target-output-list">
                   <button
-                      v-for="file in column"
+                      v-for="file in group.files"
                       :key="file"
                       type="button"
                       class="file-chip"
@@ -119,23 +131,46 @@
                   </button>
                 </div>
               </div>
-              <div v-else class="target-empty-state">No input files required</div>
-            </div>
-            <div class="target-column">
-              <h2>Output</h2>
-              <div v-if="targetOutputFiles.length" class="target-output-list">
-                <button
-                    v-for="file in targetOutputFiles"
-                    :key="file"
-                    type="button"
-                    class="file-chip"
-                    v-on:click="selectedFile = file"
-                >
-                  {{ file }}
-                </button>
+            </template>
+            <template v-else>
+              <div class="target-column">
+                <h2>Input</h2>
+                <div v-if="targetInputColumns.length" class="target-input-grid">
+                  <div
+                      v-for="(column, columnIndex) in targetInputColumns"
+                      :key="`input-${columnIndex}`"
+                      class="target-input-column"
+                  >
+                    <button
+                        v-for="file in column"
+                        :key="file"
+                        type="button"
+                        class="file-chip"
+                        :class="{ active: selectedFile === file }"
+                        v-on:click="selectedFile = file"
+                    >
+                      {{ file }}
+                    </button>
+                  </div>
+                </div>
+                <div v-else class="target-empty-state">No input files required</div>
               </div>
-              <div v-else class="target-empty-state">No output files available yet</div>
-            </div>
+              <div class="target-column">
+                <h2>Output</h2>
+                <div v-if="targetOutputFiles.length" class="target-output-list">
+                  <button
+                      v-for="file in targetOutputFiles"
+                      :key="file"
+                      type="button"
+                      class="file-chip"
+                      v-on:click="selectedFile = file"
+                  >
+                    {{ file }}
+                  </button>
+                </div>
+                <div v-else class="target-empty-state">No output files available yet</div>
+              </div>
+            </template>
           </section>
 
           <section class="module-parameters" v-if="presentation.mode !== 'workflow'">
@@ -565,6 +600,15 @@ export default {
       ]);
     },
     resolvedFileGroups() {
+      if (this.run && this.run.isTutorial) {
+        return this.presentation.file_groups
+            .map(group => ({
+              label: group.label,
+              files: this.uniqueFileNames(group.files || []),
+            }))
+            .filter(group => group.files.length > 0);
+      }
+
       const inputNames = this.resolvedInputFileNames;
       const outputNames = this.resolvedOutputFiles;
       const groups = [];
@@ -663,6 +707,9 @@ export default {
     },
   },
   methods: {
+    async cloneTutorial() {
+      await this.$router.push(`/runs/new?clonedFrom=${this.run.id}`);
+    },
     async refreshRun() {
       try {
         this.run = await RunService.fetchRun({ runId: this.runId });
@@ -1319,6 +1366,10 @@ export default {
   margin-bottom: 22px;
 }
 
+.target-states-matrix.tutorial-file-groups {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .target-column h2,
 .view-run-resource h2 {
   font-size: 17px;
@@ -1520,6 +1571,7 @@ export default {
   }
 
   .target-states-matrix,
+  .target-states-matrix.tutorial-file-groups,
   .target-input-grid,
   .workflow-continuation-preview {
     grid-template-columns: 1fr;

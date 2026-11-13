@@ -1101,6 +1101,90 @@ def test_engform_type_transition_removes_and_recreates_term_rows_without_touchin
 
 
 
+def test_all_packaged_tutorials_rewrite_convert_to_their_runtime_input_and_format():
+    script = textwrap.dedent(
+        r'''
+        const fs = require("fs");
+        const path = require("path");
+        const babel = require("@babel/core");
+
+        function loadModule(relativePath) {
+          const sourcePath = path.join(process.cwd(), relativePath);
+          const source = fs.readFileSync(sourcePath, "utf8");
+          const compiled = babel.transformSync(source, {
+            plugins: ["@babel/plugin-transform-modules-commonjs"],
+          }).code;
+          const moduleObject = { exports: {} };
+          new Function("module", "exports", compiled)(moduleObject, moduleObject.exports);
+          return moduleObject.exports;
+        }
+
+        const { patchEPolyScatInputScript, parseEPolyScatInputScript } = loadModule(
+          path.join("src", "utils", "epolyscat-input-script.js"),
+        );
+        const { buildEPolyScatInputDataSelectionValues } = loadModule(
+          path.join("src", "utils", "workflow-file-linking.js"),
+        );
+        const catalogRoot = path.join(
+          process.cwd(),
+          "data",
+          "epolyscat",
+          "manual_tutorials",
+        );
+        const manifest = JSON.parse(
+          fs.readFileSync(path.join(catalogRoot, "manifest.json"), "utf8"),
+        );
+
+        for (const tutorialCase of manifest.cases) {
+          const original = fs.readFileSync(
+            path.join(catalogRoot, tutorialCase.id, tutorialCase.script),
+            "utf8",
+          );
+          const originalConvertRecords = original.match(/^\s*Convert\b.*$/gmi) || [];
+          if (originalConvertRecords.length !== 1) {
+            throw new Error(`${tutorialCase.id}: expected one original Convert record`);
+          }
+
+          const linkedValues = buildEPolyScatInputDataSelectionValues(
+            { name: tutorialCase.runtime_data },
+            "",
+            tutorialCase.convert_format,
+          );
+          const patched = patchEPolyScatInputScript(
+            original,
+            linkedValues,
+            [],
+            { changedKeys: ["convertSource", "convertFormat"] },
+          );
+          const parsed = parseEPolyScatInputScript(patched);
+          const expectedSource = `$pt/${tutorialCase.runtime_data}`;
+          if (parsed.convertSource !== expectedSource) {
+            throw new Error(
+              `${tutorialCase.id}: expected ${expectedSource}, got ${parsed.convertSource}`,
+            );
+          }
+          if (parsed.convertFormat !== tutorialCase.convert_format) {
+            throw new Error(
+              `${tutorialCase.id}: expected ${tutorialCase.convert_format}, got ${parsed.convertFormat}`,
+            );
+          }
+
+          const withoutConvert = contents => contents
+            .split(/\r?\n/)
+            .filter(line => !/^\s*Convert\b/i.test(line))
+            .join("\n");
+          if (withoutConvert(patched) !== withoutConvert(original)) {
+            throw new Error(`${tutorialCase.id}: clone rewrite changed non-Convert content`);
+          }
+        }
+        '''
+    )
+
+    result = _run_node_script(script)
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_generated_output_destinations_precede_the_commands_that_write_them():
     script = textwrap.dedent(
         """

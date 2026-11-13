@@ -76,22 +76,38 @@
                 </b-input-group-append>
               </b-input-group>
 
+              <b-alert
+                  v-if="isTutorials && tutorialLoadError"
+                  show
+                  variant="danger"
+                  class="d-flex align-items-center justify-content-between"
+              >
+                <span>{{ tutorialLoadError }}</span>
+                <b-button variant="outline-danger" size="sm" @click="retryTutorialLoad">
+                  Retry
+                </b-button>
+              </b-alert>
+
               <LoadingOverlay :name="loadingOverlayName" class="d-flex w-100" style="flex-grow: 1; min-height: 300px;">
                     <ListView class="portal-list-table"
-                        :items="runs" :columns="[['name', 'Run Name'], ['status', 'Status'], ['resource', 'Resource'], ['actions', 'Actions']]"
+                        :items="runs" :columns="runColumns"
                         :canSelectMultiple="true" @updateSelected="updateSelected" identifier="id"
-                        :sorters="[
-                            (run1, run2) => run1.name.localeCompare(run2.name),
-                            (run1, run2) => sortStatus(run1.displayStatus, run2.displayStatus),
-                            (run1, run2) => (run1.resource || '').localeCompare(run2.resource || ''),
-                        ]"
+                        :sorters="runSorters"
                     >
                         <template v-slot:name="{ item }">
-                            <router-link :to="`/runs/${item.id}`" v-slot="{isExactActive, href, navigate}">
-                                <b-link variant="link" :class="{active: isExactActive}" :href="href" @click="navigate">
-                                    {{ item.name }}
-                                </b-link>
-                            </router-link>
+                            <div class="tutorial-name-cell">
+                              <router-link :to="`/runs/${item.id}`" v-slot="{isExactActive, href, navigate}">
+                                  <b-link variant="link" :class="{active: isExactActive}" :href="href" @click="navigate">
+                                      {{ item.name }}
+                                  </b-link>
+                              </router-link>
+                              <div v-if="isTutorials && item.description" class="tutorial-description">
+                                {{ item.description }}
+                              </div>
+                            </div>
+                        </template>
+                        <template v-slot:inputFormat="{ item }">
+                            {{ item.inputFormat || "—" }}
                         </template>
                         <template v-slot:status="{ item }">
                             <Badge :status="item.displayStatus"/>
@@ -114,7 +130,7 @@
                             <!-- View / tutorial contexts: full action set -->
                             <template v-else>
                                 <b-button
-                                    v-if="view != null" variant="link" size="sm" @click="removeFromView([item])"
+                                    v-if="view != null && !isTutorials" variant="link" size="sm" @click="removeFromView([item])"
                                     v-b-tooltip.hover title="Remove from view"
                                 ><b-icon icon="x" /></b-button>
                                 <b-button
@@ -290,6 +306,7 @@ export default {
       filterText: "",
       refreshDataInterval: null,
       view: null,
+      tutorialLoadError: "",
 
       //runIds: null,
       //selectedRunIdsMap: {},
@@ -304,6 +321,37 @@ export default {
     };
   },
   computed: {
+    runColumns() {
+      return this.isTutorials
+          ? [
+            ['name', 'Tutorial'],
+            ['inputFormat', 'Input Format'],
+            ['status', 'Status'],
+            ['actions', 'Actions'],
+          ]
+          : [
+            ['name', 'Run Name'],
+            ['status', 'Status'],
+            ['resource', 'Resource'],
+            ['actions', 'Actions'],
+          ];
+    },
+    runSorters() {
+      const nameSorter = (run1, run2) => run1.name.localeCompare(run2.name);
+      const statusSorter = (run1, run2) => this.sortStatus(run1.displayStatus, run2.displayStatus);
+
+      return this.isTutorials
+          ? [
+            nameSorter,
+            (run1, run2) => (run1.inputFormat || '').localeCompare(run2.inputFormat || ''),
+            statusSorter,
+          ]
+          : [
+            nameSorter,
+            statusSorter,
+            (run1, run2) => (run1.resource || '').localeCompare(run2.resource || ''),
+          ];
+    },
     isCompareEnabled() {
             return [...this.selected].some(
                 run => {
@@ -337,16 +385,20 @@ export default {
                     this.$store.getters["experiment/getExperiment"]({experimentId: this.experimentId}) : null;
     },
     runs() {
+         if (this.isTutorials && this.view == null) return [];
          // NOTE: loose == on experimentId is intentional; the route query param
          // is a string while run.experimentId is a number.
          let runs = (this.experimentId != null)
              ? this.$store.getters["run/getRuns"]().filter(run => run.experimentId == this.experimentId)
              : (this.view == null) ? this.$store.getters["run/getRuns"]() : this.view.runs;
 
-         return runs.filter(run => run.name.includes(this.filterText)).map(run => {
-                    run.isSelectable = !this.isTutorials;
-                    return run;
-         });
+         return runs.filter(run => run.name.includes(this.filterText)).map(run => ({
+                    ...run,
+                    inputFormat: run.tutorialInputFormat
+                        || (run.workflowMetadata || {}).tutorialInputFormat
+                        || "",
+                    isSelectable: !this.isTutorials,
+         }));
     },
 //      if (this.processingList) {
 //        return null;
@@ -367,10 +419,9 @@ export default {
                 return (this.viewId == null) ? "runs" : `viewRuns${this.viewId}`
     },
     pageName() {
-                return (this.experimentId != null) ?
+                return this.isTutorials ? "Tutorials" : (this.experimentId != null) ?
                     ((this.experiment == null) ? `Loading Experiment...` : this.experiment.name) :
-                    (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name
-    },
+                    (this.viewId == null) ? "All Runs" : (this.view == null) ? `Loading View...` : this.view.name    },
     pageIsLoading() {
                 return this.$store.getters['loading/getMessages'](this.loadingOverlayName).length > 0
     },
@@ -508,7 +559,12 @@ export default {
          if (this.viewId != null) {
                     try {
                         this.view = await this.$store.dispatch("view/fetchView", { viewId: this.viewId });
+                        if (this.isTutorials) this.tutorialLoadError = "";
                     } catch (error) {
+                        this.view = null;
+                        if (this.isTutorials) {
+                            this.tutorialLoadError = "Tutorials could not be loaded.";
+                        }
                         eventBus.$emit("error", { name: `Error while trying to fetch view with id: ${this.viewId}`, error });
                     }   
          } else {
@@ -525,6 +581,9 @@ export default {
          }
             
          this.$store.commit("loading/STOP", { key: this.loadingOverlayName, message: "Fetching Runs" });
+    },
+    async retryTutorialLoad() {
+        await this.refreshData(true);
     },
     async removeFromView(runs) {
         if (this.view != null) {
@@ -691,6 +750,22 @@ export default {
 
     .action-icon:hover {
         color: #102537;
+    }
+
+    .tutorial-name-cell {
+        align-items: flex-start;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        width: 100%;
+    }
+
+    .tutorial-description {
+        color: #6c757d;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        margin-top: 0.2rem;
+        max-width: 34rem;
     }
 
     .button_row > * {

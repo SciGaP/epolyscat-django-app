@@ -354,10 +354,19 @@ class RunSerializer(serializers.ModelSerializer):
         }
         selectable_inputs = input_files or schema["input_files"]
         selectable_files = selectable_inputs or output_files or [""]
-        file_groups = [
-            {"label": "Inputs", "files": selectable_inputs},
-            {"label": "Outputs", "files": output_files + schema["output_extras"]},
-        ]
+        if metadata.get("tutorialCaseId") and metadata.get("file_groups"):
+            file_groups = [
+                {
+                    "label": group["label"],
+                    "files": list(group.get("files") or []),
+                }
+                for group in metadata["file_groups"]
+            ]
+        else:
+            file_groups = [
+                {"label": "Inputs", "files": selectable_inputs},
+                {"label": "Outputs", "files": output_files + schema["output_extras"]},
+            ]
 
         presentation = {
             "mode": mode,
@@ -1025,21 +1034,31 @@ class RunSerializer(serializers.ModelSerializer):
         )
 
     def get_is_tutorial(self, run_instance: models.Run):
-        request = self.context["request"]
-        if "tutorial_view_id" in self.context:
-            tutorial_view_id = self.context["tutorial_view_id"]
-            return bool(
-                tutorial_view_id
-                and any(
-                    view.pk == tutorial_view_id
-                    for view in run_instance.views.all()
-                )
-            )
+        cache = getattr(self, "_tutorial_membership_cache", None)
+        if cache is None:
+            cache = {}
+            self._tutorial_membership_cache = cache
+        if run_instance.pk in cache:
+            return cache[run_instance.pk]
 
-        tutorial_view = models.View.tutorial_view()
-        if tutorial_view is None:
-            return False
-        return tutorial_view in run_instance.views.all() and request.user != tutorial_view.owner
+        tutorial_view_id = self.context.get("tutorial_view_id")
+        prefetched_views = getattr(
+            run_instance,
+            "_prefetched_objects_cache",
+            {},
+        ).get("views")
+        if tutorial_view_id is not None:
+            is_tutorial = bool(
+                tutorial_view_id
+                and any(view.pk == tutorial_view_id for view in run_instance.views.all())
+            )
+        elif prefetched_views is not None:
+            is_tutorial = any(view.is_tutorial for view in prefetched_views)
+        else:
+            is_tutorial = run_instance.is_tutorial
+
+        cache[run_instance.pk] = is_tutorial
+        return is_tutorial
             
 #    def get_status(self, instance: models.Run):
 #        request = self.context["request"]
@@ -1058,6 +1077,9 @@ class RunSerializer(serializers.ModelSerializer):
 #            return latest_execution.get_airavata_experiment_status(request)
 
     def get_status(self, run_instance: models.Run):
+        if self.get_is_tutorial(run_instance):
+            return "COMPLETED"
+
         workflow_summary = self._workflow_parent_summary(run_instance)
         if workflow_summary is not None:
             return workflow_summary["status"]
@@ -1074,6 +1096,9 @@ class RunSerializer(serializers.ModelSerializer):
 
 
     def get_job_status(self, run_instance: models.Run):
+        if self.get_is_tutorial(run_instance):
+            return "COMPLETED"
+
         workflow_summary = self._workflow_parent_summary(run_instance)
         if workflow_summary is not None:
             return workflow_summary["job_status"]
@@ -1117,6 +1142,9 @@ class RunSerializer(serializers.ModelSerializer):
             return "---"
 
     def get_job_id(self, run_instance: models.Run):
+        if self.get_is_tutorial(run_instance):
+            return None
+
         request = self.context["request"]
         latest_execution = run_instance.latest_execution
         if latest_execution is None:
@@ -1388,8 +1416,11 @@ class ViewSerializer(serializers.ModelSerializer):
     def get_runs(self, view_instance: models.View):
         if not self.context.get("include_runs", True):
             return []
+        runs = view_instance.runs.all()
+        if view_instance.is_tutorial:
+            runs = sorted(runs, key=lambda run: run.name)
         return RunSerializer(
-            view_instance.runs.all(),
+            runs,
             many=True,
             context=self.context,
         ).data

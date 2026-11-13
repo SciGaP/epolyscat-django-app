@@ -7,8 +7,11 @@ from airavata.model.status.ttypes import ExperimentState
 from airavata.model.workspace.ttypes import Project as AiravataProject
 from airavata_django_portal_sdk import experiment_util, user_storage
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
+
+from epolyscat_django_app.tutorial_contract import TUTORIAL_VIEW_KEY, TUTORIAL_RUN_KEY_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -130,22 +133,30 @@ class View(models.Model):
     type = models.CharField(
         max_length=20, default="user-defined", choices=VIEW_TYPE_CHOICES
     )
+    tutorial_key = models.CharField(
+        max_length=80,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+    )
     deleted = models.BooleanField(default=False)
     order = models.IntegerField(default=0)
 
+    class Meta:
+        constraints = [models.CheckConstraint(
+            name="packaged_tutorial_view_unowned",
+            check=~Q(tutorial_key=TUTORIAL_VIEW_KEY) | Q(owner__isnull=True, type="tutorial"),
+        )]
+
     @property
     def is_tutorial(self):
-        return Run.check_is_tutorial(self.id)
-        
-        #return self.name == "Tutorials" and self.owner.username == "tom_wolcott"
+        return self.type == "tutorial" and self.owner_id is None
 
+    @staticmethod
     def tutorial_view():
-        tutorial_views = [view for view in View.objects.all() if view.is_tutorial]
-
-        if len(tutorial_views) == 0:
-            return None
-        else:
-            return tutorial_views[0]
+        canonical = View.objects.filter(tutorial_key=TUTORIAL_VIEW_KEY).first()
+        return canonical or View.objects.filter(type="tutorial", owner=None).order_by("pk").first()
 
     @staticmethod
     def filter_by_user(request):
@@ -208,6 +219,13 @@ class Run(models.Model):
         Experiment, on_delete=models.CASCADE, related_name="runs", null=True, blank=True
     )
     filepath = models.CharField(max_length=255, blank=True, default="")
+    tutorial_key = models.CharField(
+        max_length=80,
+        null=True,
+        blank=True,
+        unique=True,
+        editable=False,
+    )
     inpc_data_product_uri = models.CharField(max_length=64, null=True, default=None)
 
     created = models.DateTimeField(auto_now_add=True)
@@ -274,22 +292,29 @@ class Run(models.Model):
 #    def name(self):
 #        return f"{self.root.root}/{self.number}"
 
+    class Meta:
+        constraints = [models.CheckConstraint(
+            name="packaged_tutorial_run_independent",
+            check=~Q(tutorial_key__startswith=TUTORIAL_RUN_KEY_PREFIX) | Q(
+                owner__isnull=True, root__isnull=True, experiment__isnull=True,
+                parent_run__isnull=True, workflow_source_run__isnull=True,
+                airavata_project_id__isnull=True, inpc_data_product_uri__isnull=True,
+                directory="",
+            ),
+        )]
+
     @property
     def is_tutorial(self):
         return Run.check_is_tutorial(self.id)
 
+    @staticmethod
     def tutorial_view():
-        tutorial_views = [view for view in View.objects.all() if view.is_tutorial]
-
-        if len(tutorial_views) == 0:
-            return None
-        else:
-            return tutorial_views[0]
+        return View.tutorial_view()
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
 
-        if self.id and not self.directory:
+        if self.id and not self.directory and not (self.tutorial_key or "").startswith(TUTORIAL_RUN_KEY_PREFIX):
             self.directory = f"EPOLYSCAT_Runs/Run_{self.id}"
             super().save(update_fields=["directory"])
 
@@ -335,11 +360,11 @@ class Run(models.Model):
 
     @staticmethod
     def check_is_tutorial(run_id):
-        try:
-            tutorials_view = View.objects.get(type="tutorial", owner=None)
-            return tutorials_view.runs.filter(pk=run_id).exists()
-        except View.DoesNotExist:
-            return False
+        return View.objects.filter(
+            type="tutorial",
+            owner=None,
+            runs__pk=run_id,
+        ).exists()
 
     def get_most_recent_job_id(self, request):
         job_id = None
@@ -390,6 +415,11 @@ class RemoteExecution(models.Model):
     )
     resource_name = models.CharField(max_length=255, blank=True, default="")
     job_id = models.CharField(max_length=255, null=True)
+
+    def save(self, *args, **kwargs):
+        if (self.run.tutorial_key or "").startswith(TUTORIAL_RUN_KEY_PREFIX):
+            raise ValidationError("Packaged tutorial sources cannot have remote executions")
+        return super().save(*args, **kwargs)
 
     def get_job_id(self, request):
         if self.job_id is None and self.airavata_experiment_id is not None:

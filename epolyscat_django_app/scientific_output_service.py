@@ -13,6 +13,7 @@ from . import (
     models,
     output_presentation_contracts,
     scientific_output_contracts,
+    tutorials as tutorial_domain,
     workflow_continuation as workflow_continuation_domain,
 )
 
@@ -88,6 +89,9 @@ def _output_cache_key(run, execution):
 
 
 def output_files_for_run(request, run):
+    if run.is_tutorial:
+        return tutorial_domain.output_file_descriptors(run)
+
     latest_execution = run.latest_execution
     cache_key = (
         _output_cache_key(run, latest_execution)

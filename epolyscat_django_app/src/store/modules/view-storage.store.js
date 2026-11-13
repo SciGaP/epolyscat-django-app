@@ -195,7 +195,16 @@ const getters = {
     },
 */
     getViews: (state) => {
-        return () => Object.values(state.viewMap).filter(view => view.id != -1);
+        return ({page = 1, pageSize = 1000, tutorials = false} = {
+            page: 1, pageSize: 1000, tutorials: false
+        }) => {
+            const queryString = JSON.stringify({page, pageSize, tutorials});
+            const viewIds = state.viewListMap[queryString];
+
+            return viewIds
+                ? viewIds.map(viewId => state.viewMap[viewId]).filter(Boolean)
+                : [];
+        };
     },
 
     getViewsPage: (state) => {

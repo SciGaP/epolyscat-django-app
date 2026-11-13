@@ -139,15 +139,25 @@ const mutations = {
 
         const indexToBeReplaced = inputFile.files
             .findIndex(other_file => other_file.name == file.name);
+        const existingFile = indexToBeReplaced == -1
+            ? null
+            : inputFile.files[indexToBeReplaced];
+        const replacesGeneratedPlaceholder = existingFile != null
+            && existingFile.generatedByNewRun
+            && !file.generatedByNewRun;
 
-        if (indexToBeReplaced == -1 && !inputFile.isMultiFileInput && file.replaceCurrent) {
-            // Deal with cases where the new file you're uploading has a different name, but only one can exist
-            inputFile.files[0].deleted = true;
-            inputFile.files.unshift(file);
+        if (!inputFile.isMultiFileInput && file.replaceCurrent) {
+            inputFile.files.forEach(otherFile => {
+                otherFile.deleted = true;
+                otherFile.unchanged = false;
+            });
+            file.deleted = false;
+            if (indexToBeReplaced == -1) inputFile.files.unshift(file);
+            else inputFile.files.splice(indexToBeReplaced, 1, file);
         } else if (indexToBeReplaced == -1) {
             inputFile.files.push(file);
             inputFile.files.sort((a,b) => a.name.localeCompare(b.name));
-        } else if (file.replaceCurrent || inputFile.files[indexToBeReplaced].deleted)
+        } else if (file.replaceCurrent || existingFile.deleted || replacesGeneratedPlaceholder)
             inputFile.files.splice(indexToBeReplaced, 1, file);
     },
     // Assumes filename and properFilename are in pathLabels and inputFiles
@@ -236,6 +246,7 @@ const getters = {
                     return {
                         type: "files",
                         name: inputFileName,
+                        isMultiFileInput: inputFile.isMultiFileInput,
                         files
                     }
                 })

@@ -17,6 +17,12 @@ pip install -e .
 
 Start (or restart) the Django Portal server.
 
+### Application discovery
+
+The app fetches the current user's accessible Airavata application modules, interfaces, and deployments before showing supported run choices. Gaussian16, OpenMolcas, and ePolyScat are matched by normalized module name; workflow stages and input mappings remain local application contracts. Utilities are read from the shared ePolyScat interface's `Application_Utility` editor options and checked against those contracts.
+
+Optional `EPOLYSCAT_APPLICATION_ID`, `GAUSSIAN16_APPLICATION_ID`, and `OPENMOLCAS_APPLICATION_ID` entries in Django's `EPOLYSCAT` setting can select a particular registration. Configured IDs must still exist and be accessible. Missing or ambiguous registrations are unavailable, and discovery failures show a retry message rather than falling back to fixed IDs. Resource availability is checked separately for the selected allocation.
+
 ---
 
 ## Frontend Development

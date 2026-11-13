@@ -1,11 +1,15 @@
 <template>
-  <div id="app" class="flex-fill h-100 overflow-auto">
+  <div id="app" class="portal-app flex-fill h-100 overflow-auto">
+    <a class="portal-skip-link" href="#portal-main" @click.prevent="focusPageContent">Skip to page content</a>
     <notifications-display/>
-    <div class=" w-100 h-100 d-flex">
-      <div class="overflow-auto app_left_nav" style="max-width: 250px;min-width: 250px;box-shadow: 1px 1px 3px 1px #d8d8d8;">
+    <div class="portal-shell w-100 h-100 d-flex">
+      <button type="button" class="portal-navigation-toggle btn btn-outline-primary"
+              aria-controls="portal-navigation" :aria-expanded="navigationOpen ? 'true' : 'false'"
+              @click="navigationOpen = !navigationOpen">Navigation</button>
+      <div id="portal-navigation" class="overflow-auto app_left_nav" :class="{ 'is-open': navigationOpen }">
         <AppLeftNav/>
       </div>
-      <div class="flex-fill overflow-auto" >
+      <div id="portal-main" ref="pageContent" class="portal-content flex-fill overflow-auto" tabindex="-1">
         <router-view class="w-100" :key="$route.fullPath"/>
       </div>
       <!--      <div class="overflow-auto">-->
@@ -28,7 +32,18 @@ export default {
   name: 'App',
   components: {AppLeftNav, NotificationsDisplay},
   store,
+  data() {
+    return { navigationOpen: false };
+  },
+  watch: {
+    '$route.fullPath'() {
+      this.navigationOpen = false;
+    },
+  },
   methods: {
+        focusPageContent() {
+            this.$refs.pageContent.focus();
+        },
         async refreshRuns() {
             this.$store.commit("loading/START", { key: "runs", message: "Fetching Runs" });
 

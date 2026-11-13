@@ -1,69 +1,15 @@
 <template>
-  <div class="w-100 h-100 overflow-auto">
-    <div class="w-100 d-flex p-5">
-      <div class="flex-fill">
-        <div class="text-primary" style="font-size:56px;">ePolyScat Documentation</div>
-        <div>
-          ePolyScat is an electron–molecule scattering and photoionization
-          suite for computing photoelectron spectra, differential cross sections,
-          resonances, and angular distributions. This portal lets you create,
-          submit, and analyze ePS runs on modern HPC resources.
-        </div>
-      </div>
-      <!-- div v-html="externalHtml"></div>
-      <button @click="fetchHtml">ePolyScat-Manual</button -->
-
-    <!--
-      <div class="text-primary text-center p-5 m-2 stats-card">
-        <div style="font-size:56px;height:85px;">
-          <template v-if="experimentStatistics">{{ experimentStatistics.experimentCount }}</template>
-          <template v-else>0</template>
-        </div>
-        <div>Manuals</div>
-      </div>
-      <div class="text-primary text-center p-5 m-2 stats-card">
-        <div style="font-size:56px;height:85px;">
-          <template v-if="experimentStatistics">{{ experimentStatistics.runCount }}</template>
-          <template v-else>0</template>
-        </div>
-        <div>Tutorials</div>
-      </div>
-    </div>
-    <div class="exp-list p-3">
-      <div class="grid-container">
-        <router-link to="/create-experiment" v-slot="{ href, route, navigate, isActive,isExactActive }">
-          <b-link :href="href" @click="navigate">
-            <div class="exp-card create-exp-card p-4 text-primary text-center">
-              <div style="font-size: 50px;">
-                <b-icon icon="plus-circle"/>
-              </div>
-              <div style="font-size: 20px;">Create a new experiment</div>
-            </div>
-          </b-link>
-        </router-link>
-    -->
-      <!-- experiments loop -->
-      <!--
-        <div v-for="experiment in experiments" :key="experiment.experimentId" class="exp-card">
-          <ExperimentCard :experimentId="experiment.experimentId"/>
-        </div>
-      </div>
-      -->
-      <!-- iframe :src="https://epolyscat.droppages.com/front" frameborder="0" width="100%" height="500px"></iframe -->
-    </div>
-  </div>
-  <div>
-    <iframe :src="https://epolyscat.droppages.com/IntroREADME2/" ></iframe>
+  <div class="portal-page">
+    <main class="portal-page-content">
+      <header class="portal-page-header"><h1 class="portal-page-title">Documentation</h1></header>
+      <p>Read the ePolyScat manual for input records, commands, and scientific examples.</p>
+      <p><a href="https://rrlucchese.github.io/">Open the ePolyScat manual</a></p>
+      <iframe class="portal-documentation-frame" title="ePolyScat manual" src="https://rrlucchese.github.io/" />
+    </main>
   </div>
 </template>
 
 <script>
-import ExperimentCard from "@/components/block/ExperimentCard";
-import store from "@/store";
-import { ExperimentService } from "@/service/epolyscat-service";
-
-import { ref, onMounted } from 'vue';
-
 export default {
   data() {
         return {
@@ -76,7 +22,7 @@ export default {
   methods: {
     async fetchHtml() {
       try {
-        const response = await fetch('https://epolyscat.droppages.com/front');
+        const response = await fetch('https://rrlucchese.github.io/');
         this.externalHtml = await response.text();
       } catch (error) {
         console.error('Error fetching HTML:', error);

@@ -43,19 +43,21 @@
                         ></b-form-checkbox-group>
                     </b-form-group>
 
-                    <b-form-group v-slot="{ ariaDescribedby }" class="mx-1" :disabled="plotParameter != 'new'">
+                    <b-form-group class="mx-1" :disabled="plotParameter != 'new'">
                         <template v-slot:label>
                             Flags
                             <b-button variant="link" v-b-modal.flags-modal size="sm">(help)</b-button>
                         </template>
-                        <b-form-textarea
-                            id="textarea"
-                            v-model="flags"
-                            placeholder="Enter flags here"
-                            :aria-describedby="ariaDescribedby"
-                            rows="6"
-                            max-rows="6"
-                        ></b-form-textarea>
+                        <template v-slot="{ ariaDescribedby }">
+                            <b-form-textarea
+                                id="textarea"
+                                v-model="flags"
+                                placeholder="Enter flags here"
+                                :aria-describedby="ariaDescribedby"
+                                rows="6"
+                                max-rows="6"
+                            ></b-form-textarea>
+                        </template>
                     </b-form-group>
                 </div>
                 <b-button variant="primary" @click="fetchPlot" :disabled="!canCreate">Create Plot</b-button>
@@ -295,7 +297,7 @@ export default {
                 xAxis: "" + this.xAxisIndex,
                 yAxis: this.yAxisIndeces.join(","),
                 flags: this.flags
-            }).then(({plotImageUrl, output, userGuidance}) => {
+            }).then(({plotImageUrl, output}) => {
                 if (plotImageUrl) {
                     this.plotImageUrl = plotImageUrl;
                     this.imageSrcFilename = this.file.name;

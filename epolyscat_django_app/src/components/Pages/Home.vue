@@ -1,86 +1,26 @@
 <template>
-  <!-- div class="w-100 h-100 overflow-auto" -->
-  <div class="w-100 h-100 flex-fill d-flex flex-row p-5">
-
-    <!-- div class="w-100 d-flex p-5" -->
-      <!-- div class="flex-fill" -->
-      <div style="padding: 0 10px; margin: 0 10px; width: 200%; height: 100%; overflow-y: scroll;">
-        <div class="text-primary" style="font-size:56px;">ePolyScat</div>
-        <hr>
-        <p>
-          ePolyScat is an electron–molecule scattering and photoionization
-          suite for computing photoelectron spectra, differential cross sections,
-          resonances, and angular distributions. This portal lets you create,
-          submit, and analyze ePS runs on modern HPC resources.
-        </p>
-      </div>
-      <div class="cardList m-5">
-            <h3>Recent Runs</h3>
-            <LoadingOverlay name="runs" class="cardList p-3" style="border-top: 1px solid #0002; border-bottom: 1px solid #0002">
-                <router-link v-for="run in displayedRuns" :key="run" :to="`/runs/${run.id}`" v-slot="{isExactActive, href, navigate}">
-                    <b-button variant="outline-primary" :class="{active: isExactActive}" :href="href" @click="navigate">
-                        {{ run.name }}
-                    </b-button>
-                </router-link>
-                <div v-if="runCount == 0" class="d-flex align-items-center justify-content-center" style="height: 200px">
-                    <span>No recent runs</span>
-                </div>
-            </LoadingOverlay>
-            <router-link :to="`runs/new`" v-slot="{isExactActive, href, navigate}">
-                <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
-                    Create new run
-                </b-button>
-            </router-link>
-            <router-link :to="`runs`" v-slot="{isExactActive, href, navigate}" v-if="runCount > 4">
-                <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
-                    View all Runs
-                </b-button>
-            </router-link>
-          <!-- router-link :to="`runs/new`" v-slot="{isExactActive, href, navigate}">
-              <b-button variant="outline-secondary" :class="{active: isExactActive}" :href="href" @click="navigate">
-                    Create new run
-              </b-button>
-          </router-link -->
-      </div>
-      
-      <!-- div class="text-primary text-center p-5 m-2 stats-card">
-        <div style="font-size:56px;height:85px;">
-          <template v-if="experimentStatistics">{{ experimentStatistics.experimentCount }}</template>
-          <template v-else>0</template>
-        </div>
-        <div>Experiments
-
-        </div>
-      </div>
-      <div class="text-primary text-center p-5 m-2 stats-card">
-        <div style="font-size:56px;height:85px;">
-          <template v-if="experimentStatistics">{{ experimentStatistics.runCount }}</template>
-          <template v-else>0</template>
-        </div>
-        <div>Runs
-
-        </div>
-      </div -->
-    <!-- /div -->
-    <!-- div class="exp-list p-3" -->
-      <!-- div class="grid-container" -->
-        <!-- router-link to="/create-experiment" v-slot="{ href, route, navigate, isActive,isExactActive }">
-          <b-link :href="href" @click="navigate">
-            <div class="exp-card create-exp-card p-4 text-primary text-center">
-              <div style="font-size: 50px;">
-                <b-icon icon="plus-circle"/>
-              </div>
-              <div style="font-size: 20px;">Create a new experiment</div>
+  <div class="portal-page">
+    <main class="portal-page-content">
+      <header class="portal-page-header"><h1 class="portal-page-title">ePolyScat</h1></header>
+      <div class="portal-home-grid">
+        <section aria-label="About ePolyScat">
+          <p>ePolyScat is an electron–molecule scattering and photoionization suite for computing photoelectron spectra, differential cross sections, resonances, and angular distributions. This portal lets you create, submit, and analyze ePS runs on modern HPC resources.</p>
+          <b-button variant="primary" @click="goToNewRun">New Run</b-button>
+        </section>
+        <section aria-labelledby="recent-runs-title">
+          <h2 id="recent-runs-title">Recent Runs</h2>
+          <LoadingOverlay name="runs">
+            <div class="portal-recent-runs">
+              <router-link v-for="run in displayedRuns" :key="run.id" :to="`/runs/${run.id}`" v-slot="{isExactActive, href, navigate}">
+                <b-button variant="outline-primary" :class="{active: isExactActive}" :href="href" @click="navigate">{{ run.name }}</b-button>
+              </router-link>
+              <p v-if="runCount === 0" class="portal-empty-state">No recent runs</p>
             </div>
-          </b-link>
-        </router-link -->
-
-        <!-- experiments loop -->
-        <!-- div v-for="experiment in experiments" :key="experiment.experimentId" class="exp-card">
-          <ExperimentCard :experimentId="experiment.experimentId"/>
-        </div -->
-      <!-- /div>
-    </div -->
+          </LoadingOverlay>
+          <b-button v-if="runCount > 0" variant="outline-primary" to="/runs">View all runs</b-button>
+        </section>
+      </div>
+    </main>
   </div>
 </template>
 
@@ -89,7 +29,6 @@
 import store from "@/store";
 import LoadingOverlay from '../overlay/LoadingOverlay.vue';
 import { eventBus } from '@/event-bus';
-import { ExperimentService } from "@/service/epolyscat-service";
 
 export default {
   components: { LoadingOverlay },
@@ -124,6 +63,9 @@ export default {
     }
   },
   methods: {
+    goToNewRun() {
+      this.$router.push("/runs/new");
+    },
     async refreshData() {
       try {
                     await this.$store.dispatch("run/fetchRuns", {});

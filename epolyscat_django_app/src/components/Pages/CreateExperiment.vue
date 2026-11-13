@@ -1,35 +1,33 @@
 <template>
-  <div class="w-100 h-100 bg-light p-2">
-    <div class="w-100 h-100 bg-white d-flex flex-column overflow-auto p-3">
+  <div class="portal-page">
+    <div class="portal-page-content">
       <b-breadcrumb>
         <b-breadcrumb-item to="/experiments">Experiments</b-breadcrumb-item>
         <b-breadcrumb-item to="/create-experiment">New</b-breadcrumb-item>
       </b-breadcrumb>
 
-      <div class="w-100">
-        <div class="d-inline" style="font-weight: 400; font-size: 19px;">Create a new experiment</div>
-      </div>
+      <header class="portal-page-header"><h1 class="portal-page-title">New Experiment</h1></header>
 
-      <div class="w-100 d-flex flex-row">
-        <div class="p-2 d-flex flex-row flex-fill">
-          <div style="min-width: 200px;"><label for="name">Name of the experiment *</label></div>
+      <div class="portal-experiment-fields">
+        <div class="portal-experiment-field">
+          <div><label for="name">Name of the experiment *</label></div>
           <div>
-            <b-form-input id="name" size="sm" v-model="name" :state="inputState.name"/>
+            <b-form-input id="name" v-model="name" :state="inputState.name"/>
             <b-form-invalid-feedback>
               The name of the experiment cannot be empty
             </b-form-invalid-feedback>
           </div>
         </div>
-        <div class="p-2 d-flex flex-row flex-fill">
-          <div style="min-width: 200px;"><label for="description">Description</label></div>
+        <div class="portal-experiment-field">
+          <div><label for="description">Description</label></div>
           <div>
-            <b-form-input id="name" size="sm" v-model="description" :state="inputState.description"/>
+            <b-form-input id="description" v-model="description" :state="inputState.description"/>
           </div>
         </div>
       </div>
 
-      <div class="w-100 p-2">
-        <b-button variant="primary" class="w-100" v-on:click="onSubmit">Submit</b-button>
+      <div class="portal-page-actions">
+        <b-button variant="primary" v-on:click="onSubmit">Create Experiment</b-button>
       </div>
 
     </div>
